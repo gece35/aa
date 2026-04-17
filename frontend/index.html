@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nebula Scanner | Hisse Tarama ve Puanlama</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    <div class="galaxy">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+        <div class="orb orb-4"></div>
+        <div class="stars"></div>
+    </div>
+
+    <header class="header glass">
+        <div class="brand">
+            <div class="logo">
+                <span class="logo-dot"></span>
+            </div>
+            <div class="brand-text">
+                <h1>Nebula <span class="accent">Scanner</span></h1>
+                <p>Teknik analiz goestergeleriyle 0-5 hisse puanlamasi</p>
+            </div>
+        </div>
+        <div class="header-meta">
+            <div class="meta-card">
+                <span class="meta-label">Son guncelleme</span>
+                <span id="lastUpdated" class="meta-value">-</span>
+            </div>
+            <div class="meta-card">
+                <span class="meta-label">Cache</span>
+                <span id="cacheState" class="meta-value">-</span>
+            </div>
+            <button id="refreshBtn" class="btn btn-primary" title="Zorla yenile">
+                <span class="btn-ic">&#x21bb;</span>
+                <span>Yenile</span>
+            </button>
+        </div>
+    </header>
+
+    <nav class="tabs glass" role="tablist">
+        <button class="tab active" data-tab="scan" role="tab">
+            <span class="tab-ic">&#9672;</span> Tarama
+        </button>
+        <button class="tab" data-tab="news" role="tab">
+            <span class="tab-ic">&#9873;</span> Haberler
+        </button>
+    </nav>
+
+    <section class="market-switcher glass">
+        <div class="ms-title">
+            <span class="ms-label">Pazar</span>
+            <span class="ms-hint">BIST ya da US hisseleri arasinda gecis yap</span>
+        </div>
+        <div class="market-buttons" id="marketButtons"></div>
+    </section>
+
+    <main>
+        <section id="tab-scan" class="tab-panel active">
+            <div class="summary-grid">
+                <div class="summary glass">
+                    <span class="s-label">Taranan</span>
+                    <span id="statTotal" class="s-value">-</span>
+                </div>
+                <div class="summary glass">
+                    <span class="s-label">Puanlanan</span>
+                    <span id="statScored" class="s-value">-</span>
+                </div>
+                <div class="summary glass">
+                    <span class="s-label">Ortalama Puan</span>
+                    <span id="statAvg" class="s-value">-</span>
+                </div>
+                <div class="summary glass">
+                    <span class="s-label">5/5 Hisseler</span>
+                    <span id="statPerfect" class="s-value">-</span>
+                </div>
+            </div>
+
+            <div class="filters glass">
+                <input type="search" id="searchInput" placeholder="Hisse ara (orn: AAPL, GARAN)" />
+                <div class="chip-group" id="scoreFilters">
+                    <button class="chip active" data-min="0">Tumu</button>
+                    <button class="chip" data-min="3">&ge; 3 Puan</button>
+                    <button class="chip" data-min="4">&ge; 4 Puan</button>
+                    <button class="chip" data-min="5">Sadece 5/5</button>
+                </div>
+            </div>
+
+            <div id="resultsArea" class="results-area">
+                <div id="skeletons" class="skeleton-grid"></div>
+            </div>
+        </section>
+
+        <section id="tab-news" class="tab-panel">
+            <div id="newsArea" class="news-area">
+                <div class="empty glass">Haberler yukleniyor...</div>
+            </div>
+        </section>
+    </main>
+
+    <div id="stockModal" class="modal hidden" role="dialog">
+        <div class="modal-backdrop"></div>
+        <div class="modal-card glass">
+            <button class="modal-close" id="modalClose">&times;</button>
+            <div id="modalContent"></div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <span>Nebula Scanner &bull; Egitim amacli arac. Yatirim tavsiyesi degildir.</span>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>
