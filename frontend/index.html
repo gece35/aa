@@ -83,12 +83,24 @@
             </div>
 
             <div class="filters glass">
-                <input type="search" id="searchInput" placeholder="Hisse ara (orn: AAPL, GARAN)" />
+                <input type="search" id="searchInput" placeholder="Hisse ara ( / ile hizli odakla)" />
                 <div class="chip-group" id="scoreFilters">
                     <button class="chip active" data-min="0">Tumu</button>
                     <button class="chip" data-min="3">&ge; 3 Puan</button>
                     <button class="chip" data-min="4">&ge; 4 Puan</button>
                     <button class="chip" data-min="5">Sadece 5/5</button>
+                    <button class="chip chip-star" data-watch="1" title="Sadece favoriler">&#9733; Favoriler</button>
+                </div>
+                <div class="sort-wrap">
+                    <label for="sortSelect" class="sort-label">Sirala</label>
+                    <select id="sortSelect" class="sort-select">
+                        <option value="score">Puan (yuksek)</option>
+                        <option value="change_desc">Gunluk Degisim &#x2191;</option>
+                        <option value="change_asc">Gunluk Degisim &#x2193;</option>
+                        <option value="week">Haftalik Degisim</option>
+                        <option value="month">Aylik Degisim</option>
+                        <option value="symbol">Sembol (A-Z)</option>
+                    </select>
                 </div>
             </div>
 

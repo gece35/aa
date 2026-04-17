@@ -34,6 +34,12 @@ class ScoreResult:
     price: float
     change_pct: float
     indicators: List[IndicatorResult]
+    sparkline: List[float]
+    volume: float = 0.0
+    change_week_pct: float = 0.0
+    change_month_pct: float = 0.0
+    high_52w: float | None = None
+    low_52w: float | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -41,6 +47,12 @@ class ScoreResult:
             "score": self.score,
             "price": round(self.price, 4),
             "change_pct": round(self.change_pct, 2),
+            "change_week_pct": round(self.change_week_pct, 2),
+            "change_month_pct": round(self.change_month_pct, 2),
+            "volume": int(self.volume),
+            "high_52w": round(self.high_52w, 4) if self.high_52w else None,
+            "low_52w": round(self.low_52w, 4) if self.low_52w else None,
+            "sparkline": [round(float(v), 4) for v in self.sparkline],
             "indicators": [asdict(ind) for ind in self.indicators],
         }
 
@@ -199,6 +211,15 @@ def _evaluate_stoch(high: pd.Series, low: pd.Series, close: pd.Series) -> Indica
     )
 
 
+def _pct_change_back(close: pd.Series, n: int) -> float:
+    if len(close) <= n:
+        return 0.0
+    prev = float(close.iloc[-(n + 1)])
+    if prev == 0 or pd.isna(prev):
+        return 0.0
+    return (float(close.iloc[-1]) - prev) / prev * 100.0
+
+
 def score_symbol(symbol: str, df: pd.DataFrame) -> ScoreResult | None:
     if df is None or df.empty or len(df) < 60:
         return None
@@ -206,6 +227,7 @@ def score_symbol(symbol: str, df: pd.DataFrame) -> ScoreResult | None:
     close = df["Close"].astype(float)
     high = df["High"].astype(float)
     low = df["Low"].astype(float)
+    volume = df["Volume"].astype(float) if "Volume" in df.columns else pd.Series(dtype=float)
 
     last_close = float(close.iloc[-1])
     if len(close) >= 2 and not pd.isna(close.iloc[-2]) and close.iloc[-2] != 0:
@@ -223,11 +245,28 @@ def score_symbol(symbol: str, df: pd.DataFrame) -> ScoreResult | None:
 
     score = sum(1 for ind in indicators if ind.signal)
 
+    sparkline_raw = close.tail(30).dropna().tolist()
+    week_change = _pct_change_back(close, 5)
+    month_change = _pct_change_back(close, 21)
+
+    high_series = high.tail(252).dropna()
+    low_series = low.tail(252).dropna()
+    high_52 = float(high_series.max()) if not high_series.empty else None
+    low_52 = float(low_series.min()) if not low_series.empty else None
+
+    last_volume = float(volume.iloc[-1]) if not volume.empty and not pd.isna(volume.iloc[-1]) else 0.0
+
     return ScoreResult(
         symbol=symbol,
         score=score,
         price=last_close,
         change_pct=change_pct,
+        change_week_pct=week_change,
+        change_month_pct=month_change,
+        volume=last_volume,
+        high_52w=high_52,
+        low_52w=low_52,
+        sparkline=sparkline_raw,
         indicators=indicators,
     )
 

@@ -265,7 +265,34 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
     transition: border-color var(--trans), box-shadow var(--trans);
 }
 .filters input[type="search"]:focus { border-color: var(--accent-2); box-shadow: 0 0 0 3px rgba(34,211,238,.2); }
+
+.sort-wrap { display: inline-flex; align-items: center; gap: 10px; }
+.sort-label { font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-3); }
+.sort-select {
+    background: rgba(0,0,0,.25);
+    border: 1px solid var(--glass-brd-soft);
+    color: var(--text-1);
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color var(--trans);
+}
+.sort-select:focus, .sort-select:hover {
+    outline: none;
+    border-color: var(--accent-2);
+}
+.sort-select option { background: #10122a; color: var(--text-1); }
+
 .chip-group { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip-star.active {
+    background: rgba(255, 209, 102, 0.18);
+    color: #ffd166;
+    border-color: rgba(255, 209, 102, 0.45);
+    box-shadow: 0 0 18px rgba(255, 209, 102, 0.25);
+}
 .chip {
     padding: 9px 14px; border-radius: 999px;
     background: rgba(255,255,255,.04);
@@ -288,12 +315,32 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
 .stock-card {
     padding: 18px 22px;
     display: grid;
-    grid-template-columns: 64px minmax(0, 1.6fr) 1.1fr 1fr auto;
+    grid-template-columns: 52px minmax(0, 1.4fr) 120px 1.2fr 1.4fr auto;
     gap: 18px;
     align-items: center;
     cursor: pointer;
     transition: transform var(--trans), box-shadow var(--trans), border-color var(--trans);
+    position: relative;
 }
+.star-toggle {
+    position: absolute;
+    top: 10px; right: 14px;
+    background: transparent; border: none; cursor: pointer;
+    font-size: 18px; color: var(--text-3);
+    transition: color var(--trans), transform var(--trans), text-shadow var(--trans);
+    padding: 4px;
+    z-index: 2;
+}
+.star-toggle:hover { color: #ffd166; transform: scale(1.2); }
+.star-toggle.active { color: #ffd166; text-shadow: 0 0 14px rgba(255,209,102,.7); }
+
+.spark-wrap {
+    height: 48px;
+    min-width: 110px;
+    position: relative;
+    pointer-events: none;
+}
+.spark-wrap canvas { width: 100%; height: 100%; display: block; }
 .stock-card:hover {
     transform: translateY(-4px);
     border-color: rgba(255,255,255,.28);
@@ -432,12 +479,35 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
 /* responsive */
+.week-month {
+    display: flex; gap: 12px; font-size: 11px; color: var(--text-3); margin-top: 6px;
+    letter-spacing: .5px;
+}
+.week-month span { display: inline-flex; gap: 4px; align-items: center; }
+.week-month b { color: var(--text-1); font-weight: 600; font-size: 12px; }
+.week-month .up { color: var(--neon); }
+.week-month .down { color: var(--danger); }
+
+.shortcut-hint {
+    position: absolute; right: 16px; top: 50%; transform: translateY(-50%);
+    font-size: 10px; color: var(--text-3);
+    border: 1px solid var(--glass-brd-soft); padding: 3px 7px; border-radius: 6px;
+    pointer-events: none; letter-spacing: 1px;
+}
+.filters { position: relative; }
+
 @media (max-width: 960px) {
     .summary-grid { grid-template-columns: repeat(2, 1fr); }
-    .stock-card { grid-template-columns: 44px 1fr auto; grid-template-rows: auto auto; row-gap: 8px; }
-    .stock-card .price-block { grid-column: 2; }
-    .stock-card .indicators { grid-column: 1 / -1; }
+    .stock-card {
+        grid-template-columns: 44px 1fr auto;
+        grid-template-rows: auto auto auto;
+        row-gap: 10px;
+    }
+    .stock-card .spark-wrap { grid-column: 1 / -1; grid-row: 2; min-width: auto; }
+    .stock-card .price-block { grid-column: 2; grid-row: 1; }
+    .stock-card .indicators { grid-column: 1 / -1; grid-row: 3; }
     .stock-card .score-chip { grid-column: 3; grid-row: 1; }
+    .shortcut-hint { display: none; }
 }
 @media (max-width: 600px) {
     main, .header, .tabs, .market-switcher { padding-left: 16px; padding-right: 16px; }
