@@ -51,6 +51,9 @@
         <button class="tab" data-tab="news" role="tab">
             <span class="tab-ic">&#9873;</span> Haberler
         </button>
+        <button class="tab" data-tab="repetition" role="tab">
+            <span class="tab-ic">&#9998;</span> Tekrar Sistemi
+        </button>
     </nav>
 
     <section class="market-switcher glass">
@@ -114,6 +117,67 @@
                 <div class="empty glass">Haberler yukleniyor...</div>
             </div>
         </section>
+
+        <section id="tab-repetition" class="tab-panel">
+            <div class="rep-layout">
+
+                <!-- Add Lesson Form -->
+                <div class="rep-form-card glass">
+                    <h2 class="rep-section-title">Yeni Konu Ekle</h2>
+                    <div class="rep-form">
+                        <div class="rep-field">
+                            <label for="repTopic">Konu Adi</label>
+                            <input type="text" id="repTopic" placeholder="ornek: Turev, Newton Kanunlari..." />
+                        </div>
+                        <div class="rep-field">
+                            <label for="repSubject">Ders</label>
+                            <input type="text" id="repSubject" placeholder="ornek: Matematik, Fizik..." />
+                        </div>
+                        <div class="rep-field">
+                            <label for="repDate">Calisma Tarihi</label>
+                            <input type="date" id="repDate" />
+                        </div>
+                        <div class="rep-field rep-field-check">
+                            <label class="rep-check-label">
+                                <input type="checkbox" id="repSyncCalendar" />
+                                <span>Google Calendar'a otomatik ekle</span>
+                            </label>
+                            <span id="repCalendarStatus" class="rep-cal-status"></span>
+                        </div>
+                        <button id="repAddBtn" class="btn btn-primary rep-add-btn">Ekle ve Takvim Olustur</button>
+                    </div>
+
+                    <!-- Preview -->
+                    <div id="repPreview" class="rep-preview hidden">
+                        <h3 class="rep-preview-title">Tekrar Plani Onizlemesi</h3>
+                        <div id="repPreviewList" class="rep-preview-list"></div>
+                    </div>
+                </div>
+
+                <!-- Upcoming Repetitions -->
+                <div class="rep-upcoming-card glass">
+                    <div class="rep-upcoming-header">
+                        <h2 class="rep-section-title">Yaklasan Tekrarlar</h2>
+                        <div class="rep-days-filter">
+                            <button class="chip active" data-days="7">7 Gun</button>
+                            <button class="chip" data-days="14">14 Gun</button>
+                            <button class="chip" data-days="30">30 Gun</button>
+                        </div>
+                    </div>
+                    <div id="repUpcomingList" class="rep-upcoming-list">
+                        <div class="empty">Yukleniyor...</div>
+                    </div>
+                </div>
+
+                <!-- All Lessons -->
+                <div class="rep-lessons-card glass">
+                    <h2 class="rep-section-title">Tum Konular</h2>
+                    <div id="repLessonsList" class="rep-lessons-list">
+                        <div class="empty">Henuz konu eklenmedi.</div>
+                    </div>
+                </div>
+            </div>
+        </section>
     </main>
 
     <div id="stockModal" class="modal hidden" role="dialog">
@@ -129,5 +193,6 @@
     </footer>
 
     <script src="app.js"></script>
+    <script src="repetition.js"></script>
 </body>
 </html>
