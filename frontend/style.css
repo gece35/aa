@@ -515,3 +515,226 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
     .brand-text h1 { font-size: 22px; }
     .tabs { margin-left: 16px; }
 }
+
+/* ── Tekrar Sistemi (Spaced Repetition) ────────────────────────────────────── */
+
+.rep-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
+    gap: 20px;
+    padding: 0 32px 40px;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.rep-form-card {
+    grid-column: 1;
+    grid-row: 1;
+    padding: 28px;
+}
+
+.rep-upcoming-card {
+    grid-column: 2;
+    grid-row: 1;
+    padding: 28px;
+    max-height: 520px;
+    overflow-y: auto;
+}
+
+.rep-lessons-card {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    padding: 28px;
+}
+
+.rep-section-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-1);
+    margin: 0 0 20px;
+    letter-spacing: -0.3px;
+}
+
+/* Form */
+.rep-form { display: flex; flex-direction: column; gap: 14px; }
+
+.rep-field { display: flex; flex-direction: column; gap: 6px; }
+
+.rep-field label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+}
+
+.rep-field input[type="text"],
+.rep-field input[type="date"] {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid var(--glass-brd);
+    border-radius: var(--radius-s);
+    color: var(--text-1);
+    font-family: inherit;
+    font-size: 14px;
+    padding: 10px 14px;
+    outline: none;
+    transition: border-color var(--trans);
+}
+.rep-field input[type="text"]:focus,
+.rep-field input[type="date"]:focus {
+    border-color: var(--accent);
+}
+.rep-field input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.7);
+    cursor: pointer;
+}
+
+.rep-field-check { flex-direction: row; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+
+.rep-check-label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); cursor: pointer; }
+.rep-check-label input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; }
+
+.rep-cal-status { font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 20px; }
+.rep-cal-ok { background: rgba(52,245,168,0.15); color: var(--neon); }
+.rep-cal-warn { background: rgba(255,184,107,0.15); color: var(--warn); }
+
+.rep-add-btn { margin-top: 4px; width: 100%; justify-content: center; }
+
+/* Preview */
+.rep-preview { margin-top: 24px; border-top: 1px solid var(--glass-brd-soft); padding-top: 20px; }
+
+.rep-preview-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin: 0 0 12px;
+}
+
+.rep-preview-list { display: flex; flex-direction: column; gap: 8px; }
+
+.rep-preview-item {
+    display: grid;
+    grid-template-columns: 36px 1fr auto auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-left: 3px solid var(--rep-color, var(--accent));
+    border-radius: var(--radius-s);
+    font-size: 13px;
+}
+
+.rp-badge {
+    font-weight: 700;
+    font-size: 12px;
+    color: var(--rep-color, var(--accent));
+}
+.rp-interval { color: var(--text-2); font-size: 12px; }
+.rp-date { color: var(--text-1); font-weight: 500; }
+.rp-time { font-size: 12px; color: var(--text-3); font-weight: 600; }
+
+/* Upcoming */
+.rep-upcoming-header { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+.rep-days-filter { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.rep-upcoming-list { display: flex; flex-direction: column; gap: 10px; }
+
+.glass-inner {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--glass-brd-soft);
+    border-radius: var(--radius-s);
+}
+
+.rep-upcoming-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-left: 3px solid var(--rep-color, var(--accent));
+    transition: background var(--trans);
+}
+.rep-upcoming-item:hover { background: rgba(255,255,255,0.07); }
+
+.rui-left { display: flex; flex-direction: column; gap: 3px; }
+.rui-badge { font-size: 11px; font-weight: 700; color: var(--rep-color, var(--accent)); text-transform: uppercase; letter-spacing: 0.5px; }
+.rui-topic { font-weight: 600; font-size: 14px; color: var(--text-1); }
+.rui-subject { font-size: 12px; color: var(--text-3); }
+.rui-right { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.rui-date { font-size: 13px; color: var(--text-2); font-weight: 500; }
+.rui-time { font-size: 12px; font-weight: 700; color: var(--accent-2); }
+
+/* Lessons list */
+.rep-lessons-list { display: flex; flex-direction: column; gap: 10px; }
+
+.rep-lesson-item {
+    padding: 14px 18px;
+    transition: background var(--trans);
+}
+.rep-lesson-item:hover { background: rgba(255,255,255,0.07); }
+
+.rli-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+.rli-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.rli-topic { font-weight: 700; font-size: 15px; color: var(--text-1); }
+.rli-subject {
+    font-size: 12px;
+    color: var(--accent);
+    background: rgba(139,92,246,0.15);
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-weight: 600;
+}
+
+.rep-synced-badge {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--neon);
+    background: rgba(52,245,168,0.12);
+    padding: 2px 8px;
+    border-radius: 20px;
+}
+
+.rli-actions { display: flex; align-items: center; gap: 12px; }
+.rli-date { font-size: 12px; color: var(--text-3); }
+
+.rep-del-btn {
+    background: none;
+    border: none;
+    color: var(--text-3);
+    font-size: 18px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: color var(--trans), background var(--trans);
+}
+.rep-del-btn:hover { color: var(--danger); background: rgba(255,83,112,0.12); }
+
+.rli-schedule { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+.rli-rep-dot {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 800;
+    color: #fff;
+    cursor: default;
+    opacity: 0.85;
+    transition: opacity var(--trans), transform var(--trans);
+}
+.rli-rep-dot:hover { opacity: 1; transform: scale(1.15); }
+
+/* Responsive */
+@media (max-width: 900px) {
+    .rep-layout { grid-template-columns: 1fr; padding: 0 16px 32px; }
+    .rep-form-card, .rep-upcoming-card, .rep-lessons-card { grid-column: 1; }
+    .rep-upcoming-card { grid-row: 2; max-height: none; }
+    .rep-lessons-card { grid-row: 3; }
+}
