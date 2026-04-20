@@ -44,25 +44,24 @@
         </div>
     </header>
 
-    <nav class="tabs glass" role="tablist">
-        <button class="tab active" data-tab="scan" role="tab">
-            <span class="tab-ic">&#9672;</span> Tarama
-        </button>
-        <button class="tab" data-tab="news" role="tab">
-            <span class="tab-ic">&#9873;</span> Haberler
-        </button>
-    </nav>
-
     <section class="market-switcher glass">
         <div class="ms-title">
             <span class="ms-label">Pazar</span>
             <span class="ms-hint">BIST ya da US hisseleri arasinda gecis yap</span>
         </div>
-        <div class="market-buttons" id="marketButtons"></div>
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+            <div class="market-buttons" id="marketButtons"></div>
+            <div id="currencyToggleWrap"></div>
+        </div>
     </section>
 
+    <div class="tab-bar glass">
+        <button class="tab-btn active" data-tab="scan">Tarama</button>
+        <button class="tab-btn" data-tab="portfolio">Portföy <span id="portBadge" class="port-badge hidden"></span></button>
+    </div>
+
     <main>
-        <section id="tab-scan" class="tab-panel active">
+        <section id="tab-scan">
             <div class="summary-grid">
                 <div class="summary glass">
                     <span class="s-label">Taranan</span>
@@ -109,10 +108,9 @@
             </div>
         </section>
 
-        <section id="tab-news" class="tab-panel">
-            <div id="newsArea" class="news-area">
-                <div class="empty glass">Haberler yukleniyor...</div>
-            </div>
+        <section id="tab-portfolio" class="hidden">
+            <div id="portOverview"></div>
+            <div id="portList" class="port-list"></div>
         </section>
     </main>
 

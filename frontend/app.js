@@ -2,33 +2,50 @@
 (function () {
     const API = {
         markets: () => fetch('/api/markets').then((r) => r.json()),
-        scan: (market, force = false) =>
-            fetch(`/api/scan?market=${market}&force=${force ? 1 : 0}`).then((r) => r.json()),
-        news: (market, force = false) =>
-            fetch(`/api/news?market=${market}&force=${force ? 1 : 0}`).then((r) => r.json()),
+        scanChunk: (market, offset, limit, force = false, sort = 'score') =>
+            fetch(`/api/scan?market=${market}&offset=${offset}&limit=${limit}&force=${force ? 1 : 0}&sort=${sort}`).then((r) => r.json()),
         stock: (symbol) => fetch(`/api/stock/${encodeURIComponent(symbol)}`).then((r) => r.json()),
+        stockNews: (symbol) => fetch(`/api/news/stock/${encodeURIComponent(symbol)}`).then((r) => r.json()),
+        exchangeRate: () => fetch('/api/exchange-rate').then((r) => r.json()),
     };
 
     const WATCHLIST_KEY = 'nebula.watchlist.v1';
+    const BATCH_SIZE = 30;
+    const IDLE_PREFETCH_MS = 1500;
+
+    function newMarketState() {
+        return {
+            results: [],
+            bySymbol: new Map(),
+            offset: 0,
+            total: 0,
+            hasMore: true,
+            loading: false,
+            generatedAt: 0,
+            cacheRemaining: 0,
+            loadedOnce: false,
+        };
+    }
 
     const state = {
         market: 'us',
         currency: 'USD',
-        tab: 'scan',
         minScore: 0,
         onlyWatched: false,
         search: '',
         sort: 'score',
-        scanResults: [],
-        lastGeneratedAt: 0,
-        cacheRemaining: 0,
         watchlist: new Set(),
+        byMarket: { us: newMarketState(), bist: newMarketState() },
+        scrollObserver: null,
+        prefetchTimer: null,
+        usdRate: null,
+        showUsd: false,
     };
+
+    function ms() { return state.byMarket[state.market]; }
 
     const els = {
         marketButtons: document.getElementById('marketButtons'),
-        tabs: document.querySelectorAll('.tab'),
-        tabPanels: document.querySelectorAll('.tab-panel'),
         refreshBtn: document.getElementById('refreshBtn'),
         lastUpdated: document.getElementById('lastUpdated'),
         cacheState: document.getElementById('cacheState'),
@@ -41,7 +58,7 @@
         searchInput: document.getElementById('searchInput'),
         scoreFilters: document.getElementById('scoreFilters'),
         sortSelect: document.getElementById('sortSelect'),
-        newsArea: document.getElementById('newsArea'),
+        currencyToggleWrap: document.getElementById('currencyToggleWrap'),
         modal: document.getElementById('stockModal'),
         modalClose: document.getElementById('modalClose'),
         modalContent: document.getElementById('modalContent'),
@@ -50,8 +67,14 @@
     // --- helpers ---
     const fmtPrice = (p, ccy) => {
         if (p == null || isNaN(p)) return '-';
-        const symbol = ccy === 'TRY' ? '₺' : ccy === 'USD' ? '$' : '';
-        return `${symbol}${Number(p).toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })}`;
+        let val = Number(p);
+        let displayCcy = ccy;
+        if (ccy === 'TRY' && state.showUsd && state.usdRate) {
+            val = val / state.usdRate;
+            displayCcy = 'USD';
+        }
+        const sym = displayCcy === 'TRY' ? '₺' : displayCcy === 'USD' ? '$' : '';
+        return `${sym}${val.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })}`;
     };
 
     const fmtChange = (c) => {
@@ -74,7 +97,7 @@
         return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     };
 
-    // --- watchlist (localStorage) ---
+    // --- watchlist ---
     function loadWatchlist() {
         try {
             const raw = localStorage.getItem(WATCHLIST_KEY);
@@ -120,27 +143,36 @@
                 btn.classList.add('active');
                 state.market = m.code;
                 state.currency = m.currency;
+                state.showUsd = false;
+                updateCurrencyToggle();
+                if (m.code === 'bist') fetchExchangeRate();
                 loadScan();
-                if (state.tab === 'news') loadNews();
             });
             els.marketButtons.appendChild(btn);
             if (m.code === state.market) state.currency = m.currency;
         });
     }
 
-    // --- scan ---
+    // --- scan (lazy / chunked) ---
     async function loadScan(force = false) {
-        renderSkeletons(8);
-        els.resultsArea.querySelectorAll('.stock-card, .empty').forEach((x) => x.remove());
-        try {
-            const data = await API.scan(state.market, force);
-            if (data.error) throw new Error(data.error);
-            state.scanResults = data.results || [];
-            state.lastGeneratedAt = data.generated_at || 0;
-            state.cacheRemaining = data.cache_age_remaining || 0;
-            updateSummary(data);
-            updateMeta(data);
+        const m = ms();
+        if (force) {
+            state.byMarket[state.market] = newMarketState();
+        }
+
+        if (!force && m.loadedOnce) {
+            updateSummary();
+            updateMeta();
             renderResults();
+            schedulePrefetch();
+            return;
+        }
+
+        renderSkeletons(8);
+        els.resultsArea.querySelectorAll('.stock-card, .empty, .loader-sentinel').forEach((x) => x.remove());
+
+        try {
+            await loadNextChunk(force);
         } catch (err) {
             console.error(err);
             hideSkeletons();
@@ -148,44 +180,99 @@
             empty.className = 'empty glass';
             empty.textContent = `Tarama yuklenemedi: ${err.message}`;
             els.resultsArea.appendChild(empty);
+            return;
+        }
+        updateSummary();
+        updateMeta();
+        renderResults();
+        schedulePrefetch();
+    }
+
+    async function loadNextChunk(force = false) {
+        const market = state.market;
+        const m = state.byMarket[market];
+        if (m.loading || !m.hasMore) return false;
+        m.loading = true;
+        try {
+            const data = await API.scanChunk(market, m.offset, BATCH_SIZE, force, state.sort);
+            if (data.error) throw new Error(data.error);
+
+            const incoming = data.results || [];
+            for (const r of incoming) {
+                if (!m.bySymbol.has(r.symbol)) {
+                    m.bySymbol.set(r.symbol, r);
+                    m.results.push(r);
+                }
+            }
+            m.total = data.total || m.total;
+            m.offset = data.next_offset != null ? data.next_offset : (m.offset + (data.limit || BATCH_SIZE));
+            m.hasMore = Boolean(data.has_more);
+            m.generatedAt = data.generated_at || m.generatedAt || Math.floor(Date.now() / 1000);
+            m.cacheRemaining = 600;
+            m.loadedOnce = true;
+            return true;
+        } finally {
+            m.loading = false;
         }
     }
 
-    function updateSummary(data) {
-        els.statTotal.textContent = data.total ?? '-';
-        els.statScored.textContent = data.scored ?? '-';
-        const results = data.results || [];
-        const avg = results.length ? (results.reduce((s, r) => s + r.score, 0) / results.length) : 0;
-        els.statAvg.textContent = avg ? avg.toFixed(2) : '-';
-        els.statPerfect.textContent = results.filter((r) => r.score >= 5).length;
+    function schedulePrefetch() {
+        if (state.prefetchTimer) clearTimeout(state.prefetchTimer);
+        const m = ms();
+        if (!m.hasMore) return;
+        state.prefetchTimer = setTimeout(async function tick() {
+            const mm = ms();
+            if (!mm.hasMore || mm.loading) return;
+            const ok = await loadNextChunk(false).catch(() => false);
+            if (ok) {
+                updateSummary();
+                updateMeta();
+                renderResults();
+            }
+            if (ms().hasMore) {
+                state.prefetchTimer = setTimeout(tick, IDLE_PREFETCH_MS);
+            }
+        }, IDLE_PREFETCH_MS);
     }
 
-    function updateMeta(data) {
-        els.lastUpdated.textContent = tsToTime(data.generated_at);
+    function updateSummary() {
+        const m = ms();
+        els.statTotal.textContent = m.total || '-';
+        els.statScored.textContent = m.results.length || '-';
+        const avg = m.results.length ? (m.results.reduce((s, r) => s + r.score, 0) / m.results.length) : 0;
+        els.statAvg.textContent = avg ? avg.toFixed(2) : '-';
+        els.statPerfect.textContent = m.results.filter((r) => r.score >= 5).length;
+    }
+
+    function updateMeta() {
+        const m = ms();
+        els.lastUpdated.textContent = tsToTime(m.generatedAt);
         renderCacheState();
     }
 
     function renderCacheState() {
-        if (!state.lastGeneratedAt) {
+        const m = ms();
+        if (!m.generatedAt) {
             els.cacheState.textContent = '-';
             return;
         }
-        const remaining = Math.max(0, state.cacheRemaining);
+        const remaining = Math.max(0, m.cacheRemaining);
+        const loadedInfo = m.total ? ` &middot; ${m.results.length}/${m.total} yuklendi` : '';
         if (remaining > 0) {
             const mins = Math.floor(remaining / 60);
             const secs = remaining % 60;
-            els.cacheState.innerHTML = `canli &middot; ${mins}:${String(secs).padStart(2, '0')} sonra yenile`;
+            els.cacheState.innerHTML = `canli &middot; ${mins}:${String(secs).padStart(2, '0')} sonra yenile${loadedInfo}`;
             els.cacheState.style.color = '#22d3ee';
         } else {
-            els.cacheState.textContent = 'cache suresi doldu';
+            els.cacheState.innerHTML = `cache suresi doldu${loadedInfo}`;
             els.cacheState.style.color = '#ffb86b';
         }
     }
 
-    // tick every second to update countdown
     setInterval(() => {
-        if (state.cacheRemaining > 0) {
-            state.cacheRemaining -= 1;
+        const m = ms();
+        if (m.cacheRemaining > 0) {
+            m.cacheRemaining -= 1;
             renderCacheState();
         }
     }, 1000);
@@ -212,10 +299,10 @@
         return copy;
     }
 
-    // --- render results ---
     function renderResults() {
         hideSkeletons();
-        let filtered = state.scanResults.filter((r) => {
+        const m = ms();
+        let filtered = m.results.filter((r) => {
             if (r.score < state.minScore) return false;
             if (state.onlyWatched && !state.watchlist.has(r.symbol)) return false;
             if (state.search) {
@@ -226,30 +313,57 @@
 
         filtered = sortResults(filtered);
 
-        els.resultsArea.querySelectorAll('.stock-card, .empty').forEach((x) => x.remove());
+        els.resultsArea.querySelectorAll('.stock-card, .empty, .loader-sentinel').forEach((x) => x.remove());
 
-        if (!filtered.length) {
+        if (!filtered.length && !m.loading) {
             const empty = document.createElement('div');
             empty.className = 'empty glass';
             empty.textContent = state.onlyWatched
                 ? 'Favori listenizde bu pazardan hisse yok.'
-                : 'Secili filtrelere uygun hisse bulunamadi.';
+                : m.hasMore
+                    ? 'Daha fazla hisse yukleniyor...'
+                    : 'Secili filtrelere uygun hisse bulunamadi.';
             els.resultsArea.appendChild(empty);
-            return;
+        } else {
+            const frag = document.createDocumentFragment();
+            filtered.forEach((r, idx) => {
+                const card = buildStockCard(r, idx);
+                frag.appendChild(card);
+            });
+            els.resultsArea.appendChild(frag);
+
+            filtered.forEach((r) => {
+                const canvas = document.getElementById(`spark-${cssSafe(r.symbol)}`);
+                if (canvas) drawSparkline(canvas, r.sparkline || [], r.change_pct >= 0);
+            });
         }
 
-        const frag = document.createDocumentFragment();
-        filtered.forEach((r, idx) => {
-            const card = buildStockCard(r, idx);
-            frag.appendChild(card);
-        });
-        els.resultsArea.appendChild(frag);
+        if (m.hasMore) {
+            const sentinel = document.createElement('div');
+            sentinel.className = 'loader-sentinel';
+            sentinel.innerHTML = `<div class="loader-dot"></div><div class="loader-dot"></div><div class="loader-dot"></div>
+                <span class="loader-text">${m.loading ? 'Yukleniyor...' : `Daha fazlasi... (${m.results.length}/${m.total})`}</span>`;
+            els.resultsArea.appendChild(sentinel);
+            observeSentinel(sentinel);
+        }
+    }
 
-        // draw sparklines after DOM insert
-        filtered.forEach((r) => {
-            const canvas = document.getElementById(`spark-${cssSafe(r.symbol)}`);
-            if (canvas) drawSparkline(canvas, r.sparkline || [], r.change_pct >= 0);
-        });
+    function observeSentinel(el) {
+        if (state.scrollObserver) state.scrollObserver.disconnect();
+        state.scrollObserver = new IntersectionObserver(async (entries) => {
+            for (const entry of entries) {
+                if (!entry.isIntersecting) continue;
+                const m = ms();
+                if (m.loading || !m.hasMore) return;
+                const ok = await loadNextChunk(false).catch(() => false);
+                if (ok) {
+                    updateSummary();
+                    updateMeta();
+                    renderResults();
+                }
+            }
+        }, { rootMargin: '400px 0px' });
+        state.scrollObserver.observe(el);
     }
 
     function cssSafe(s) { return String(s).replace(/[^a-zA-Z0-9_-]/g, '_'); }
@@ -264,6 +378,14 @@
 
         const weekCls = (r.change_week_pct || 0) >= 0 ? 'up' : 'down';
         const monthCls = (r.change_month_pct || 0) >= 0 ? 'up' : 'down';
+
+        const spikeBadge = r.volume_spike
+            ? `<span class="badge volume-spike" title="Son 10 gun ortalamasinin 1.5x uzeri hacim">&#128640; Hacim Patlamasi</span>`
+            : '';
+        const nearPeakBadge = r.near_peak
+            ? `<span class="badge near-peak" title="52 haftalik zirveye %5 icinde">&#9650; Tepe</span>`
+            : '';
+        const reason = buildScoreReason(r);
 
         card.innerHTML = `
             <button class="star-toggle ${isWatched ? 'active' : ''}" data-sym="${r.symbol}" title="Favorilere ekle">&#9733;</button>
@@ -283,10 +405,12 @@
             </div>
             <div class="indicators">
                 ${r.indicators.map((ind) => `<span class="badge ${ind.signal ? 'on' : ''}" title="${escapeAttr(ind.detail || '')}">${ind.name}</span>`).join('')}
+                ${spikeBadge}${nearPeakBadge}
             </div>
             <div class="score-chip" data-score="${r.score}">
                 <span class="star">&#9733;</span> ${r.score}/5
             </div>
+            ${reason ? `<div class="score-reason">${escapeHtml(reason)}</div>` : ''}
         `;
 
         card.addEventListener('click', (e) => {
@@ -314,6 +438,68 @@
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;');
+    }
+
+    function buildScoreReason(r) {
+        if (!r || !r.indicators) return '';
+        const parts = [];
+        const byKey = {};
+        r.indicators.forEach((ind) => { byKey[ind.key] = ind; });
+
+        const rsi = byKey['rsi'];
+        const macd = byKey['macd'];
+        const bbands = byKey['bbands'];
+        const ema = byKey['ema50'];
+        const stoch = byKey['stoch'];
+
+        if (rsi && rsi.signal) {
+            const v = rsi.value != null ? ` (${rsi.value})` : '';
+            if (rsi.detail && rsi.detail.includes('30')) parts.push(`RSI${v} asiri satim bolgesinden cikis`);
+            else parts.push(`RSI${v} yukselis sinyali verdi`);
+        }
+        if (macd && macd.signal) parts.push('MACD alim sinyali verdi');
+        if (bbands && bbands.signal) parts.push('Bollinger alt bandından donus');
+        if (ema && ema.signal) parts.push('fiyat EMA50 uzerinde');
+        if (stoch && stoch.signal) parts.push('Stokastik al sinyali olustu');
+        if (r.volume_spike) parts.push('hacim patlamasi var');
+        if (r.near_peak) parts.push('dikkat: zirveye yakin');
+
+        if (!parts.length) return r.score === 0 ? 'Aktif teknik sinyal bulunmuyor.' : '';
+        const sentence = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+        const rest = parts.slice(1);
+        if (!rest.length) return sentence + '.';
+        return sentence + ', ' + rest.join(', ') + '.';
+    }
+
+    // --- USD/TRY kur toggle ---
+    async function fetchExchangeRate() {
+        try {
+            const data = await API.exchangeRate();
+            if (data.rate) state.usdRate = data.rate;
+        } catch (_) {}
+        updateCurrencyToggle();
+    }
+
+    function updateCurrencyToggle() {
+        if (!els.currencyToggleWrap) return;
+        if (state.market !== 'bist' || !state.usdRate) {
+            els.currencyToggleWrap.innerHTML = '';
+            return;
+        }
+        if (els.currencyToggleWrap.querySelector('.currency-toggle')) {
+            els.currencyToggleWrap.querySelector('.currency-toggle').classList.toggle('active', state.showUsd);
+            return;
+        }
+        const btn = document.createElement('button');
+        btn.className = 'currency-toggle' + (state.showUsd ? ' active' : '');
+        btn.title = 'TRY fiyatlarını USD cinsinden goster';
+        btn.innerHTML = `<span>&#8378; &rarr; $</span>`;
+        btn.addEventListener('click', () => {
+            state.showUsd = !state.showUsd;
+            btn.classList.toggle('active', state.showUsd);
+            renderResults();
+        });
+        els.currencyToggleWrap.appendChild(btn);
     }
 
     // --- sparkline ---
@@ -362,46 +548,20 @@
         ctx.fill();
     }
 
-    // --- news ---
-    async function loadNews(force = false) {
-        els.newsArea.innerHTML = '<div class="empty glass">Haberler yukleniyor...</div>';
-        try {
-            const data = await API.news(state.market, force);
-            if (!data.items || !data.items.length) {
-                els.newsArea.innerHTML = '<div class="empty glass">Gosterilecek haber bulunamadi.</div>';
-                return;
-            }
-            els.newsArea.innerHTML = '';
-            data.items.forEach((n) => {
-                const card = document.createElement('a');
-                card.className = 'news-card glass';
-                card.href = n.link;
-                card.target = '_blank';
-                card.rel = 'noopener noreferrer';
-                card.innerHTML = `
-                    <span class="news-source">${n.source || 'Kaynak'}</span>
-                    <h3 class="news-title">${escapeHtml(n.title)}</h3>
-                    ${n.summary ? `<p class="news-summary">${escapeHtml(n.summary)}</p>` : ''}
-                    <span class="news-meta">${n.published || ''}</span>
-                `;
-                els.newsArea.appendChild(card);
-            });
-        } catch (err) {
-            console.error(err);
-            els.newsArea.innerHTML = `<div class="empty glass">Haberler yuklenemedi: ${err.message}</div>`;
-        }
-    }
-
     // --- modal ---
     async function openStockModal(symbol) {
         els.modal.classList.remove('hidden');
         els.modalContent.innerHTML = '<div class="empty">Yukleniyor...</div>';
         try {
-            const data = await API.stock(symbol);
+            const [data, newsData] = await Promise.all([
+                API.stock(symbol),
+                API.stockNews(symbol).catch(() => ({ items: [] })),
+            ]);
             if (data.error) throw new Error(data.error);
-            els.modalContent.innerHTML = renderStockDetail(data);
-            drawDetailChart(data.history || []);
+            els.modalContent.innerHTML = renderStockDetail(data, newsData);
+            drawDetailChart(data.history || [], data.supports || [], data.resistances || [], data.stop_loss, data.take_profit);
             wireModalWatchToggle(data.symbol);
+        wireModalPortfolioForm(data);
         } catch (err) {
             els.modalContent.innerHTML = `<div class="empty">Detay yuklenemedi: ${err.message}</div>`;
         }
@@ -413,80 +573,590 @@
         btn.addEventListener('click', () => {
             toggleWatch(symbol);
             btn.classList.toggle('active');
-            // re-render underlying list if visible
             renderResults();
         });
     }
 
-    function renderStockDetail(d) {
+    function renderStockDetail(d, newsData) {
         const display = d.symbol.replace('.IS', '');
         const change = Number(d.change_pct || 0);
-        const cls = change >= 0 ? 'up' : 'down';
-        const weekCls = (d.change_week_pct || 0) >= 0 ? 'up' : 'down';
-        const monthCls = (d.change_month_pct || 0) >= 0 ? 'up' : 'down';
         const isWatched = state.watchlist.has(d.symbol);
+        const spikeHtml = d.volume_spike
+            ? `<span class="badge volume-spike" style="margin-left:8px;">&#128640; Hacim Patlamasi</span>`
+            : '';
+        const nearPeakHtml = d.near_peak
+            ? `<span class="badge near-peak" style="margin-left:8px;" title="Fiyat 52 haftalik zirveye %5 icinde">&#9650; Tepeye Yakin</span>`
+            : '';
+        const reason = buildScoreReason(d);
+
+        const price = d.price;
+        const ccy = state.currency;
+
+        // --- Support / Resistance ---
+        const sups = (d.supports || []).filter(s => s < price * 1.05).slice(-4).reverse();
+        const ress = (d.resistances || []).filter(r => r > price * 0.95).slice(0, 4);
+
+        const srHtml = (sups.length || ress.length) ? `
+            <div style="margin-top:20px;">
+                <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--text-3);margin-bottom:10px;">Destek / Direnc Seviyeleri</div>
+                <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                    <div style="flex:1;min-width:120px;">
+                        <div style="font-size:10px;color:var(--neon);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;font-weight:700;">&#9650; Destek</div>
+                        ${sups.length ? sups.map(s => {
+                            const pct = ((s / price - 1) * 100).toFixed(1);
+                            return `<div class="sr-level sup">${fmtPrice(s, ccy)} <span class="sr-pct">${pct}%</span></div>`;
+                        }).join('') : '<div style="color:var(--text-3);font-size:12px;">Bulunamadi</div>'}
+                    </div>
+                    <div style="flex:1;min-width:120px;">
+                        <div style="font-size:10px;color:var(--danger);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;font-weight:700;">&#9650; Direnc</div>
+                        ${ress.length ? ress.map(r => {
+                            const pct = ((r / price - 1) * 100).toFixed(1);
+                            return `<div class="sr-level res">${fmtPrice(r, ccy)} <span class="sr-pct">+${pct}%</span></div>`;
+                        }).join('') : '<div style="color:var(--text-3);font-size:12px;">Bulunamadi</div>'}
+                    </div>
+                </div>
+            </div>` : '';
+
+        // --- Stop Loss / Take Profit ---
+        const sl = d.stop_loss;
+        const tp = d.take_profit;
+        const rr = d.risk_reward;
+        const slPct = sl ? ((sl / price - 1) * 100).toFixed(2) : null;
+        const tpPct = tp ? ((tp / price - 1) * 100).toFixed(2) : null;
+
+        const slTpHtml = (sl || tp) ? `
+            <div style="margin-top:14px;">
+                <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--text-3);margin-bottom:10px;">Stop Loss / Kar Al</div>
+                <div class="sl-tp-box">
+                    ${sl ? `<div class="sl-tp-item stop-loss">
+                        <span class="sl-tp-label">Stop Loss</span>
+                        <span class="sl-tp-value">${fmtPrice(sl, ccy)}</span>
+                        <span class="sl-tp-pct">${slPct}%</span>
+                    </div>` : ''}
+                    ${tp ? `<div class="sl-tp-item take-profit">
+                        <span class="sl-tp-label">Kar Al</span>
+                        <span class="sl-tp-value">${fmtPrice(tp, ccy)}</span>
+                        <span class="sl-tp-pct">+${tpPct}%</span>
+                    </div>` : ''}
+                    ${rr ? `<div class="sl-tp-item rr">
+                        <span class="sl-tp-label">Risk / Odul</span>
+                        <span class="sl-tp-value">1 : ${rr}</span>
+                    </div>` : ''}
+                </div>
+            </div>` : '';
+
+        // --- News ---
+        const newsItems = (newsData && newsData.items && newsData.items.length)
+            ? newsData.items.map((n) => {
+                const sentCls = n.sentiment === 'positive' ? 'sent-positive'
+                    : n.sentiment === 'negative' ? 'sent-negative' : 'sent-neutral';
+                const dateStr = n.published
+                    ? new Date(n.published * 1000).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' })
+                    : '';
+                return `<a class="stock-news-item ${sentCls}" href="${escapeAttr(n.link)}" target="_blank" rel="noopener noreferrer">
+                    <span class="sn-source">${escapeHtml(n.publisher || 'Kaynak')}</span>
+                    <span class="sn-title">${escapeHtml(n.title)}</span>
+                    <span class="sn-meta">${dateStr}</span>
+                </a>`;
+            }).join('')
+            : `<div style="color:var(--text-3);font-size:13px;padding:10px 0;">Bu hisse icin guncel haber bulunamadi.</div>`;
 
         return `
-            <div style="display:flex; align-items:center; gap:14px;">
+            <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
                 <div>
                     <h2 style="margin:0;font-family:'Outfit';font-size:28px;">${display}</h2>
-                    <div style="color: var(--text-3); font-size: 12px; letter-spacing: 1px; text-transform: uppercase;">${d.symbol}</div>
+                    <div style="color:var(--text-3);font-size:12px;letter-spacing:1px;text-transform:uppercase;">${d.symbol}</div>
                 </div>
-                <button id="modalStar" class="star-toggle ${isWatched ? 'active' : ''}" style="position:static; font-size:22px;" title="Favorilere ekle">&#9733;</button>
-                <div style="margin-left:auto">
+                <button id="modalStar" class="star-toggle ${isWatched ? 'active' : ''}" style="position:static;font-size:22px;" title="Favorilere ekle">&#9733;</button>
+                <div style="margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                    ${spikeHtml}${nearPeakHtml}
                     <div class="score-chip" data-score="${d.score}"><span class="star">&#9733;</span> ${d.score}/5</div>
                 </div>
             </div>
+            ${reason ? `<div style="margin-top:12px;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,.03);border:1px solid var(--glass-brd-soft);font-size:13px;color:var(--text-2);line-height:1.6;">${escapeHtml(reason)}</div>` : ''}
             <canvas id="detailChart" class="mini-chart" style="margin-top:18px;"></canvas>
-            <div class="detail-row"><span class="k">Fiyat</span><span>${fmtPrice(d.price, state.currency)}</span></div>
-            <div class="detail-row"><span class="k">Gunluk Degisim</span><span class="${cls}" style="color: ${change >= 0 ? 'var(--neon)' : 'var(--danger)'}">${fmtChange(change)}</span></div>
-            <div class="detail-row"><span class="k">Haftalik Degisim</span><span style="color: ${(d.change_week_pct || 0) >= 0 ? 'var(--neon)' : 'var(--danger)'}">${fmtChange(d.change_week_pct)}</span></div>
-            <div class="detail-row"><span class="k">Aylik Degisim</span><span style="color: ${(d.change_month_pct || 0) >= 0 ? 'var(--neon)' : 'var(--danger)'}">${fmtChange(d.change_month_pct)}</span></div>
-            <div class="detail-row"><span class="k">52 Hafta Yuksek</span><span>${fmtPrice(d.high_52w, state.currency)}</span></div>
-            <div class="detail-row"><span class="k">52 Hafta Dusuk</span><span>${fmtPrice(d.low_52w, state.currency)}</span></div>
+            <div class="detail-row"><span class="k">Fiyat</span><span>${fmtPrice(d.price, ccy)}</span></div>
+            <div class="detail-row"><span class="k">Gunluk Degisim</span><span style="color:${change >= 0 ? 'var(--neon)' : 'var(--danger)'}">${fmtChange(change)}</span></div>
+            <div class="detail-row"><span class="k">Haftalik Degisim</span><span style="color:${(d.change_week_pct || 0) >= 0 ? 'var(--neon)' : 'var(--danger)'}">${fmtChange(d.change_week_pct)}</span></div>
+            <div class="detail-row"><span class="k">Aylik Degisim</span><span style="color:${(d.change_month_pct || 0) >= 0 ? 'var(--neon)' : 'var(--danger)'}">${fmtChange(d.change_month_pct)}</span></div>
+            <div class="detail-row"><span class="k">52 Hafta Yuksek</span><span>${fmtPrice(d.high_52w, ccy)}</span></div>
+            <div class="detail-row"><span class="k">52 Hafta Dusuk</span><span>${fmtPrice(d.low_52w, ccy)}</span></div>
             <div class="detail-row"><span class="k">20g Ort. Hacim</span><span>${fmtVolume(d.avg_volume_20d || 0)}</span></div>
-            <div class="detail-row"><span class="k">Veri Noktasi</span><span>${d.data_points}</span></div>
+            ${slTpHtml}
+            ${srHtml}
             <div style="margin-top:18px;">
                 ${d.indicators.map((ind) => `
                     <div class="detail-ind">
                         <div class="di-head">
-                            <span class="di-name">${ind.name} ${ind.value != null ? `<span style="color:var(--text-3); font-weight:500">(${ind.value})</span>` : ''}</span>
+                            <span class="di-name">${ind.name} ${ind.value != null ? `<span style="color:var(--text-3);font-weight:500">(${ind.value})</span>` : ''}</span>
                             <span class="badge ${ind.signal ? 'on' : ''}">${ind.signal ? 'AL' : '-'}</span>
                         </div>
                         <div class="di-reason">${ind.detail || ''}</div>
                     </div>`).join('')}
             </div>
+            <div style="margin-top:22px;">
+                <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--text-3);margin-bottom:10px;">Son Haberler</div>
+                <div class="stock-news-list">${newsItems}</div>
+            </div>
+            <div id="addPosSection" class="add-pos-section">
+                <button class="btn add-pos-toggle">&#128204; Portf&ouml;ye Ekle</button>
+                <div class="add-pos-form hidden">
+                    <div class="add-pos-fields">
+                        <label class="add-pos-field">
+                            <span>Al&#305;&#351; Tarihi</span>
+                            <input type="date" id="posDate" />
+                        </label>
+                        <label class="add-pos-field">
+                            <span>Al&#305;&#351; Fiyat&#305;</span>
+                            <input type="number" id="posPrice" step="0.01" min="0.01" />
+                        </label>
+                        <label class="add-pos-field">
+                            <span>Adet</span>
+                            <input type="number" id="posQty" min="1" step="1" value="1" />
+                        </label>
+                    </div>
+                    <div class="add-pos-btns">
+                        <button class="btn btn-primary" id="posConfirmBtn">Portf&ouml;ye Ekle</button>
+                        <button class="btn" id="posCancelBtn">&#304;ptal</button>
+                    </div>
+                </div>
+            </div>
         `;
     }
 
-    function drawDetailChart(history) {
+    function drawDetailChart(history, supports, resistances, stopLoss, takeProfit) {
         const canvas = document.getElementById('detailChart');
         if (!canvas || !history.length) return;
+
         const closes = history.map((p) => p.close);
         const last = closes[closes.length - 1];
         const first = closes[0];
-        drawSparkline(canvas, closes, last >= first);
+        const isUp = last >= first;
+
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        const w = Math.max(1, rect.width);
+        const h = Math.max(1, rect.height);
+        canvas.width = w * dpr;
+        canvas.height = h * dpr;
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        ctx.clearRect(0, 0, w, h);
+
+        // Price range: include S/R and SL/TP levels
+        const allPrices = [...closes];
+        if (stopLoss && stopLoss > 0) allPrices.push(stopLoss);
+        if (takeProfit && takeProfit > 0) allPrices.push(takeProfit);
+
+        const rawMin = Math.min(...allPrices);
+        const rawMax = Math.max(...allPrices);
+        const pad5 = (rawMax - rawMin) * 0.05 || rawMin * 0.02;
+        const minP = rawMin - pad5;
+        const maxP = rawMax + pad5;
+        const range = maxP - minP || 1;
+        const pad = 12;
+
+        const priceToY = (p) => h - ((p - minP) / range) * (h - pad * 2) - pad;
+
+        // Draw horizontal level lines
+        const drawHLine = (price, color, dash, alpha) => {
+            if (price == null || price <= 0) return;
+            const y = priceToY(price);
+            if (y < 0 || y > h) return;
+            ctx.save();
+            ctx.beginPath();
+            ctx.setLineDash(dash || [4, 4]);
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = color;
+            ctx.globalAlpha = alpha || 0.45;
+            ctx.moveTo(0, y);
+            ctx.lineTo(w, y);
+            ctx.stroke();
+            ctx.restore();
+        };
+
+        // Nearest 2 supports below price and 2 resistances above
+        const nearSups = (supports || []).filter(s => s < last).slice(-2);
+        const nearRess = (resistances || []).filter(r => r > last).slice(0, 2);
+        nearSups.forEach(s => drawHLine(s, '#34f5a8', [3, 4], 0.4));
+        nearRess.forEach(r => drawHLine(r, '#ff5370', [3, 4], 0.4));
+        if (stopLoss) drawHLine(stopLoss, '#ff5370', [8, 4], 0.7);
+        if (takeProfit) drawHLine(takeProfit, '#34f5a8', [8, 4], 0.7);
+
+        // Draw price line
+        const color = isUp ? '#34f5a8' : '#ff5370';
+        const shadowCol = isUp ? 'rgba(52,245,168,.45)' : 'rgba(255,83,112,.45)';
+        const grad = ctx.createLinearGradient(0, 0, 0, h);
+        grad.addColorStop(0, isUp ? 'rgba(52,245,168,0.35)' : 'rgba(255,83,112,0.3)');
+        grad.addColorStop(1, isUp ? 'rgba(52,245,168,0)' : 'rgba(255,83,112,0)');
+
+        const step = w / Math.max(1, closes.length - 1);
+        ctx.beginPath();
+        closes.forEach((v, i) => {
+            const x = i * step;
+            const y = priceToY(v);
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        });
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = color;
+        ctx.shadowColor = shadowCol;
+        ctx.shadowBlur = 6;
+        ctx.stroke();
+        ctx.lineTo(w, h);
+        ctx.lineTo(0, h);
+        ctx.closePath();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = grad;
+        ctx.fill();
     }
 
     function closeModal() { els.modal.classList.add('hidden'); }
 
-    // --- events ---
-    els.tabs.forEach((t) => {
-        t.addEventListener('click', () => setTab(t.dataset.tab));
-    });
+    // --- portfolio ---
+    const PORTFOLIO_KEY = 'nebula.portfolio.v2';
+    const port = { positions: [], details: {}, loading: new Set() };
 
-    function setTab(name) {
-        state.tab = name;
-        els.tabs.forEach((x) => x.classList.toggle('active', x.dataset.tab === name));
-        els.tabPanels.forEach((p) => p.classList.remove('active'));
-        document.getElementById(`tab-${name}`).classList.add('active');
-        if (name === 'news' && !els.newsArea.querySelector('.news-card')) loadNews();
+    function loadPortfolio() {
+        try {
+            const raw = localStorage.getItem(PORTFOLIO_KEY);
+            if (raw) port.positions = JSON.parse(raw);
+        } catch (_) { port.positions = []; }
+        updatePortBadge();
     }
 
-    els.refreshBtn.addEventListener('click', () => {
-        if (state.tab === 'scan') loadScan(true);
-        else loadNews(true);
-    });
+    function savePortfolio() {
+        try { localStorage.setItem(PORTFOLIO_KEY, JSON.stringify(port.positions)); } catch (_) {}
+        updatePortBadge();
+    }
+
+    function updatePortBadge() {
+        const badge = document.getElementById('portBadge');
+        if (!badge) return;
+        const n = port.positions.length;
+        badge.textContent = n;
+        badge.classList.toggle('hidden', n === 0);
+    }
+
+    function addPosition(symbol, market, buyDate, buyPrice, qty) {
+        port.positions.push({
+            id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+            symbol: symbol.toUpperCase(),
+            market: market || 'us',
+            buyDate,
+            buyPrice: parseFloat(buyPrice),
+            qty: parseFloat(qty) || 1,
+        });
+        savePortfolio();
+    }
+
+    function removePosition(id) {
+        port.positions = port.positions.filter(p => p.id !== id);
+        savePortfolio();
+    }
+
+    async function fetchPortfolioDetails(force = false) {
+        const symbols = [...new Set(port.positions.map(p => p.symbol))];
+        const toFetch = force ? symbols : symbols.filter(s => !port.details[s] && !port.loading.has(s));
+        if (!toFetch.length) return;
+        await Promise.all(toFetch.map(async (sym) => {
+            if (port.loading.has(sym)) return;
+            port.loading.add(sym);
+            try {
+                const d = await API.stock(sym);
+                if (!d.error) port.details[sym] = d;
+            } catch (_) {}
+            finally { port.loading.delete(sym); }
+        }));
+    }
+
+    function detectTrend(history) {
+        if (!history || history.length < 10) return 'neutral';
+        const closes = history.map(h => h.close);
+        const recent = closes.slice(-10);
+        const older = closes.slice(-20, -10);
+        if (older.length < 5) return 'neutral';
+        const ra = recent.reduce((a, b) => a + b, 0) / recent.length;
+        const oa = older.reduce((a, b) => a + b, 0) / older.length;
+        const diff = (ra - oa) / oa * 100;
+        if (diff > 2.5) return 'up';
+        if (diff < -2.5) return 'down';
+        return 'neutral';
+    }
+
+    function detectWedge(history) {
+        if (!history || history.length < 20) return null;
+        const closes = history.map(h => h.close).slice(-20);
+        const mid = Math.floor(closes.length / 2);
+        const early = closes.slice(0, mid);
+        const late = closes.slice(mid);
+        const earlyRange = Math.max(...early) - Math.min(...early);
+        const lateRange = Math.max(...late) - Math.min(...late);
+        if (earlyRange === 0 || lateRange / earlyRange > 0.60) return null;
+        const earlyAvg = early.reduce((a, b) => a + b, 0) / early.length;
+        const lateAvg = late.reduce((a, b) => a + b, 0) / late.length;
+        return lateAvg > earlyAvg ? 'rising' : 'falling';
+    }
+
+    function buildSellRecommendation(d, pos) {
+        const price = d.price;
+        const pnlPct = (price - pos.buyPrice) / pos.buyPrice * 100;
+        const sl = d.stop_loss;
+        const tp = d.take_profit;
+        const score = d.score || 0;
+        const weekPct = d.change_week_pct || 0;
+        const trend = detectTrend(d.history || []);
+        const wedge = detectWedge(d.history || []);
+        const reasons = [];
+
+        if (sl && price <= sl) {
+            reasons.push('Stop loss seviyesi kırıldı, kayıpları sınırla');
+            if (weekPct < -5) reasons.push(`Bu hafta %${weekPct.toFixed(1)} düşüş`);
+            return { level: 'sat_hemen', label: 'Hemen Sat', reasons };
+        }
+        if (pnlPct < -15 && score === 0 && trend === 'down') {
+            reasons.push(`%${Math.abs(pnlPct).toFixed(1)} zarar, al sinyali kalmadı`);
+            reasons.push('Düşüş trendi devam ediyor');
+            return { level: 'sat_hemen', label: 'Hemen Sat', reasons };
+        }
+
+        if (tp && price >= tp * 0.98) {
+            reasons.push('Kar al hedefine ulaşıldı');
+            if (d.near_peak) reasons.push('52 haftalık zirveye çok yakın');
+            return { level: 'kar_al', label: 'Kar Al', reasons };
+        }
+        if (d.near_peak && pnlPct > 15) {
+            reasons.push(`%${pnlPct.toFixed(1)} kar var, zirve bölgesine girildi`);
+            reasons.push('Kısmi kar almayı değerlendirin');
+            return { level: 'kar_al', label: 'Kar Al', reasons };
+        }
+        if (pnlPct > 30 && score <= 1) {
+            reasons.push(`%${pnlPct.toFixed(1)} büyük kar elde edildi`);
+            reasons.push('Sinyaller zayıfladı, karı koruma zamanı');
+            return { level: 'kar_al', label: 'Kar Al', reasons };
+        }
+
+        let bearish = 0;
+        if (sl && price < sl * 1.035) { reasons.push("Stop loss'a %3'ten az mesafe kaldı"); bearish += 2; }
+        if (score <= 1 && weekPct < -3) { reasons.push(`${score}/5 sinyal, haftalık ${weekPct.toFixed(1)}%`); bearish++; }
+        if (pnlPct > 18 && score === 0) { reasons.push(`%${pnlPct.toFixed(1)} karda ama tüm sinyaller söndü`); bearish += 2; }
+        if (wedge === 'rising' && score <= 2) { reasons.push('Yükselen kama kırılım riski (bearish)'); bearish++; }
+        if (trend === 'down' && score <= 1 && pnlPct < 0) { reasons.push('Düşüş trendi + negatif pozisyon'); bearish++; }
+        if (bearish >= 2) return { level: 'sat_dusun', label: 'Satışı Düşün', reasons: reasons.slice(0, 3) };
+
+        let bullish = 0;
+        const bullReasons = [];
+        if (score >= 4) { bullReasons.push(`${score}/5 güçlü al sinyali`); bullish += 2; }
+        else if (score === 3) { bullReasons.push('3/5 iyi sinyal seviyesi'); bullish++; }
+        if (trend === 'up') { bullReasons.push('Yukarı trend devam ediyor'); bullish++; }
+        if (d.volume_spike) { bullReasons.push('Hacim patlaması güç göstergesi'); bullish++; }
+        if (wedge === 'falling') { bullReasons.push('Düşen kama — yukarı kırılım beklentisi'); bullish++; }
+        if (weekPct > 3 && score >= 2) { bullReasons.push(`Haftalık +%${weekPct.toFixed(1)} güçlü ivme`); bullish++; }
+        if (bullish >= 3) return { level: 'tut', label: 'Tut', reasons: bullReasons.slice(0, 3) };
+
+        const watchReasons = [];
+        if (score >= 2) watchReasons.push(`${score}/5 sinyal var, güçlenme bekleniyor`);
+        if (Math.abs(weekPct) <= 2) watchReasons.push('Yatay seyir, net yön bekleniyor');
+        else if (weekPct > 0) watchReasons.push(`Haftalık +%${weekPct.toFixed(1)} pozitif seyir`);
+        if (wedge) watchReasons.push(wedge === 'rising' ? 'Yükselen kama: kırılımı izle' : 'Düşen kama: yukarı kırılım beklentisi');
+        if (!watchReasons.length) watchReasons.push('Karma sinyaller, izlemeye devam');
+        return { level: 'izle', label: 'İzle', reasons: watchReasons.slice(0, 2) };
+    }
+
+    function fmtPortPrice(price, market) {
+        if (market === 'bist') {
+            if (state.showUsd && state.usdRate)
+                return '$' + (price / state.usdRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            return '₺' + price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+        return '$' + price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function renderPortfolioTab() {
+        const overview = document.getElementById('portOverview');
+        const list = document.getElementById('portList');
+        if (!overview || !list) return;
+
+        if (!port.positions.length) {
+            overview.innerHTML = '';
+            list.innerHTML = `
+                <div class="empty glass" style="text-align:center;padding:50px 20px;">
+                    <div style="font-size:48px;margin-bottom:16px;">💼</div>
+                    <div style="font-size:17px;font-weight:600;margin-bottom:8px;">Portföyünüz henüz boş</div>
+                    <div style="font-size:13px;color:var(--text-3);max-width:300px;margin:0 auto;line-height:1.6;">
+                        Tarama sekmesinden bir hisseye tıklayın ve "Portföye Ekle" butonunu kullanın.
+                    </div>
+                </div>`;
+            return;
+        }
+
+        let totalInvested = 0, totalCurrent = 0, loadedCount = 0;
+        for (const pos of port.positions) {
+            const d = port.details[pos.symbol];
+            totalInvested += pos.buyPrice * pos.qty;
+            if (d) { totalCurrent += d.price * pos.qty; loadedCount++; }
+        }
+        const totalPnl = totalCurrent - totalInvested;
+        const totalPnlPct = totalInvested > 0 ? totalPnl / totalInvested * 100 : 0;
+        const pnlColor = totalPnl >= 0 ? 'var(--neon)' : 'var(--danger)';
+
+        overview.innerHTML = `
+            <div class="port-overview glass">
+                <div class="port-ov-item">
+                    <span class="s-label">Toplam Yatırım</span>
+                    <span class="s-value">${fmtPortPrice(totalInvested, state.market)}</span>
+                </div>
+                <div class="port-ov-item">
+                    <span class="s-label">Güncel Değer</span>
+                    <span class="s-value">${loadedCount ? fmtPortPrice(totalCurrent, state.market) : '...'}</span>
+                </div>
+                <div class="port-ov-item">
+                    <span class="s-label">Toplam K/Z</span>
+                    <span class="s-value" style="color:${pnlColor}">
+                        ${loadedCount
+                            ? (totalPnl >= 0 ? '+' : '') + fmtPortPrice(Math.abs(totalPnl), state.market) +
+                              ' (' + (totalPnlPct >= 0 ? '+' : '') + totalPnlPct.toFixed(2) + '%)'
+                            : '...'}
+                    </span>
+                </div>
+                <div class="port-ov-item">
+                    <span class="s-label">Açık Pozisyon</span>
+                    <span class="s-value">${port.positions.length}</span>
+                </div>
+            </div>`;
+
+        const frag = document.createDocumentFragment();
+        [...port.positions].reverse().forEach(pos => {
+            frag.appendChild(buildPositionCard(pos, port.details[pos.symbol]));
+        });
+        list.innerHTML = '';
+        list.appendChild(frag);
+    }
+
+    function buildPositionCard(pos, d) {
+        const card = document.createElement('div');
+        card.className = 'port-card glass';
+        const displaySym = pos.symbol.replace('.IS', '');
+
+        const headerHtml = `
+            <div class="port-card-top">
+                <div class="port-sym-block">
+                    <span class="port-sym">${displaySym}</span>
+                    <span class="port-sym-full">${pos.symbol}</span>
+                </div>
+                <div class="port-buy-info">
+                    <span>${fmtPortPrice(pos.buyPrice, pos.market)} &times; ${pos.qty} adet</span>
+                    <span class="port-buy-date">${pos.buyDate}</span>
+                </div>
+                <button class="port-remove-btn" data-id="${pos.id}" title="Pozisyonu kaldır">&times;</button>
+            </div>`;
+
+        if (!d) {
+            card.innerHTML = headerHtml + `
+                <div class="port-loading">
+                    <span class="port-loading-dot"></span>
+                    <span class="port-loading-dot"></span>
+                    <span class="port-loading-dot"></span>
+                    Güncel fiyat yükleniyor...
+                </div>`;
+        } else {
+            const price = d.price;
+            const pnlRaw = (price - pos.buyPrice) * pos.qty;
+            const pnlPct = (price - pos.buyPrice) / pos.buyPrice * 100;
+            const pnlColor = pnlRaw >= 0 ? 'var(--neon)' : 'var(--danger)';
+            const pnlSign = pnlRaw >= 0 ? '+' : '';
+            const rec = buildSellRecommendation(d, pos);
+            const recClass = { sat_hemen: 'rec-danger', kar_al: 'rec-take', sat_dusun: 'rec-warn', tut: 'rec-hold', izle: 'rec-watch' }[rec.level] || 'rec-watch';
+            const sl = d.stop_loss, tp = d.take_profit, rr = d.risk_reward;
+
+            card.innerHTML = headerHtml + `
+                <div class="port-card-body">
+                    <div class="port-current-row">
+                        <div>
+                            <div class="port-price-label">G&uuml;ncel Fiyat</div>
+                            <div class="port-current-price">${fmtPortPrice(price, pos.market)}</div>
+                            <div style="font-size:12px;color:var(--text-3);margin-top:2px;">${(d.change_pct || 0) >= 0 ? '+' : ''}${(d.change_pct || 0).toFixed(2)}% bug&uuml;n</div>
+                        </div>
+                        <div class="port-pnl" style="color:${pnlColor}">
+                            <div class="port-pnl-main">${pnlSign}${fmtPortPrice(Math.abs(pnlRaw), pos.market)}</div>
+                            <div class="port-pnl-pct">${pnlSign}${pnlPct.toFixed(2)}%</div>
+                        </div>
+                    </div>
+                    <div class="port-levels-row">
+                        ${sl ? `<span class="port-level port-sl">SL: ${fmtPortPrice(sl, pos.market)}</span>` : ''}
+                        ${tp ? `<span class="port-level port-tp">TP: ${fmtPortPrice(tp, pos.market)}</span>` : ''}
+                        ${rr ? `<span class="port-level port-rr">R/R 1:${rr}</span>` : ''}
+                        <span class="port-level port-score">${d.score}/5 sinyal</span>
+                    </div>
+                    <div class="port-rec ${recClass}">
+                        <span class="rec-badge">${escapeHtml(rec.label)}</span>
+                        <div class="rec-reasons">${rec.reasons.map(r => `<span>&middot; ${escapeHtml(r)}</span>`).join('')}</div>
+                    </div>
+                    <div class="port-card-footer">
+                        <button class="btn btn-sm port-detail-btn" data-sym="${pos.symbol}">Grafik &amp; Detay</button>
+                        <button class="port-remove-link" data-id="${pos.id}">Kaldır</button>
+                    </div>
+                </div>`;
+        }
+
+        card.querySelectorAll('.port-remove-btn, .port-remove-link').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                removePosition(btn.dataset.id);
+                renderPortfolioTab();
+            });
+        });
+        const detBtn = card.querySelector('.port-detail-btn');
+        if (detBtn) detBtn.addEventListener('click', (e) => { e.stopPropagation(); openStockModal(detBtn.dataset.sym); });
+        return card;
+    }
+
+    function wireModalPortfolioForm(data) {
+        const section = document.getElementById('addPosSection');
+        if (!section) return;
+        const toggle = section.querySelector('.add-pos-toggle');
+        const form = section.querySelector('.add-pos-form');
+        const priceInput = document.getElementById('posPrice');
+        const dateInput = document.getElementById('posDate');
+        const qtyInput = document.getElementById('posQty');
+
+        if (priceInput) priceInput.value = data.price;
+        if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
+        if (qtyInput) qtyInput.value = 1;
+
+        const existing = port.positions.filter(p => p.symbol === data.symbol);
+        if (toggle && existing.length > 0)
+            toggle.innerHTML = `&#128204; Portf&ouml;ye Ekle <span style="opacity:.6;font-size:11px;">(${existing.length} mevcut)</span>`;
+
+        toggle?.addEventListener('click', () => form?.classList.toggle('hidden'));
+        document.getElementById('posCancelBtn')?.addEventListener('click', () => form?.classList.add('hidden'));
+        document.getElementById('posConfirmBtn')?.addEventListener('click', () => {
+            const date = dateInput?.value;
+            const price = parseFloat(priceInput?.value);
+            const qty = parseFloat(qtyInput?.value) || 1;
+            if (!date || !price || isNaN(price) || price <= 0) { priceInput?.focus(); return; }
+            addPosition(data.symbol, state.market, date, price, qty);
+            form?.classList.add('hidden');
+            if (toggle) {
+                const n = port.positions.filter(p => p.symbol === data.symbol).length;
+                toggle.innerHTML = `&#10003; Portf&ouml;ye Eklendi (${n} pozisyon)`;
+                toggle.style.cssText = 'background:rgba(52,245,168,.12);color:var(--neon);border-color:rgba(52,245,168,.4);pointer-events:none;';
+            }
+        });
+    }
+
+    function switchTab(tab) {
+        const scanSec = document.getElementById('tab-scan');
+        const portSec = document.getElementById('tab-portfolio');
+        if (scanSec) scanSec.classList.toggle('hidden', tab !== 'scan');
+        if (portSec) portSec.classList.toggle('hidden', tab !== 'portfolio');
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tab));
+        if (tab === 'portfolio') fetchPortfolioDetails().then(() => renderPortfolioTab());
+    }
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
+
+    // --- events ---
+    els.refreshBtn.addEventListener('click', () => loadScan(true));
 
     els.searchInput.addEventListener('input', (e) => {
         state.search = e.target.value.trim();
@@ -509,28 +1179,35 @@
 
     els.sortSelect.addEventListener('change', (e) => {
         state.sort = e.target.value;
-        renderResults();
+        const m = ms();
+        if (m.hasMore && m.loadedOnce) {
+            state.byMarket[state.market] = newMarketState();
+            loadScan();
+        } else {
+            renderResults();
+        }
     });
 
     els.modalClose.addEventListener('click', closeModal);
     els.modal.querySelector('.modal-backdrop').addEventListener('click', closeModal);
 
-    // keyboard shortcuts
     document.addEventListener('keydown', (e) => {
         const isTyping = ['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target && e.target.tagName) || '');
         if (e.key === 'Escape') { closeModal(); return; }
         if (isTyping) return;
         if (e.key === '/') { e.preventDefault(); els.searchInput.focus(); return; }
-        if (e.key === '1') { setTab('scan'); return; }
-        if (e.key === '2') { setTab('news'); return; }
-        if (e.key.toLowerCase() === 'r') { if (state.tab === 'scan') loadScan(true); else loadNews(true); }
+        if (e.key.toLowerCase() === 'r') loadScan(true);
     });
 
     window.addEventListener('resize', () => {
-        if (state.tab === 'scan' && state.scanResults.length) renderResults();
+        if (ms().results.length) renderResults();
     });
 
     // bootstrap
     loadWatchlist();
-    loadMarkets().then(() => loadScan());
+    loadPortfolio();
+    loadMarkets().then(() => {
+        if (state.market === 'bist') fetchExchangeRate();
+        loadScan();
+    });
 })();
