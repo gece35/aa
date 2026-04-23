@@ -980,3 +980,192 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
     .port-current-price, .port-pnl-main { font-size: 18px; }
     .tab-bar { margin-left: 16px; }
 }
+
+/* ── Portföy Grafik Analiz Modalı ────────────────────────────────────────── */
+.port-chart-card {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(96vw, 1100px);
+    max-height: 92vh;
+    overflow-y: auto;
+    padding: 28px 28px 24px;
+    z-index: 1001;
+    border-radius: var(--radius-l);
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,.1) transparent;
+}
+.port-chart-card::-webkit-scrollbar { width: 5px; }
+.port-chart-card::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 10px; }
+
+.port-chart-wrap {
+    width: 100%;
+    height: 400px;
+    background: #07080f;
+    border-radius: var(--radius-s);
+    overflow: hidden;
+    margin: 16px 0 0;
+    border: 1px solid var(--glass-brd-soft);
+}
+
+/* Grafik modal başlık */
+.chart-modal-hdr {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.chart-sym-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.chart-sym {
+    font-family: 'Outfit', sans-serif;
+    font-size: 26px;
+    font-weight: 800;
+    color: var(--text-1);
+    line-height: 1;
+}
+.chart-market-badge {
+    font-size: 11px;
+    font-weight: 700;
+    background: rgba(139,92,246,.18);
+    color: #a78bfa;
+    border: 1px solid rgba(139,92,246,.3);
+    border-radius: 6px;
+    padding: 3px 9px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+.chart-pos-context {
+    display: flex;
+    gap: 18px;
+    font-size: 13px;
+    color: var(--text-3);
+    flex-wrap: wrap;
+    margin-top: 6px;
+    align-items: center;
+}
+.chart-pos-context span { display: flex; align-items: center; gap: 5px; }
+.chart-pos-context .pnl-pos { font-weight: 700; font-size: 15px; }
+
+/* Legend satırı */
+.chart-legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--text-3);
+}
+.chart-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.chart-legend-line {
+    width: 18px;
+    height: 2px;
+    border-radius: 1px;
+}
+.chart-legend-dashed {
+    width: 18px;
+    height: 0;
+    border-top: 2px dashed currentColor;
+}
+
+/* ── Formasyon Kartları ───────────────────────────────────────────────────── */
+.pattern-section-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    margin: 22px 0 12px;
+}
+.pattern-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+    gap: 12px;
+    padding-bottom: 8px;
+}
+.pattern-card {
+    background: rgba(255,255,255,.03);
+    border: 1px solid var(--glass-brd-soft);
+    border-left: 3px solid transparent;
+    border-radius: var(--radius-s);
+    padding: 14px 16px;
+    transition: background var(--trans);
+}
+.pattern-card:hover { background: rgba(255,255,255,.05); }
+.pattern-card.bullish  { border-left-color: var(--neon); }
+.pattern-card.bearish  { border-left-color: var(--danger); }
+.pattern-card.neutral  { border-left-color: #fbbf24; }
+
+.pattern-card-hdr {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+.pattern-emoji { font-size: 17px; line-height: 1; }
+.pattern-name  { flex: 1; font-weight: 700; font-size: 14px; color: var(--text-1); }
+.pattern-strength {
+    font-size: 10px;
+    color: var(--text-3);
+    background: rgba(255,255,255,.06);
+    border-radius: 20px;
+    padding: 2px 9px;
+    letter-spacing: .03em;
+}
+.pattern-desc {
+    font-size: 12px;
+    color: var(--text-2);
+    line-height: 1.55;
+    margin-bottom: 7px;
+}
+.pattern-signal {
+    font-size: 12px;
+    color: var(--text-3);
+    font-style: italic;
+    line-height: 1.4;
+    border-top: 1px solid var(--glass-brd-soft);
+    padding-top: 7px;
+}
+
+.pattern-empty {
+    padding: 24px 0;
+    text-align: center;
+    color: var(--text-3);
+    font-size: 13px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.pattern-empty small { font-size: 12px; opacity: .7; }
+
+@media (max-width: 700px) {
+    .port-chart-card { padding: 20px 16px 18px; }
+    .port-chart-wrap { height: 300px; }
+    .pattern-grid { grid-template-columns: 1fr; }
+    .chart-sym { font-size: 22px; }
+}
+
+/* ── Tarama kartı grafik butonu ──────────────────────────────────────────── */
+.scan-chart-btn {
+    margin-top: 8px;
+    font-size: 11px;
+    padding: 5px 12px;
+    color: var(--accent-2);
+    border-color: rgba(34,211,238,.3);
+    background: rgba(34,211,238,.07);
+    transition: background var(--trans), border-color var(--trans);
+}
+.scan-chart-btn:hover {
+    background: rgba(34,211,238,.15);
+    border-color: rgba(34,211,238,.55);
+}

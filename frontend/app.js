@@ -387,6 +387,10 @@
             : '';
         const reason = buildScoreReason(r);
 
+        const chartBtnHtml = r.score >= 4
+            ? `<button class="scan-chart-btn btn btn-sm" data-sym="${r.symbol}" title="Candlestick grafik ve formasyon analizi">&#128202; Grafik</button>`
+            : '';
+
         card.innerHTML = `
             <button class="star-toggle ${isWatched ? 'active' : ''}" data-sym="${r.symbol}" title="Favorilere ekle">&#9733;</button>
             <div class="stock-rank">${idx + 1}</div>
@@ -411,10 +415,11 @@
                 <span class="star">&#9733;</span> ${r.score}/5
             </div>
             ${reason ? `<div class="score-reason">${escapeHtml(reason)}</div>` : ''}
+            ${chartBtnHtml}
         `;
 
         card.addEventListener('click', (e) => {
-            if (e.target.closest('.star-toggle')) return;
+            if (e.target.closest('.star-toggle') || e.target.closest('.scan-chart-btn')) return;
             openStockModal(r.symbol);
         });
 
@@ -425,6 +430,9 @@
             starBtn.classList.toggle('active');
             if (state.onlyWatched) renderResults();
         });
+
+        const scanChartBtn = card.querySelector('.scan-chart-btn');
+        if (scanChartBtn) scanChartBtn.addEventListener('click', (e) => { e.stopPropagation(); openScanChart(r); });
 
         return card;
     }
@@ -1107,7 +1115,7 @@
             });
         });
         const detBtn = card.querySelector('.port-detail-btn');
-        if (detBtn) detBtn.addEventListener('click', (e) => { e.stopPropagation(); openStockModal(detBtn.dataset.sym); });
+        if (detBtn) detBtn.addEventListener('click', (e) => { e.stopPropagation(); openPortfolioChart(pos); });
         return card;
     }
 
@@ -1144,6 +1152,243 @@
             }
         });
     }
+
+    // --- grafik analizi (portföy + tarama) ---
+    async function openPortfolioChart(pos) {
+        const modal = document.getElementById('portChartModal');
+        const headerEl = document.getElementById('portChartHeader');
+        const chartEl = document.getElementById('portChartContainer');
+        const patternEl = document.getElementById('portPatternCards');
+        if (!modal) return;
+
+        modal.classList.remove('hidden');
+        if (headerEl) headerEl.innerHTML = `<div style="color:var(--text-3);padding:4px 0 8px;">Grafik yükleniyor...</div>`;
+        if (chartEl) chartEl.innerHTML = '';
+        if (patternEl) patternEl.innerHTML = '';
+
+        if (!port.details[pos.symbol]) {
+            try {
+                const d = await API.stock(pos.symbol);
+                if (!d.error) port.details[pos.symbol] = d;
+            } catch (_) {}
+        }
+        renderChartModal(port.details[pos.symbol], pos);
+    }
+
+    async function openScanChart(r) {
+        const modal = document.getElementById('portChartModal');
+        const headerEl = document.getElementById('portChartHeader');
+        const chartEl = document.getElementById('portChartContainer');
+        const patternEl = document.getElementById('portPatternCards');
+        if (!modal) return;
+
+        modal.classList.remove('hidden');
+        if (headerEl) headerEl.innerHTML = `<div style="color:var(--text-3);padding:4px 0 8px;">Grafik yükleniyor...</div>`;
+        if (chartEl) chartEl.innerHTML = '';
+        if (patternEl) patternEl.innerHTML = '';
+
+        let d = null;
+        try {
+            d = await API.stock(r.symbol);
+            if (d.error) throw new Error(d.error);
+        } catch (err) {
+            if (headerEl) headerEl.innerHTML = `<div style="color:var(--danger);padding:8px;">Veri yüklenemedi: ${escapeHtml(err.message)}</div>`;
+            return;
+        }
+        renderChartModal(d, null);
+    }
+
+    function renderChartModal(d, pos) {
+        const headerEl = document.getElementById('portChartHeader');
+        const chartEl = document.getElementById('portChartContainer');
+        const patternEl = document.getElementById('portPatternCards');
+        if (!headerEl || !chartEl) return;
+
+        if (chartEl._lwChart) { try { chartEl._lwChart.remove(); } catch (_) {} chartEl._lwChart = null; }
+        if (chartEl._resizeObs) { chartEl._resizeObs.disconnect(); chartEl._resizeObs = null; }
+
+        const symbol = d ? d.symbol : (pos ? pos.symbol : '?');
+        const displaySym = symbol.replace('.IS', '');
+        const market = pos ? pos.market : state.market;
+        const price = d ? d.price : null;
+
+        let contextHtml = '';
+        let recHtml = '';
+        if (pos) {
+            const pnlPct = (price !== null) ? (price - pos.buyPrice) / pos.buyPrice * 100 : null;
+            const pnlColor = (pnlPct !== null && pnlPct >= 0) ? 'var(--neon)' : 'var(--danger)';
+            const pnlSign = (pnlPct !== null && pnlPct >= 0) ? '+' : '';
+            const rec = d ? buildSellRecommendation(d, pos) : null;
+            const recClass = rec ? ({ sat_hemen: 'rec-danger', kar_al: 'rec-take', sat_dusun: 'rec-warn', tut: 'rec-hold', izle: 'rec-watch' }[rec.level] || 'rec-watch') : '';
+            contextHtml = `
+                <div class="chart-pos-context">
+                    <span>Alış: <strong>${fmtPortPrice(pos.buyPrice, pos.market)}</strong> &times; ${pos.qty} adet</span>
+                    <span>${pos.buyDate}</span>
+                    ${price !== null ? `<span>Güncel: <strong>${fmtPortPrice(price, pos.market)}</strong></span>` : ''}
+                    ${pnlPct !== null ? `<span class="pnl-pos" style="color:${pnlColor}">${pnlSign}${pnlPct.toFixed(2)}%</span>` : ''}
+                </div>`;
+            recHtml = rec ? `<div class="port-rec ${recClass}" style="margin-top:0;flex-shrink:0;"><span class="rec-badge">${escapeHtml(rec.label)}</span></div>` : '';
+        } else {
+            const reason = d ? buildScoreReason(d) : '';
+            const spikeHtml = d && d.volume_spike ? `<span class="badge volume-spike">&#128640; Hacim Patlamasi</span>` : '';
+            const nearPeakHtml = d && d.near_peak ? `<span class="badge near-peak">&#9650; Tepe</span>` : '';
+            contextHtml = `
+                <div class="chart-pos-context" style="align-items:center;gap:8px;">
+                    ${spikeHtml}${nearPeakHtml}
+                    ${reason ? `<span style="font-size:12px;color:var(--text-2);font-style:italic;">${escapeHtml(reason)}</span>` : ''}
+                </div>`;
+        }
+
+        headerEl.innerHTML = `
+            <div class="chart-modal-hdr">
+                <div>
+                    <div class="chart-sym-row">
+                        <span class="chart-sym">${displaySym}</span>
+                        <span class="chart-market-badge">${market.toUpperCase()}</span>
+                        ${d && d.score != null ? `<span class="score-chip" data-score="${d.score}" style="font-size:12px;padding:3px 10px;"><span class="star">&#9733;</span> ${d.score}/5</span>` : ''}
+                    </div>
+                    ${contextHtml}
+                </div>
+                ${recHtml}
+            </div>
+            <div class="chart-legend">
+                ${pos ? `<span class="chart-legend-item"><span class="chart-legend-line" style="background:#a78bfa;"></span>Alış</span>
+                <span class="chart-legend-item"><span class="chart-legend-line" style="background:#ff5370;border-top:2px dashed #ff5370;height:0;"></span>SL</span>` : ''}
+                <span class="chart-legend-item"><span class="chart-legend-line" style="background:#34f5a8;border-top:2px dashed #34f5a8;height:0;"></span>TP</span>
+                <span class="chart-legend-item"><span class="chart-legend-line" style="background:rgba(52,245,168,.4);"></span>Destek</span>
+                <span class="chart-legend-item"><span class="chart-legend-line" style="background:rgba(255,83,112,.4);"></span>Direnç</span>
+            </div>`;
+
+        if (!d || !d.ohlcv || !d.ohlcv.length) {
+            chartEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-3);font-size:13px;">Grafik verisi yüklenemedi.</div>';
+            return;
+        }
+
+        if (typeof LightweightCharts === 'undefined') {
+            chartEl.innerHTML = '<div style="padding:20px;color:var(--text-3);font-size:13px;">Grafik kütüphanesi yüklenemedi. İnternet bağlantısını kontrol edin.</div>';
+            return;
+        }
+
+        const chart = LightweightCharts.createChart(chartEl, {
+            width: chartEl.clientWidth,
+            height: chartEl.clientHeight || 400,
+            layout: {
+                background: { type: LightweightCharts.ColorType ? LightweightCharts.ColorType.Solid : 'solid', color: '#07080f' },
+                textColor: '#8a8fb5',
+                fontSize: 11,
+            },
+            grid: {
+                vertLines: { color: 'rgba(255,255,255,.04)' },
+                horzLines: { color: 'rgba(255,255,255,.04)' },
+            },
+            crosshair: { mode: 1 },
+            rightPriceScale: { borderColor: 'rgba(255,255,255,.08)' },
+            timeScale: { borderColor: 'rgba(255,255,255,.08)', timeVisible: true, secondsVisible: false },
+        });
+        chartEl._lwChart = chart;
+
+        const candleSeries = chart.addCandlestickSeries({
+            upColor: '#34f5a8', downColor: '#ff5370',
+            borderUpColor: '#34f5a8', borderDownColor: '#ff5370',
+            wickUpColor: '#34f5a8', wickDownColor: '#ff5370',
+        });
+        candleSeries.setData(d.ohlcv.map(b => ({ time: b.t, open: b.o, high: b.h, low: b.l, close: b.c })));
+
+        const volSeries = chart.addHistogramSeries({
+            color: 'rgba(52,245,168,.3)',
+            priceFormat: { type: 'volume' },
+            priceScaleId: '',
+        });
+        volSeries.priceScale().applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
+        volSeries.setData(d.ohlcv.map(b => ({
+            time: b.t, value: b.v || 0,
+            color: b.c >= b.o ? 'rgba(52,245,168,.28)' : 'rgba(255,83,112,.28)',
+        })));
+
+        if (pos) {
+            candleSeries.createPriceLine({ price: pos.buyPrice, color: 'rgba(167,139,250,.9)', lineWidth: 1, lineStyle: 1, axisLabelVisible: true, title: 'Alış' });
+            if (d.stop_loss)   candleSeries.createPriceLine({ price: d.stop_loss,   color: '#ff5370', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'SL' });
+            if (d.take_profit) candleSeries.createPriceLine({ price: d.take_profit, color: '#34f5a8', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TP' });
+        } else {
+            if (d.stop_loss)   candleSeries.createPriceLine({ price: d.stop_loss,   color: 'rgba(255,83,112,.7)', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'SL' });
+            if (d.take_profit) candleSeries.createPriceLine({ price: d.take_profit, color: 'rgba(52,245,168,.7)', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TP' });
+        }
+
+        const curPrice = d.price;
+        (d.supports || []).filter(s => s < curPrice).slice(-3).forEach(s =>
+            candleSeries.createPriceLine({ price: s, color: 'rgba(52,245,168,.45)', lineWidth: 1, lineStyle: 4, axisLabelVisible: false, title: '' })
+        );
+        (d.resistances || []).filter(r => r > curPrice).slice(0, 3).forEach(r =>
+            candleSeries.createPriceLine({ price: r, color: 'rgba(255,83,112,.45)', lineWidth: 1, lineStyle: 4, axisLabelVisible: false, title: '' })
+        );
+
+        const patterns = d.patterns || [];
+        const allMarkers = [];
+        patterns.forEach(pat => {
+            (pat.markers || []).forEach(m => {
+                if (!m.t) return;
+                allMarkers.push({ time: m.t, position: m.pos, color: m.color, shape: m.shape, text: m.label || '' });
+            });
+            (pat.trendlines || []).forEach(line => {
+                if (!line || line.length < 2 || !line[0].t || !line[1].t) return;
+                const col = pat.direction === 'bullish' ? 'rgba(52,245,168,.55)' :
+                            pat.direction === 'bearish' ? 'rgba(255,83,112,.55)' : 'rgba(251,191,36,.55)';
+                try {
+                    const ls = chart.addLineSeries({ color: col, lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+                    ls.setData([{ time: line[0].t, value: line[0].v }, { time: line[1].t, value: line[1].v }]);
+                } catch (_) {}
+            });
+        });
+        if (allMarkers.length) {
+            try { candleSeries.setMarkers(allMarkers.sort((a, b) => (a.time < b.time ? -1 : 1))); } catch (_) {}
+        }
+
+        chart.timeScale().fitContent();
+
+        const ro = new ResizeObserver(() => { try { chart.applyOptions({ width: chartEl.clientWidth }); } catch (_) {} });
+        ro.observe(chartEl);
+        chartEl._resizeObs = ro;
+
+        if (patternEl) {
+            if (!patterns.length) {
+                patternEl.innerHTML = `
+                    <div class="pattern-empty">
+                        <span>Aktif formasyon tespit edilmedi</span>
+                        <small>Son 90 barda bilinen bir grafik formasyonu bulunamadı.</small>
+                    </div>`;
+            } else {
+                patternEl.innerHTML = `
+                    <div class="pattern-section-title">Tespit Edilen Formasyonlar &mdash; ${patterns.length} adet</div>
+                    <div class="pattern-grid">
+                        ${patterns.map(p => `
+                            <div class="pattern-card ${escapeHtml(p.direction)}">
+                                <div class="pattern-card-hdr">
+                                    <span class="pattern-emoji">${p.emoji || '📊'}</span>
+                                    <span class="pattern-name">${escapeHtml(p.name)}</span>
+                                    <span class="pattern-strength">${escapeHtml(p.strength)}</span>
+                                </div>
+                                <div class="pattern-desc">${escapeHtml(p.description)}</div>
+                                <div class="pattern-signal">${escapeHtml(p.signal)}</div>
+                            </div>`).join('')}
+                    </div>`;
+            }
+        }
+    }
+
+    function closePortChartModal() {
+        const modal = document.getElementById('portChartModal');
+        if (!modal) return;
+        modal.classList.add('hidden');
+        const chartEl = document.getElementById('portChartContainer');
+        if (chartEl) {
+            if (chartEl._lwChart) { try { chartEl._lwChart.remove(); } catch (_) {} chartEl._lwChart = null; }
+            if (chartEl._resizeObs) { chartEl._resizeObs.disconnect(); chartEl._resizeObs = null; }
+            chartEl.innerHTML = '';
+        }
+    }
+
+    document.getElementById('portChartClose')?.addEventListener('click', closePortChartModal);
+    document.getElementById('portChartModal')?.querySelector('.modal-backdrop')?.addEventListener('click', closePortChartModal);
 
     function switchTab(tab) {
         const scanSec = document.getElementById('tab-scan');
@@ -1193,7 +1438,7 @@
 
     document.addEventListener('keydown', (e) => {
         const isTyping = ['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target && e.target.tagName) || '');
-        if (e.key === 'Escape') { closeModal(); return; }
+        if (e.key === 'Escape') { closeModal(); closePortChartModal(); return; }
         if (isTyping) return;
         if (e.key === '/') { e.preventDefault(); els.searchInput.focus(); return; }
         if (e.key.toLowerCase() === 'r') loadScan(true);

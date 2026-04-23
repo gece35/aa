@@ -126,6 +126,20 @@
         <span>Nebula Scanner &bull; Egitim amacli arac. Yatirim tavsiyesi degildir.</span>
     </footer>
 
+    <!-- TradingView Lightweight Charts -->
+    <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+
+    <!-- Portföy grafik analiz modalı -->
+    <div id="portChartModal" class="modal hidden" role="dialog">
+        <div class="modal-backdrop"></div>
+        <div class="port-chart-card glass">
+            <button class="modal-close" id="portChartClose">&times;</button>
+            <div id="portChartHeader"></div>
+            <div id="portChartContainer" class="port-chart-wrap"></div>
+            <div id="portPatternCards"></div>
+        </div>
+    </div>
+
     <script src="app.js"></script>
 </body>
 </html>

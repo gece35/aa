@@ -1,11 +1,11 @@
 """Teknik gosterge bazli puanlama motoru.
 
 5 gostergeden olusur, her AL sinyali +1 puan verir:
-  - RSI (14)          : 30 yukari kesis VEYA RSI > SMA9 VEYA RSI < 50 ve yukselisli
-  - MACD (12, 26, 9)  : MACD cizgisi sinyali yukari yonlu keser
-  - Bollinger (20, 2) : Alt bandi yakin/dokun sonra yukari
-  - EMA (50)          : Fiyat EMA50 uzerinde
-  - Stochastic        : %K %D'yi yukari keser (asiri satim bolgesinde bonus)
+  - RSI (14)          : Son 3 barda 30 yukari kesis veya sinyal cizgisi kesisi
+  - MACD (12, 26, 9)  : Son 3 barda MACD cizgisi sinyali yukari yonlu keser
+  - Bollinger (20, 2) : Son 3 barda alt banda dokup yukari donmus olmali
+  - EMA (50)          : Fiyat EMA50 uzerinde VE 52h zirvesinin %3 altinda
+  - Stochastic        : Son 3 barda %K %D'yi yukari keser, K < 80 (asiri alim degil)
 
 pandas_ta yerine saf pandas/numpy ile hesaplama yapilir.
 """
@@ -17,6 +17,8 @@ from typing import List
 
 import numpy as np
 import pandas as pd
+
+from backend.patterns import detect_patterns
 
 
 @dataclass
@@ -41,6 +43,8 @@ class ScoreResult:
     change_month_pct: float = 0.0
     high_52w: float | None = None
     low_52w: float | None = None
+    volume_spike: bool = False
+    near_peak: bool = False
 
     def to_dict(self) -> dict:
         return {
@@ -55,6 +59,8 @@ class ScoreResult:
             "low_52w": round(self.low_52w, 4) if self.low_52w else None,
             "sparkline": [round(float(v), 4) for v in self.sparkline],
             "indicators": [asdict(ind) for ind in self.indicators],
+            "volume_spike": self.volume_spike,
+            "near_peak": self.near_peak,
         }
 
 
@@ -113,19 +119,29 @@ def _safe_last(series: pd.Series):
     return float(val)
 
 
-def _crosses_above(series_a: pd.Series, series_b) -> bool:
-    if series_a is None or len(series_a) < 2:
+def _crosses_above_within(series_a: pd.Series, series_b, n: int = 3) -> bool:
+    """Son n barda series_a, series_b'yi en az bir kez yukari gecti mi?
+
+    n=3 → son 3 mum gecisini (3 art arda bar ciftini) kontrol eder.
+    """
+    if len(series_a) < 2:
         return False
-    a_now, a_prev = series_a.iloc[-1], series_a.iloc[-2]
-    if isinstance(series_b, (int, float)):
-        b_now = b_prev = series_b
-    else:
-        if series_b is None or len(series_b) < 2:
-            return False
-        b_now, b_prev = series_b.iloc[-1], series_b.iloc[-2]
-    if any(pd.isna(v) for v in [a_now, a_prev, b_now, b_prev]):
-        return False
-    return float(a_prev) <= float(b_prev) and float(a_now) > float(b_now)
+    pairs = min(n, len(series_a) - 1)
+    for i in range(pairs):
+        a_now = series_a.iloc[-(i + 1)]
+        a_prev = series_a.iloc[-(i + 2)]
+        if isinstance(series_b, (int, float)):
+            b_now = b_prev = float(series_b)
+        else:
+            if len(series_b) < i + 2:
+                continue
+            b_now = series_b.iloc[-(i + 1)]
+            b_prev = series_b.iloc[-(i + 2)]
+        if any(pd.isna(v) for v in [a_now, a_prev, b_now, b_prev]):
+            continue
+        if float(a_prev) <= float(b_prev) and float(a_now) > float(b_now):
+            return True
+    return False
 
 
 # --- indikatör değerlendirmeleri ---
@@ -137,24 +153,24 @@ def _evaluate_rsi(close: pd.Series) -> IndicatorResult:
 
     signal_line = _sma(rsi, 9)
     rsi_now = _safe_last(rsi)
-    cross_30 = _crosses_above(rsi, 30)
-    cross_signal = _crosses_above(rsi, signal_line)
-    rising = (
-        rsi_now is not None and rsi_now < 50 and len(rsi) >= 3
-        and not pd.isna(rsi.iloc[-2]) and not pd.isna(rsi.iloc[-3])
-        and rsi.iloc[-1] > rsi.iloc[-2] > rsi.iloc[-3]
-    )
 
-    signal = bool(cross_30 or cross_signal or rising)
+    # Son 3 barda 30 cizgisini yukari gecti mi? (asiri satimdan kurtulus)
+    cross_30 = _crosses_above_within(rsi, 30, n=3)
+    # Son 3 barda sinyal cizgisini yukari gecti mi?
+    cross_signal = _crosses_above_within(rsi, signal_line, n=3)
+
+    signal = bool(cross_30 or cross_signal)
     reason = []
-    if cross_30: reason.append("30 yukari kesis")
-    if cross_signal: reason.append("sinyal kesisi")
-    if rising: reason.append("<50 yukselis")
+    if cross_30:
+        reason.append("son 3 barda 30 yukari kesis")
+    if cross_signal:
+        reason.append("sinyal kesisi")
 
+    detail = ", ".join(reason) if reason else (f"RSI={rsi_now:.1f}" if rsi_now else "notr")
     return IndicatorResult(
         name="RSI", key="rsi", signal=signal,
         value=round(rsi_now, 2) if rsi_now is not None else None,
-        detail=", ".join(reason) if reason else (f"RSI={rsi_now:.1f}" if rsi_now else "notr"),
+        detail=detail,
     )
 
 
@@ -162,12 +178,15 @@ def _evaluate_macd(close: pd.Series) -> IndicatorResult:
     macd_line, signal_line = _macd(close)
     if macd_line.dropna().empty:
         return IndicatorResult("MACD", "macd", False, None, "veri yok")
-    cross = _crosses_above(macd_line, signal_line)
+
+    # Son 3 barda MACD, sinyal cizgisini yukari gecti mi?
+    cross = _crosses_above_within(macd_line, signal_line, n=3)
     macd_now = _safe_last(macd_line)
+
     return IndicatorResult(
         name="MACD", key="macd", signal=bool(cross),
         value=round(macd_now, 4) if macd_now is not None else None,
-        detail="yukari kesis" if cross else "kesis yok",
+        detail="son 3 barda yukari kesis" if cross else "kesis yok",
     )
 
 
@@ -175,26 +194,39 @@ def _evaluate_bbands(close: pd.Series) -> IndicatorResult:
     upper, middle, lower = _bbands(close)
     price = _safe_last(close)
     lower_now = _safe_last(lower)
-    middle_now = _safe_last(middle)
 
     if price is None or lower_now is None:
         return IndicatorResult("BBands", "bbands", False, None, "veri yok")
 
-    touched = False
-    if len(close) >= 3 and not pd.isna(lower.iloc[-2]):
-        touched = float(close.iloc[-2]) <= float(lower.iloc[-2]) and price > lower_now
-
-    near_lower = price <= lower_now * 1.02 and (middle_now is None or price < middle_now)
-    signal = bool(touched or near_lower)
+    # Son 3 barda alt banda dokup yukari donmus mu?
+    bounced = False
+    n_check = min(3, len(close) - 1)
+    for i in range(n_check):
+        try:
+            c_now = float(close.iloc[-(i + 1)])
+            c_prev = float(close.iloc[-(i + 2)])
+            l_now = float(lower.iloc[-(i + 1)])
+            l_prev = float(lower.iloc[-(i + 2)])
+            if any(pd.isna(v) for v in [c_now, c_prev, l_now, l_prev]):
+                continue
+            # Onceki mum alt bant bolgesi icindeydi (alt band * 1.01 altinda)
+            touched = c_prev <= l_prev * 1.01
+            # Simdi alt bandin uzerinde ve yukseliyor
+            bouncing = c_now > l_now and c_now > c_prev
+            if touched and bouncing:
+                bounced = True
+                break
+        except (IndexError, ValueError):
+            continue
 
     return IndicatorResult(
-        name="BBands", key="bbands", signal=signal,
+        name="BBands", key="bbands", signal=bounced,
         value=round(lower_now, 4),
-        detail="alt banttan donus" if touched else ("alt banda yakin" if near_lower else "notr"),
+        detail="son 3 barda alt banttan donus" if bounced else "notr",
     )
 
 
-def _evaluate_ema(close: pd.Series) -> IndicatorResult:
+def _evaluate_ema(close: pd.Series, high_52w: float | None = None) -> IndicatorResult:
     ema = _ema(close, 50)
     if ema.dropna().empty:
         return IndicatorResult("EMA50", "ema50", False, None, "veri yok")
@@ -202,11 +234,25 @@ def _evaluate_ema(close: pd.Series) -> IndicatorResult:
     ema_now = _safe_last(ema)
     if price is None or ema_now is None:
         return IndicatorResult("EMA50", "ema50", False, None, "veri yok")
-    signal = price > ema_now
+
+    above_ema = bool(price > ema_now)
+    # 52 haftalik zirvenin %3 icindeyse "tepe noktasina yakin" sayilir
+    near_peak = bool(high_52w and high_52w > 0 and price >= high_52w * 0.97)
+
+    signal = above_ema and not near_peak
+
+    parts = []
+    if above_ema:
+        parts.append("fiyat EMA uzerinde")
+    else:
+        parts.append("fiyat EMA altinda")
+    if near_peak:
+        parts.append("52h zirveye yakin — sinyal yok")
+
     return IndicatorResult(
-        name="EMA50", key="ema50", signal=bool(signal),
+        name="EMA50", key="ema50", signal=signal,
         value=round(ema_now, 4),
-        detail="fiyat EMA uzerinde" if signal else "fiyat EMA altinda",
+        detail=", ".join(parts),
     )
 
 
@@ -214,22 +260,106 @@ def _evaluate_stoch(high: pd.Series, low: pd.Series, close: pd.Series) -> Indica
     k_line, d_line = _stoch(high, low, close)
     if k_line.dropna().empty:
         return IndicatorResult("Stoch", "stoch", False, None, "veri yok")
-    cross = _crosses_above(k_line, d_line)
-    k_now = _safe_last(k_line)
-    oversold_bonus = k_now is not None and k_now < 30
-    signal = bool(cross and (oversold_bonus or (k_now is not None and k_now < 50)))
 
-    detail = "yok"
-    if cross and oversold_bonus:
-        detail = "asiri satimdan kesis"
-    elif cross:
-        detail = "yukari kesis"
+    # Son 3 barda %K, %D'yi yukari gecti mi?
+    cross = _crosses_above_within(k_line, d_line, n=3)
+    k_now = _safe_last(k_line)
+
+    # Asiri alim bolgesinde degil mi? (K >= 80 → asiri alim, sinyal gecersiz)
+    not_overbought = k_now is None or k_now < 80
+    signal = bool(cross and not_overbought)
+
+    detail = "kesis yok"
+    if cross:
+        if k_now is not None and k_now >= 80:
+            detail = "asiri alim bolgesinde kesis — sinyal yok"
+        elif k_now is not None and k_now < 30:
+            detail = "asiri satimdan yukari kesis"
+        else:
+            detail = "son 3 barda yukari kesis"
 
     return IndicatorResult(
         name="Stoch", key="stoch", signal=signal,
         value=round(k_now, 2) if k_now is not None else None,
         detail=detail,
     )
+
+
+# --- destek / direnc seviyeleri ---
+
+def _find_sr_levels(
+    high: pd.Series,
+    low: pd.Series,
+    close: pd.Series,
+    n: int = 120,
+    window: int = 5,
+    cluster_pct: float = 0.015,
+) -> dict:
+    """Pivot noktalariyla destek ve direnc seviyelerini tespit eder."""
+    if len(close) < window * 2 + 1:
+        return {"supports": [], "resistances": []}
+
+    h = high.tail(n).reset_index(drop=True)
+    l = low.tail(n).reset_index(drop=True)
+    n_actual = len(h)
+
+    raw_sups: list[float] = []
+    raw_ress: list[float] = []
+
+    for i in range(window, n_actual - window):
+        lo = float(l.iloc[i])
+        hi = float(h.iloc[i])
+        if pd.isna(lo) or pd.isna(hi):
+            continue
+
+        neighbors_l = [
+            float(l.iloc[i + j])
+            for j in range(-window, window + 1)
+            if j != 0 and not pd.isna(l.iloc[i + j])
+        ]
+        if neighbors_l and lo <= min(neighbors_l):
+            raw_sups.append(lo)
+
+        neighbors_h = [
+            float(h.iloc[i + j])
+            for j in range(-window, window + 1)
+            if j != 0 and not pd.isna(h.iloc[i + j])
+        ]
+        if neighbors_h and hi >= max(neighbors_h):
+            raw_ress.append(hi)
+
+    def cluster(levels: list[float]) -> list[float]:
+        if not levels:
+            return []
+        levels_s = sorted(levels)
+        clusters: list[list[float]] = [[levels_s[0]]]
+        for v in levels_s[1:]:
+            if v <= clusters[-1][-1] * (1 + cluster_pct):
+                clusters[-1].append(v)
+            else:
+                clusters.append([v])
+        return [round(sum(c) / len(c), 4) for c in clusters]
+
+    return {
+        "supports": cluster(raw_sups),
+        "resistances": cluster(raw_ress),
+    }
+
+
+def _calc_sl_tp(price: float, supports: list, resistances: list) -> tuple:
+    """Destek/direnc noktalarindan stop-loss ve kar-al hedefleri hesaplar."""
+    sups_below = [s for s in supports if s < price * 0.995]
+    ress_above = [r for r in resistances if r > price * 1.005]
+
+    if sups_below:
+        nearest_sup = max(sups_below)
+        # En yakin destegin %1.5 altini stop-loss olarak belirle
+        stop_loss = round(nearest_sup * 0.985, 4)
+    else:
+        stop_loss = None
+
+    take_profit = round(min(ress_above), 4) if ress_above else None
+    return stop_loss, take_profit
 
 
 # --- yardımcı ---
@@ -260,11 +390,17 @@ def score_symbol(symbol: str, df: pd.DataFrame) -> ScoreResult | None:
     else:
         change_pct = 0.0
 
+    # 52 haftalik yuksek/dusuk — EMA indikatoru icin onceden hesaplanmali
+    high_series = high.tail(252).dropna()
+    low_series = low.tail(252).dropna()
+    high_52 = float(high_series.max()) if not high_series.empty else None
+    low_52 = float(low_series.min()) if not low_series.empty else None
+
     indicators = [
         _evaluate_rsi(close),
         _evaluate_macd(close),
         _evaluate_bbands(close),
-        _evaluate_ema(close),
+        _evaluate_ema(close, high_52w=high_52),
         _evaluate_stoch(high, low, close),
     ]
 
@@ -273,11 +409,15 @@ def score_symbol(symbol: str, df: pd.DataFrame) -> ScoreResult | None:
     week_change = _pct_change_back(close, 5)
     month_change = _pct_change_back(close, 21)
 
-    high_series = high.tail(252).dropna()
-    low_series = low.tail(252).dropna()
-    high_52 = float(high_series.max()) if not high_series.empty else None
-    low_52 = float(low_series.min()) if not low_series.empty else None
     last_volume = float(volume.iloc[-1]) if not volume.empty and not pd.isna(volume.iloc[-1]) else 0.0
+
+    volume_spike = False
+    if last_volume > 0 and len(volume) >= 12:
+        avg_vol_10d = float(volume.iloc[-11:-1].dropna().mean())
+        if avg_vol_10d > 0:
+            volume_spike = last_volume > 1.5 * avg_vol_10d
+
+    near_peak = bool(high_52 and high_52 > 0 and last_close >= high_52 * 0.97)
 
     return ScoreResult(
         symbol=symbol,
@@ -291,6 +431,8 @@ def score_symbol(symbol: str, df: pd.DataFrame) -> ScoreResult | None:
         low_52w=low_52,
         sparkline=sparkline_raw,
         indicators=indicators,
+        volume_spike=volume_spike,
+        near_peak=near_peak,
     )
 
 
@@ -298,7 +440,10 @@ def score_symbol_detailed(symbol: str, df: pd.DataFrame) -> dict | None:
     base = score_symbol(symbol, df)
     if base is None:
         return None
+
     close = df["Close"].astype(float)
+    high = df["High"].astype(float)
+    low = df["Low"].astype(float)
     volume = df["Volume"].astype(float) if "Volume" in df.columns else pd.Series(dtype=float)
 
     hist = [
@@ -310,12 +455,55 @@ def score_symbol_detailed(symbol: str, df: pd.DataFrame) -> dict | None:
         if not pd.isna(val)
     ]
 
+    # Tam OHLCV — grafik icin son 120 bar
+    ohlcv = []
+    for idx, row in df.tail(120).iterrows():
+        try:
+            date_str = str(idx.date()) if hasattr(idx, "date") else str(idx)[:10]
+            vol_val = row.get("Volume", 0)
+            ohlcv.append({
+                "t": date_str,
+                "o": round(float(row["Open"]), 4),
+                "h": round(float(row["High"]), 4),
+                "l": round(float(row["Low"]), 4),
+                "c": round(float(row["Close"]), 4),
+                "v": int(float(vol_val)) if not pd.isna(vol_val) else 0,
+            })
+        except (KeyError, ValueError, TypeError):
+            continue
+
     avg_vol = float(volume.tail(20).mean()) if not volume.empty else 0.0
+
+    # Destek / direnc seviyeleri ve SL/TP
+    sr = _find_sr_levels(high, low, close)
+    stop_loss, take_profit = _calc_sl_tp(
+        float(close.iloc[-1]),
+        sr["supports"],
+        sr["resistances"],
+    )
+
+    risk_reward = None
+    price = float(close.iloc[-1])
+    if stop_loss and take_profit and price > stop_loss:
+        risk = price - stop_loss
+        reward = take_profit - price
+        if risk > 0:
+            risk_reward = round(reward / risk, 2)
+
+    # Formasyon tespiti
+    patterns = detect_patterns(df)
 
     out = base.to_dict()
     out.update({
         "history": hist,
+        "ohlcv": ohlcv,
+        "patterns": patterns,
         "avg_volume_20d": round(avg_vol, 2),
         "data_points": int(len(close)),
+        "supports": sr["supports"],
+        "resistances": sr["resistances"],
+        "stop_loss": stop_loss,
+        "take_profit": take_profit,
+        "risk_reward": risk_reward,
     })
     return out

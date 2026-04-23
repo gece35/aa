@@ -15,12 +15,12 @@ import time
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
-from backend.cache import scan_cache, stock_cache
-from backend.data_fetcher import download_ohlcv
-from backend.news import fetch_news
-from backend.scanner import scan_market
+from backend.cache import exchange_cache, scan_cache, stock_cache, stock_news_cache, symbol_cache
+from backend.data_fetcher import download_ohlcv, fetch_exchange_rate
+from backend.news import fetch_news, fetch_stock_news
+from backend.scanner import scan_market, scan_market_chunk
 from backend.scoring import score_symbol_detailed
-from backend.tickers import MARKETS, get_tickers
+from backend.tickers import MARKETS
 
 logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "INFO"),
@@ -61,12 +61,22 @@ def api_markets():
 def api_scan():
     market = request.args.get("market", "us").lower()
     force = request.args.get("force", "0") in ("1", "true", "yes")
+    limit_raw = request.args.get("limit")
+    offset_raw = request.args.get("offset")
 
     if market not in MARKETS:
         return jsonify({"error": f"unknown market: {market}"}), 400
 
+    sort = request.args.get("sort", "score")
     try:
-        payload = scan_market(market=market, force=force)
+        if limit_raw is not None:
+            offset = int(offset_raw) if offset_raw else 0
+            limit = int(limit_raw)
+            payload = scan_market_chunk(market=market, offset=offset, limit=limit, force=force, sort=sort)
+        else:
+            payload = scan_market(market=market, force=force)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         app.logger.exception("Tarama hatasi")
         return jsonify({"error": str(exc)}), 500
@@ -112,6 +122,27 @@ def api_stock(symbol: str):
     return jsonify(detail)
 
 
+@app.route("/api/news/stock/<path:symbol>")
+def api_stock_news(symbol: str):
+    symbol = symbol.upper().strip()
+    payload = fetch_stock_news(symbol)
+    return jsonify(payload)
+
+
+@app.route("/api/exchange-rate")
+def api_exchange_rate():
+    cache_key = "exchange:USDTRY"
+    cached = exchange_cache.get(cache_key)
+    if cached is not None:
+        return jsonify(cached)
+    rate = fetch_exchange_rate("TRY=X")
+    if rate is None:
+        return jsonify({"error": "kur alinamadi"}), 503
+    payload = {"rate": round(rate, 4), "pair": "USD/TRY", "ts": int(time.time())}
+    exchange_cache.set(cache_key, payload)
+    return jsonify(payload)
+
+
 @app.route("/api/health")
 def health():
     return jsonify({"ok": True, "ts": int(time.time())})
@@ -121,6 +152,9 @@ def health():
 def cache_clear():
     scan_cache.clear()
     stock_cache.clear()
+    symbol_cache.clear()
+    stock_news_cache.clear()
+    exchange_cache.clear()
     return jsonify({"ok": True})
 
 

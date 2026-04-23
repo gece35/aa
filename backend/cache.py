@@ -45,3 +45,6 @@ class TTLCache:
 scan_cache = TTLCache(ttl_seconds=600)
 news_cache = TTLCache(ttl_seconds=600)
 stock_cache = TTLCache(ttl_seconds=300)
+symbol_cache = TTLCache(ttl_seconds=600)
+stock_news_cache = TTLCache(ttl_seconds=300)
+exchange_cache = TTLCache(ttl_seconds=300)
