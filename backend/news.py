@@ -18,9 +18,40 @@ import requests
 import yfinance as yf
 
 from .cache import news_cache, stock_news_cache
-from .sentiment import classify as classify_sentiment
 
 logger = logging.getLogger(__name__)
+
+# ── Çeviri ────────────────────────────────────────────────────────────────────
+
+def _is_likely_english(text: str) -> bool:
+    if not text:
+        return False
+    tr_chars = set("çğıöşüÇĞİÖŞÜ")
+    if any(c in tr_chars for c in text):
+        return False
+    words = text.lower().split()
+    en_stop = {"the", "a", "an", "is", "are", "was", "were", "has", "have",
+               "to", "of", "in", "on", "at", "for", "with", "as", "by",
+               "its", "it", "be", "or", "and", "not", "from", "that", "this"}
+    hits = sum(1 for w in words[:12] if w.strip(".,!?:;\"'()") in en_stop)
+    return hits >= 2
+
+
+def _translate_to_turkish(text: str) -> str:
+    if not text or not _is_likely_english(text):
+        return text
+    try:
+        from deep_translator import MyMemoryTranslator
+        translated = MyMemoryTranslator(source="en-US", target="tr-TR").translate(text[:450])
+        return translated if translated else text
+    except Exception:
+        try:
+            from deep_translator import GoogleTranslator
+            translated = GoogleTranslator(source="en", target="tr").translate(text[:450])
+            return translated if translated else text
+        except Exception:
+            return text
+from .sentiment import classify as classify_sentiment
 
 FEEDS = {
     "bist": [
@@ -151,11 +182,14 @@ def _make_item(source: str, title: str, link: str, summary: str, published: str)
     clean_summary = _strip_html(summary)
     sentiment, sent_score = classify_sentiment(clean_title, clean_summary)
 
+    tr_title = _translate_to_turkish(clean_title)
+    tr_summary = _translate_to_turkish(clean_summary) if clean_summary else ""
+
     return {
         "source": source,
-        "title": clean_title[:240],
+        "title": tr_title[:240],
         "link": link,
-        "summary": clean_summary[:280] if clean_summary else "",
+        "summary": tr_summary[:400] if tr_summary else "",
         "published": published[:64] if published else "",
         "ts": ts,
         "sentiment": sentiment,
@@ -204,8 +238,9 @@ def fetch_stock_news(symbol: str, limit: int = 5) -> dict:
                 ts = _parse_published(pub_date)
 
             sentiment, _ = classify_sentiment(str(title), "")
+            tr_title = _translate_to_turkish(str(title))
             items.append({
-                "title": str(title)[:200],
+                "title": tr_title[:200],
                 "link": str(link),
                 "publisher": str(publisher)[:80],
                 "published": ts,

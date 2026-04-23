@@ -7,6 +7,12 @@
         stock: (symbol) => fetch(`/api/stock/${encodeURIComponent(symbol)}`).then((r) => r.json()),
         stockNews: (symbol) => fetch(`/api/news/stock/${encodeURIComponent(symbol)}`).then((r) => r.json()),
         exchangeRate: () => fetch('/api/exchange-rate').then((r) => r.json()),
+        alertsList: () => fetch('/api/alerts').then((r) => r.json()),
+        alertsCreate: (body) => fetch('/api/alerts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json()),
+        alertsDelete: (id) => fetch(`/api/alerts/${id}`, { method: 'DELETE' }).then((r) => r.json()),
+        alertsDismiss: (id) => fetch(`/api/alerts/${id}/dismiss`, { method: 'POST' }).then((r) => r.json()),
+        alertsTriggered: () => fetch('/api/alerts/triggered').then((r) => r.json()),
+        alertsConditions: () => fetch('/api/alerts/conditions').then((r) => r.json()),
     };
 
     const WATCHLIST_KEY = 'nebula.watchlist.v1';
@@ -1393,10 +1399,13 @@
     function switchTab(tab) {
         const scanSec = document.getElementById('tab-scan');
         const portSec = document.getElementById('tab-portfolio');
+        const alertSec = document.getElementById('tab-alerts');
         if (scanSec) scanSec.classList.toggle('hidden', tab !== 'scan');
         if (portSec) portSec.classList.toggle('hidden', tab !== 'portfolio');
+        if (alertSec) alertSec.classList.toggle('hidden', tab !== 'alerts');
         document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tab));
         if (tab === 'portfolio') fetchPortfolioDetails().then(() => renderPortfolioTab());
+        if (tab === 'alerts') loadAlerts();
     }
     document.querySelectorAll('.tab-btn').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
 
@@ -1455,4 +1464,206 @@
         if (state.market === 'bist') fetchExchangeRate();
         loadScan();
     });
+
+    // ── Toast bildirimleri ────────────────────────────────────────────────────
+
+    function showToast(message, type = 'info', duration = 5000) {
+        const container = document.getElementById('toastContainer');
+        if (!container) return;
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        const icons = { info: 'ℹ️', success: '✅', warning: '🔔', danger: '🚨' };
+        toast.innerHTML = `<span class="toast-icon">${icons[type] || 'ℹ️'}</span><span class="toast-msg">${escapeHtml(message)}</span><button class="toast-close">&times;</button>`;
+        toast.querySelector('.toast-close').addEventListener('click', () => toast.remove());
+        container.appendChild(toast);
+        setTimeout(() => toast.classList.add('toast-show'), 10);
+        if (duration > 0) setTimeout(() => { toast.classList.remove('toast-show'); setTimeout(() => toast.remove(), 400); }, duration);
+    }
+
+    // ── Alarm sekmesi ─────────────────────────────────────────────────────────
+
+    let alertConditions = [];
+
+    async function loadAlerts() {
+        const triggered = document.getElementById('triggeredAlerts');
+        const active = document.getElementById('activeAlerts');
+        const status = document.getElementById('alertsStatus');
+        if (!triggered || !active) return;
+
+        try {
+            const [condData, alertData] = await Promise.all([
+                alertConditions.length ? Promise.resolve({ conditions: alertConditions }) : API.alertsConditions(),
+                API.alertsList(),
+            ]);
+            if (condData.conditions) alertConditions = condData.conditions;
+
+            const alerts = alertData.alerts || [];
+            const badge = document.getElementById('alertBadge');
+            const triggeredList = alerts.filter(a => a.triggered_at && !a.dismissed);
+            const activePending = alerts.filter(a => a.is_active && !a.triggered_at);
+
+            if (badge) {
+                if (triggeredList.length > 0) { badge.textContent = triggeredList.length; badge.classList.remove('hidden'); }
+                else badge.classList.add('hidden');
+            }
+            if (status) status.textContent = `${activePending.length} aktif, ${triggeredList.length} tetiklendi`;
+
+            triggered.innerHTML = triggeredList.length ? `
+                <div class="alerts-section-title">🔔 Tetiklenen Alarmlar</div>
+                ${triggeredList.map(renderAlertCard).join('')}
+            ` : '';
+
+            active.innerHTML = `
+                <div class="alerts-section-title">📋 Aktif Alarmlar${activePending.length ? ` (${activePending.length})` : ''}</div>
+                ${activePending.length
+                    ? activePending.map(renderAlertCard).join('')
+                    : '<div class="alerts-empty">Henüz aktif alarm yok. "Yeni Alarm" ile ekle.</div>'
+                }
+            `;
+
+            document.querySelectorAll('.alert-dismiss-btn').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    const id = e.currentTarget.dataset.id;
+                    await API.alertsDismiss(id);
+                    loadAlerts();
+                });
+            });
+            document.querySelectorAll('.alert-delete-btn').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    const id = e.currentTarget.dataset.id;
+                    await API.alertsDelete(id);
+                    loadAlerts();
+                });
+            });
+        } catch (err) {
+            if (active) active.innerHTML = `<div style="color:var(--danger);padding:16px;">Yüklenemedi: ${escapeHtml(err.message)}</div>`;
+        }
+    }
+
+    function renderAlertCard(a) {
+        const fired = !!a.triggered_at;
+        const firedStr = fired ? new Date(a.triggered_at * 1000).toLocaleString('tr-TR') : '';
+        const createdStr = new Date(a.created_at * 1000).toLocaleString('tr-TR');
+        return `
+        <div class="alert-card glass ${fired ? 'alert-fired' : ''}">
+            <div class="alert-card-top">
+                <span class="alert-sym">${escapeHtml(a.symbol)}</span>
+                <span class="alert-label">${escapeHtml(a.label)}</span>
+                ${fired ? '<span class="alert-badge-fired">Tetiklendi</span>' : '<span class="alert-badge-active">Aktif</span>'}
+            </div>
+            <div class="alert-card-meta">
+                ${fired ? `<span>⏰ ${escapeHtml(firedStr)}</span>` : `<span>Oluşturuldu: ${escapeHtml(createdStr)}</span>`}
+            </div>
+            <div class="alert-card-actions">
+                ${fired ? `<button class="btn btn-sm alert-dismiss-btn" data-id="${a.id}">Kapat</button>` : ''}
+                <button class="btn btn-sm alert-delete-btn" data-id="${a.id}" style="color:var(--danger);border-color:rgba(255,83,112,.3);">Sil</button>
+            </div>
+        </div>`;
+    }
+
+    // Yeni alarm modal
+    function openAlertModal() {
+        const modal = document.getElementById('alertModal');
+        const sel = document.getElementById('af-condition');
+        if (!modal || !sel) return;
+
+        const needsValue = ['rsi_below','rsi_above','score_above','price_below','price_above'];
+
+        if (alertConditions.length && sel.options.length <= 1) {
+            alertConditions.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.type; opt.textContent = c.label;
+                sel.appendChild(opt);
+            });
+        }
+
+        sel.onchange = () => {
+            const wrap = document.getElementById('af-value-wrap');
+            const lbl = document.getElementById('af-value-label');
+            if (needsValue.includes(sel.value)) {
+                wrap.classList.remove('hidden');
+                const c = alertConditions.find(x => x.type === sel.value);
+                if (lbl && c) lbl.textContent = c.label + ' (eşik değeri)';
+            } else {
+                wrap.classList.add('hidden');
+            }
+        };
+
+        document.getElementById('af-symbol').value = '';
+        document.getElementById('af-value').value = '';
+        document.getElementById('af-condition').value = '';
+        document.getElementById('af-value-wrap').classList.add('hidden');
+        const errEl = document.getElementById('af-error');
+        if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+
+        modal.classList.remove('hidden');
+        document.getElementById('af-symbol').focus();
+    }
+
+    function closeAlertModal() {
+        const modal = document.getElementById('alertModal');
+        if (modal) modal.classList.add('hidden');
+    }
+
+    document.getElementById('newAlertBtn')?.addEventListener('click', () => {
+        if (alertConditions.length === 0) {
+            API.alertsConditions().then(d => { alertConditions = d.conditions || []; openAlertModal(); });
+        } else {
+            openAlertModal();
+        }
+    });
+    document.getElementById('alertModalClose')?.addEventListener('click', closeAlertModal);
+    document.getElementById('alertModalBackdrop')?.addEventListener('click', closeAlertModal);
+
+    document.getElementById('af-submit')?.addEventListener('click', async () => {
+        const symbol = (document.getElementById('af-symbol')?.value || '').trim().toUpperCase();
+        const condition_type = document.getElementById('af-condition')?.value || '';
+        const valueStr = document.getElementById('af-value')?.value || '';
+        const needsValue = ['rsi_below','rsi_above','score_above','price_below','price_above'];
+        const errEl = document.getElementById('af-error');
+
+        if (!symbol || !condition_type) {
+            if (errEl) { errEl.textContent = 'Hisse sembolü ve kriter zorunludur.'; errEl.style.display = 'block'; }
+            return;
+        }
+        if (needsValue.includes(condition_type) && !valueStr) {
+            if (errEl) { errEl.textContent = 'Bu kriter için eşik değeri girilmeli.'; errEl.style.display = 'block'; }
+            return;
+        }
+
+        const body = { symbol, condition_type };
+        if (valueStr) body.condition_value = parseFloat(valueStr);
+
+        const btn = document.getElementById('af-submit');
+        if (btn) btn.disabled = true;
+        try {
+            const res = await API.alertsCreate(body);
+            if (res.ok) {
+                closeAlertModal();
+                showToast(`Alarm kuruldu: ${symbol} – ${res.alert.label}`, 'success');
+                loadAlerts();
+            } else {
+                if (errEl) { errEl.textContent = res.error || 'Hata oluştu.'; errEl.style.display = 'block'; }
+            }
+        } catch (e) {
+            if (errEl) { errEl.textContent = 'Sunucu hatası.'; errEl.style.display = 'block'; }
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    });
+
+    // Tetiklenen alarmları periyodik kontrol (30 saniyede bir)
+    async function pollTriggeredAlerts() {
+        try {
+            const data = await API.alertsTriggered();
+            const list = data.triggered || [];
+            list.forEach(a => {
+                showToast(`🔔 ${a.symbol} – ${a.label}`, 'warning', 8000);
+            });
+            const badge = document.getElementById('alertBadge');
+            if (badge && list.length > 0) { badge.textContent = list.length; badge.classList.remove('hidden'); }
+        } catch (_) {}
+    }
+    setInterval(pollTriggeredAlerts, 30000);
+
 })();

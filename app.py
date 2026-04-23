@@ -15,6 +15,10 @@ import time
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
+from backend.alerts import (
+    check_alerts, create_alert, delete_alert, dismiss_alert,
+    get_triggered, list_alerts, start_worker, CONDITION_LABELS,
+)
 from backend.cache import exchange_cache, scan_cache, stock_cache, stock_news_cache, symbol_cache
 from backend.data_fetcher import download_ohlcv, fetch_exchange_rate
 from backend.news import fetch_news, fetch_stock_news
@@ -158,6 +162,78 @@ def cache_clear():
     return jsonify({"ok": True})
 
 
+# ── Alarm API ─────────────────────────────────────────────────────────────────
+
+@app.route("/api/alerts", methods=["GET"])
+def api_alerts_list():
+    include_dismissed = request.args.get("all", "0") in ("1", "true")
+    return jsonify({"alerts": list_alerts(include_dismissed)})
+
+
+@app.route("/api/alerts", methods=["POST"])
+def api_alerts_create():
+    body = request.get_json(silent=True) or {}
+    symbol = (body.get("symbol") or "").strip()
+    condition_type = (body.get("condition_type") or "").strip()
+    condition_value = body.get("condition_value")
+
+    if not symbol or not condition_type:
+        return jsonify({"error": "symbol ve condition_type zorunludur"}), 400
+    try:
+        cv = float(condition_value) if condition_value is not None else None
+        alert = create_alert(symbol, condition_type, cv)
+        return jsonify({"ok": True, "alert": alert}), 201
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@app.route("/api/alerts/<alert_id>", methods=["DELETE"])
+def api_alerts_delete(alert_id: str):
+    if delete_alert(alert_id):
+        return jsonify({"ok": True})
+    return jsonify({"error": "bulunamadı"}), 404
+
+
+@app.route("/api/alerts/<alert_id>/dismiss", methods=["POST"])
+def api_alerts_dismiss(alert_id: str):
+    if dismiss_alert(alert_id):
+        return jsonify({"ok": True})
+    return jsonify({"error": "bulunamadı"}), 404
+
+
+@app.route("/api/alerts/triggered", methods=["GET"])
+def api_alerts_triggered():
+    return jsonify({"triggered": get_triggered()})
+
+
+@app.route("/api/alerts/conditions", methods=["GET"])
+def api_alerts_conditions():
+    return jsonify({"conditions": [
+        {"type": k, "label": v} for k, v in CONDITION_LABELS.items()
+    ]})
+
+
+@app.route("/api/alerts/check", methods=["POST"])
+def api_alerts_check():
+    def fetcher(sym):
+        data = download_ohlcv([sym], period="200d", interval="1d")
+        df = data.get(sym)
+        if df is None or df.empty:
+            return {}
+        return score_symbol_detailed(sym, df) or {}
+    fired = check_alerts(fetcher)
+    return jsonify({"triggered": fired, "count": len(fired)})
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "5000"))
+
+    def _detail_fetcher(sym: str) -> dict:
+        data = download_ohlcv([sym], period="200d", interval="1d")
+        df = data.get(sym)
+        if df is None or df.empty:
+            return {}
+        return score_symbol_detailed(sym, df) or {}
+
+    start_worker(_detail_fetcher, interval_seconds=300)
     app.run(host="0.0.0.0", port=port, debug=bool(os.environ.get("DEBUG")))
