@@ -1,0 +1,225 @@
+{
+  "nav": {
+    "shop": "Shop",
+    "why": "Why us"
+  },
+  "hero": {
+    "badge": "AI-crafted, made-to-order",
+    "heading": "Wear the art that didn't exist yesterday.",
+    "subtext": "Premium print-on-demand apparel and prints. AI-generated art, archival-grade finish, shipped worldwide in days.",
+    "cta_primary": "Shop the drop",
+    "cta_secondary": "How it works"
+  },
+  "featured": {
+    "heading": "The drop",
+    "subheading": "Limited runs. Made when you order."
+  },
+  "why": {
+    "heading": "Why thousands trust us",
+    "subtext": "A modern atelier without the warehouse. Built for collectors who want unique pieces, not mass-produced merch.",
+    "features": [
+      {
+        "title": "Premium archival print",
+        "text": "Pigment inks on heavyweight cotton & fine art paper. Color-fast, fade-safe, museum-grade finish."
+      },
+      {
+        "title": "Fast worldwide shipping",
+        "text": "Produced in 48h, delivered in 3–7 days via tracked courier. No warehousing, no waste."
+      },
+      {
+        "title": "Secure checkout",
+        "text": "Payment via LemonSqueezy — Merchant of Record. Encrypted, tax-compliant, hassle-free."
+      },
+      {
+        "title": "Made when you order",
+        "text": "Zero overstock. Every piece is printed to your size, color, and signed digital edition."
+      }
+    ]
+  },
+  "footer": {
+    "privacy": "Privacy Policy",
+    "terms": "Terms of Service",
+    "shipping": "Shipping & Returns",
+    "contact": "Contact"
+  },
+  "product": {
+    "color": "Color",
+    "size": "Size",
+    "buy_now": "Buy now",
+    "opening_checkout": "Opening checkout…",
+    "trust": "Secure payment via LemonSqueezy · Tax included where applicable"
+  },
+  "policies": {
+    "back": "← Back to store",
+    "privacy": {
+      "title": "Privacy Policy",
+      "effective": "Effective April 2025",
+      "sections": [
+        {
+          "heading": "Who We Are",
+          "body": [
+            "Atelier.AI operates this website as a print-on-demand storefront. We are committed to protecting your personal data and handling it transparently.",
+            "For any privacy-related questions, contact us at hello@atelier.ai."
+          ]
+        },
+        {
+          "heading": "Data We Collect",
+          "body": [
+            "When you place an order, your name, email address, and shipping address are collected by LemonSqueezy, our Merchant of Record, who processes all payments on our behalf. We do not store payment card details on our servers.",
+            "We may also collect anonymised usage data (such as page views) through our hosting provider to improve site performance."
+          ]
+        },
+        {
+          "heading": "How We Use Your Data",
+          "body": [
+            "Order data is used solely to fulfil your purchase, communicate shipping updates, and handle any returns or enquiries.",
+            "We do not sell, rent, or share your personal data with third parties for marketing purposes."
+          ]
+        },
+        {
+          "heading": "Third-Party Services",
+          "body": [
+            "LemonSqueezy (payment processing & Merchant of Record), print fulfilment partners (order production & shipping), and Vercel (website hosting) may process your data as sub-processors under appropriate data-processing agreements.",
+            "LemonSqueezy Privacy Policy: https://www.lemonsqueezy.com/privacy"
+          ]
+        },
+        {
+          "heading": "Cookies",
+          "body": [
+            "We use only essential cookies required for site functionality. No advertising or third-party tracking cookies are placed without your explicit consent.",
+            "You can manage cookie preferences through your browser settings at any time."
+          ]
+        },
+        {
+          "heading": "Your Rights",
+          "body": [
+            "Depending on your location, you may have rights under GDPR, CCPA, or other applicable laws — including the right to access, correct, or delete your personal data.",
+            "To exercise any of these rights, email hello@atelier.ai. EU/UK residents may also lodge a complaint with the relevant supervisory authority."
+          ]
+        },
+        {
+          "heading": "Data Retention",
+          "body": [
+            "Order-related data is retained as long as required by applicable tax and accounting regulations (typically 7 years), after which it is securely deleted."
+          ]
+        },
+        {
+          "heading": "Changes to This Policy",
+          "body": [
+            "We may update this policy periodically. The effective date at the top of this page will reflect any changes. Continued use of the site constitutes acceptance of the revised policy."
+          ]
+        }
+      ]
+    },
+    "terms": {
+      "title": "Terms of Service",
+      "effective": "Effective April 2025",
+      "sections": [
+        {
+          "heading": "Agreement to Terms",
+          "body": [
+            "By accessing or placing an order on this website, you agree to be bound by these Terms of Service. If you do not agree, please do not use this site."
+          ]
+        },
+        {
+          "heading": "Products",
+          "body": [
+            "All products are made to order. Product images are representative; slight colour variations may occur due to differences in printing processes and display calibration.",
+            "We reserve the right to discontinue or modify any product at any time without notice."
+          ]
+        },
+        {
+          "heading": "Orders & Payment",
+          "body": [
+            "All orders are processed by LemonSqueezy as the Merchant of Record. LemonSqueezy collects payment, issues receipts, and handles applicable taxes on our behalf.",
+            "By completing a purchase, you also agree to LemonSqueezy's Terms of Service (https://www.lemonsqueezy.com/terms).",
+            "Prices are displayed inclusive of applicable taxes where required by law. Customs duties for international orders are the buyer's responsibility."
+          ]
+        },
+        {
+          "heading": "Intellectual Property",
+          "body": [
+            "All artwork displayed on this website is created with AI assistance and remains the exclusive intellectual property of Atelier.AI.",
+            "Reproduction, redistribution, resale, or commercial use of any artwork without prior written consent is strictly prohibited. Personal, non-commercial use is permitted."
+          ]
+        },
+        {
+          "heading": "Limitation of Liability",
+          "body": [
+            "To the maximum extent permitted by applicable law, Atelier.AI shall not be liable for indirect, incidental, or consequential damages arising from your use of this site or any product purchased through it.",
+            "Our total liability for any claim shall not exceed the amount paid for the order in question."
+          ]
+        },
+        {
+          "heading": "Governing Law",
+          "body": [
+            "These Terms are governed by applicable law. Any disputes shall be resolved by the competent courts of the relevant jurisdiction.",
+            "Nothing in these Terms affects your statutory consumer rights, which cannot be excluded or limited by contract."
+          ]
+        },
+        {
+          "heading": "Changes to These Terms",
+          "body": [
+            "We reserve the right to update these Terms at any time. Changes take effect upon posting. Continued use of the site constitutes acceptance of the revised Terms."
+          ]
+        }
+      ]
+    },
+    "shipping": {
+      "title": "Shipping & Refund Policy",
+      "effective": "Effective April 2025",
+      "sections": [
+        {
+          "heading": "Production Time",
+          "body": [
+            "All products are made to order. Production typically takes 2–5 business days from order confirmation. You will receive an email once your order has been dispatched."
+          ]
+        },
+        {
+          "heading": "Shipping Times & Carriers",
+          "body": [
+            "We ship worldwide via tracked couriers. Estimated delivery times after dispatch:",
+            "• United States: 5–10 business days",
+            "• Europe: 4–8 business days",
+            "• United Kingdom: 3–6 business days",
+            "• Rest of World: 7–14 business days",
+            "A tracking number will be emailed once your order is dispatched. Delivery times are estimates and may vary due to carrier delays or customs processing."
+          ]
+        },
+        {
+          "heading": "Customs & Import Duties",
+          "body": [
+            "International orders may be subject to local customs fees, import duties, or taxes determined by your country's customs authority. These charges are the buyer's sole responsibility.",
+            "Atelier.AI has no control over these charges and cannot predict their amount."
+          ]
+        },
+        {
+          "heading": "Returns & Exchanges",
+          "body": [
+            "As all products are individually made to order, we do not accept returns or exchanges due to buyer's remorse or incorrect size selection. Please review the size guide carefully before ordering.",
+            "If you are unsure about sizing, contact us at hello@atelier.ai before purchasing — we are happy to help."
+          ]
+        },
+        {
+          "heading": "Damaged, Defective, or Incorrect Items",
+          "body": [
+            "If your item arrives damaged, defective, or is the wrong product, contact us at hello@atelier.ai within 14 days of delivery with your order number and a clear photo.",
+            "We will arrange a free replacement or a full refund at no cost to you. No return shipment is required."
+          ]
+        },
+        {
+          "heading": "Lost Orders",
+          "body": [
+            "If your tracking shows no movement for more than 10 business days after dispatch, contact us and we will investigate with the carrier. If confirmed lost, we will resend your order at no extra charge."
+          ]
+        },
+        {
+          "heading": "Contact",
+          "body": [
+            "For any shipping or order enquiries, email hello@atelier.ai. We aim to respond within 1–2 business days."
+          ]
+        }
+      ]
+    }
+  }
+}

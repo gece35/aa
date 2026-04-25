@@ -1,0 +1,225 @@
+{
+  "nav": {
+    "shop": "Alışveriş",
+    "why": "Neden biz"
+  },
+  "hero": {
+    "badge": "Yapay zeka eseri, sipariş üzerine üretim",
+    "heading": "Dün var olmayan sanatı giy.",
+    "subtext": "Premium talep üzerine baskı giyim ve posterler. Yapay zeka ile üretilen sanat, arşiv kalitesi, dünyaya günler içinde teslimat.",
+    "cta_primary": "Koleksiyonu keşfet",
+    "cta_secondary": "Nasıl çalışır"
+  },
+  "featured": {
+    "heading": "Koleksiyon",
+    "subheading": "Sınırlı adet. Siparişle üretilir."
+  },
+  "why": {
+    "heading": "Binlerce kişi neden bize güveniyor",
+    "subtext": "Deposu olmayan modern bir atölye. Seri üretim değil, özgün parçalar isteyen koleksiyonerler için tasarlandı.",
+    "features": [
+      {
+        "title": "Premium arşiv baskı",
+        "text": "Ağır pamuk ve sanat kağıdına pigment mürekkep. Renk bozulmaz, solmaz, müze kalitesi."
+      },
+      {
+        "title": "Hızlı dünya geneli kargo",
+        "text": "48 saatte üretim, takipli kurye ile 3-7 günde teslimat. Depo yok, israf yok."
+      },
+      {
+        "title": "Güvenli ödeme",
+        "text": "LemonSqueezy ile ödeme — Merchant of Record. Şifreli, vergiye uygun, sorunsuz."
+      },
+      {
+        "title": "Siparişle üretilir",
+        "text": "Sıfır stok fazlası. Her ürün bedeninize, renginize ve imzalı dijital baskınıza göre üretilir."
+      }
+    ]
+  },
+  "footer": {
+    "privacy": "Gizlilik Politikası",
+    "terms": "Kullanım Koşulları",
+    "shipping": "Kargo & İade",
+    "contact": "İletişim"
+  },
+  "product": {
+    "color": "Renk",
+    "size": "Beden",
+    "buy_now": "Hemen satın al",
+    "opening_checkout": "Ödeme açılıyor…",
+    "trust": "LemonSqueezy ile güvenli ödeme · Vergi dahil (geçerli yerlerde)"
+  },
+  "policies": {
+    "back": "← Mağazaya dön",
+    "privacy": {
+      "title": "Gizlilik Politikası",
+      "effective": "Nisan 2025 itibarıyla geçerlidir",
+      "sections": [
+        {
+          "heading": "Biz Kimiz",
+          "body": [
+            "Atelier.AI bu web sitesini bir talep üzerine baskı mağazası olarak işletmektedir. Kişisel verilerinizi korumaya ve şeffaf bir şekilde yönetmeye kararlıyız.",
+            "Gizlilikle ilgili sorularınız için hello@atelier.ai adresinden bizimle iletişime geçebilirsiniz."
+          ]
+        },
+        {
+          "heading": "Topladığımız Veriler",
+          "body": [
+            "Sipariş verdiğinizde, adınız, e-posta adresiniz ve teslimat adresiniz; ödemeleri bizim adımıza işleyen Kayıtlı Satıcımız (Merchant of Record) LemonSqueezy tarafından toplanır. Ödeme kartı bilgilerini kendi sunucularımızda saklamıyoruz.",
+            "Site performansını iyileştirmek amacıyla barındırma sağlayıcımız aracılığıyla anonim kullanım verileri (sayfa görüntüleme sayısı gibi) de toplanabilir."
+          ]
+        },
+        {
+          "heading": "Verilerinizi Nasıl Kullanıyoruz",
+          "body": [
+            "Sipariş verileri yalnızca satın alımınızı gerçekleştirmek, kargo güncellemelerini iletmek ve iade ya da sorularınızı yönetmek için kullanılır.",
+            "Kişisel verilerinizi pazarlama amacıyla üçüncü taraflara satmıyor, kiralamıyor veya paylaşmıyoruz."
+          ]
+        },
+        {
+          "heading": "Üçüncü Taraf Hizmetler",
+          "body": [
+            "LemonSqueezy (ödeme işleme ve Kayıtlı Satıcı), baskı ve fulfillment ortakları (sipariş üretimi ve kargo) ile Vercel (web sitesi barındırma), uygun veri işleme sözleşmeleri kapsamında verilerinizi alt işleyici olarak işleyebilir.",
+            "LemonSqueezy Gizlilik Politikası: https://www.lemonsqueezy.com/privacy"
+          ]
+        },
+        {
+          "heading": "Çerezler",
+          "body": [
+            "Yalnızca site işlevselliği için gerekli olan zorunlu çerezleri kullanıyoruz. Açık rızanız olmadan reklam veya üçüncü taraf izleme çerezleri yerleştirilmez.",
+            "Çerez tercihlerinizi istediğiniz zaman tarayıcı ayarlarınızdan yönetebilirsiniz."
+          ]
+        },
+        {
+          "heading": "Haklarınız",
+          "body": [
+            "Bulunduğunuz yere bağlı olarak KVKK, GDPR, CCPA veya diğer geçerli yasalar kapsamında; kişisel verilerinize erişme, düzeltme veya silme hakkına sahip olabilirsiniz.",
+            "Bu haklardan herhangi birini kullanmak için hello@atelier.ai adresine e-posta gönderin. AB/Birleşik Krallık'ta ikamet edenler ayrıca ilgili denetleyici kuruma (örn. Birleşik Krallık'ta ICO) şikâyette bulunabilir."
+          ]
+        },
+        {
+          "heading": "Veri Saklama",
+          "body": [
+            "Siparişle ilgili veriler, geçerli vergi ve muhasebe mevzuatının gerektirdiği süre boyunca (genellikle 7 yıl) saklanır; ardından güvenli biçimde silinir."
+          ]
+        },
+        {
+          "heading": "Bu Politikadaki Değişiklikler",
+          "body": [
+            "Bu politikayı zaman zaman güncelleyebiliriz. Bu sayfanın üst kısmındaki yürürlük tarihi yapılan değişiklikleri yansıtacaktır. Güncellemeden sonra siteyi kullanmaya devam etmek, revize edilmiş politikayı kabul ettiğiniz anlamına gelir."
+          ]
+        }
+      ]
+    },
+    "terms": {
+      "title": "Kullanım Koşulları",
+      "effective": "Nisan 2025 itibarıyla geçerlidir",
+      "sections": [
+        {
+          "heading": "Koşulları Kabul",
+          "body": [
+            "Bu web sitesine erişerek veya sipariş vererek bu Kullanım Koşulları'nı kabul etmiş sayılırsınız. Kabul etmiyorsanız lütfen siteyi kullanmayınız."
+          ]
+        },
+        {
+          "heading": "Ürünler",
+          "body": [
+            "Tüm ürünler sipariş üzerine üretilmektedir. Ürün görselleri temsilidir; baskı süreçleri ve ekran kalibrasyonu farklılıkları nedeniyle hafif renk farklılıkları oluşabilir.",
+            "Herhangi bir ürünü önceden haber vermeksizin değiştirme veya satıştan kaldırma hakkımızı saklı tutarız."
+          ]
+        },
+        {
+          "heading": "Siparişler & Ödeme",
+          "body": [
+            "Tüm siparişler Kayıtlı Satıcı sıfatıyla LemonSqueezy tarafından işlenir. LemonSqueezy ödemeyi tahsil eder, makbuz düzenler ve ilgili vergileri bizim adımıza yönetir.",
+            "Satın alma işlemini tamamlayarak aynı zamanda LemonSqueezy Kullanım Koşulları'nı da kabul etmiş olursunuz (https://www.lemonsqueezy.com/terms).",
+            "Fiyatlar, yasal olarak gerekli olan yerlerde vergiler dahil gösterilmektedir. Uluslararası siparişlere ait gümrük vergileri alıcının sorumluluğundadır."
+          ]
+        },
+        {
+          "heading": "Fikri Mülkiyet",
+          "body": [
+            "Bu web sitesinde sergilenen tüm sanat eserleri yapay zeka yardımıyla oluşturulmuş olup Atelier.AI'nin münhasır fikri mülkiyeti olmaya devam etmektedir.",
+            "Önceden yazılı izin alınmadan herhangi bir eserin çoğaltılması, yeniden dağıtılması, yeniden satışı veya ticari amaçla kullanılması kesinlikle yasaktır. Kişisel, ticari olmayan kullanıma izin verilmektedir."
+          ]
+        },
+        {
+          "heading": "Sorumluluğun Sınırlandırılması",
+          "body": [
+            "Yürürlükteki yasaların izin verdiği azami ölçüde, Atelier.AI; bu sitenin kullanımından veya buradan satın alınan herhangi bir üründen kaynaklanan dolaylı, arızi ya da sonuçsal zararlardan sorumlu tutulamaz.",
+            "Herhangi bir talep için toplam sorumluluğumuz, söz konusu sipariş için ödenen tutarı aşmayacaktır."
+          ]
+        },
+        {
+          "heading": "Uygulanacak Hukuk",
+          "body": [
+            "Bu Koşullar geçerli hukuka tabidir. Her türlü uyuşmazlık, yetkili mahkemelerde çözüme kavuşturulacaktır.",
+            "Bu Koşullardaki hiçbir hüküm, sözleşmeyle kaldırılamayacak veya sınırlandırılamayacak yasal tüketici haklarınızı etkilemez."
+          ]
+        },
+        {
+          "heading": "Koşullardaki Değişiklikler",
+          "body": [
+            "Bu Koşulları istediğimiz zaman güncelleme hakkını saklı tutarız. Değişiklikler, bu sayfada yayımlanmasıyla birlikte yürürlüğe girer. Siteyi kullanmaya devam etmek revize edilmiş Koşulları kabul ettiğiniz anlamına gelir."
+          ]
+        }
+      ]
+    },
+    "shipping": {
+      "title": "Kargo & İade Politikası",
+      "effective": "Nisan 2025 itibarıyla geçerlidir",
+      "sections": [
+        {
+          "heading": "Üretim Süresi",
+          "body": [
+            "Tüm ürünler sipariş üzerine üretilmektedir. Üretim, sipariş onayından itibaren genellikle 2–5 iş günü sürer. Siparişiniz kargoya verildiğinde e-posta ile bilgilendirme yapılacaktır."
+          ]
+        },
+        {
+          "heading": "Kargo Süreleri & Taşıyıcılar",
+          "body": [
+            "Tüm dünyaya takipli kurye ile gönderi yapılmaktadır. Kargoya verildikten sonra tahmini teslimat süreleri:",
+            "• Amerika Birleşik Devletleri: 5–10 iş günü",
+            "• Avrupa: 4–8 iş günü",
+            "• Birleşik Krallık: 3–6 iş günü",
+            "• Dünyanın Geri Kalanı: 7–14 iş günü",
+            "Siparişiniz kargoya verildikten sonra takip numarası e-posta ile iletilecektir. Teslimat süreleri tahmini olup taşıyıcı gecikmeleri veya gümrük işlemleri nedeniyle değişebilir."
+          ]
+        },
+        {
+          "heading": "Gümrük & İthalat Vergileri",
+          "body": [
+            "Uluslararası siparişler, ülkenizin gümrük otoritesi tarafından belirlenen yerel gümrük vergisi, ithalat gümrüğü veya diğer vergilere tabi olabilir. Bu ücretler tamamen alıcının sorumluluğundadır.",
+            "Atelier.AI bu ücretler üzerinde herhangi bir kontrole sahip değildir ve tutarlarını önceden bilemez."
+          ]
+        },
+        {
+          "heading": "İade & Değişim",
+          "body": [
+            "Tüm ürünler kişiye özel olarak üretildiğinden, vazgeçme veya yanlış beden seçimi nedeniyle iade ya da değişim kabul edilmemektedir. Sipariş vermeden önce beden rehberini dikkatlice incelemenizi öneririz.",
+            "Beden konusunda emin değilseniz, satın almadan önce hello@atelier.ai adresinden bizimle iletişime geçin — yardımcı olmaktan memnuniyet duyarız."
+          ]
+        },
+        {
+          "heading": "Hasarlı, Hatalı veya Yanlış Ürünler",
+          "body": [
+            "Ürününüz hasarlı, hatalı veya yanlış ürün olarak geldiyse, teslimat tarihinden itibaren 14 gün içinde sipariş numaranız ve net bir fotoğrafla hello@atelier.ai adresine e-posta gönderin.",
+            "Size ücretsiz olarak yeni ürün göndereceğiz ya da tam iade yapacağız. İade kargosi gerekmemektedir."
+          ]
+        },
+        {
+          "heading": "Kayıp Siparişler",
+          "body": [
+            "Kargoya verildikten sonra 10 iş gününden fazla bir süre takip bilgilerinizde hareket yoksa bizimle iletişime geçin; taşıyıcıyla birlikte araştırma başlatacağız. Sipariş kayıp olarak teyit edilirse ek ücret almaksızın yeniden göndereceğiz."
+          ]
+        },
+        {
+          "heading": "İletişim",
+          "body": [
+            "Kargo veya sipariş ile ilgili sorularınız için hello@atelier.ai adresine e-posta gönderin. 1–2 iş günü içinde yanıt vermeyi hedefliyoruz."
+          ]
+        }
+      ]
+    }
+  }
+}
