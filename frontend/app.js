@@ -1666,4 +1666,210 @@
     }
     setInterval(pollTriggeredAlerts, 30000);
 
+    // ── Auth module ──────────────────────────────────────────────────────
+    const Auth = {
+        async me() {
+            try {
+                const d = await fetch('/api/auth/me', { credentials: 'include' }).then(r => r.json());
+                return d;
+            } catch { return { authenticated: false }; }
+        },
+        async login(email, password) {
+            return fetch('/api/auth/login', {
+                method: 'POST', credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password }),
+            }).then(r => r.json());
+        },
+        async signup(email, password, kvkk_consent, marketing_consent) {
+            return fetch('/api/auth/signup', {
+                method: 'POST', credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password, kvkk_consent, marketing_consent }),
+            }).then(r => r.json());
+        },
+        async logout() {
+            return fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).then(r => r.json());
+        },
+        async forgot(email) {
+            return fetch('/api/auth/forgot', {
+                method: 'POST', credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email }),
+            }).then(r => r.json());
+        },
+    };
+
+    let _currentUser = null;
+
+    function applyUserState(user) {
+        _currentUser = user;
+        const authArea = document.getElementById('authArea');
+        const userArea = document.getElementById('userArea');
+        const upgradeBtn = document.getElementById('upgradeBtn');
+        const planBadge = document.getElementById('planBadge');
+        const userEmailEl = document.getElementById('userEmail');
+
+        if (user) {
+            authArea.classList.add('hidden');
+            userArea.classList.remove('hidden');
+            userEmailEl.textContent = user.email;
+            planBadge.textContent = user.plan === 'premium' ? 'Premium' : 'Free';
+            planBadge.className = 'plan-badge ' + user.plan;
+            if (user.plan !== 'premium') {
+                upgradeBtn.classList.remove('hidden');
+            } else {
+                upgradeBtn.classList.add('hidden');
+            }
+        } else {
+            authArea.classList.remove('hidden');
+            userArea.classList.add('hidden');
+        }
+    }
+
+    // Bootstrap auth state
+    Auth.me().then(d => {
+        if (d.authenticated && d.user) {
+            applyUserState(d.user);
+        } else {
+            applyUserState(null);
+        }
+    });
+
+    // Auth modal
+    const authModal = document.getElementById('authModal');
+    function openAuthModal(tab) {
+        authModal.classList.remove('hidden');
+        document.querySelectorAll('.auth-tab').forEach(t => {
+            t.classList.toggle('active', t.dataset.auth === tab);
+        });
+        document.getElementById('authFormLogin').classList.toggle('hidden', tab !== 'login');
+        document.getElementById('authFormSignup').classList.toggle('hidden', tab !== 'signup');
+        document.getElementById('authFormForgot').classList.add('hidden');
+    }
+    function closeAuthModal() { authModal.classList.add('hidden'); }
+
+    document.getElementById('loginBtn')?.addEventListener('click', () => openAuthModal('login'));
+    document.getElementById('signupBtn')?.addEventListener('click', () => openAuthModal('signup'));
+    document.getElementById('authModalClose')?.addEventListener('click', closeAuthModal);
+    document.getElementById('authModalBackdrop')?.addEventListener('click', closeAuthModal);
+    document.getElementById('upgradeBtn')?.addEventListener('click', () => openPricingModal());
+
+    document.querySelectorAll('.auth-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            const which = tab.dataset.auth;
+            openAuthModal(which);
+        });
+    });
+
+    document.getElementById('forgotPasswordLink')?.addEventListener('click', e => {
+        e.preventDefault();
+        document.getElementById('authFormLogin').classList.add('hidden');
+        document.getElementById('authFormForgot').classList.remove('hidden');
+    });
+    document.getElementById('backToLoginLink')?.addEventListener('click', e => {
+        e.preventDefault();
+        document.getElementById('authFormForgot').classList.add('hidden');
+        document.getElementById('authFormLogin').classList.remove('hidden');
+    });
+
+    // Login submit
+    document.getElementById('loginSubmit')?.addEventListener('click', async () => {
+        const email = document.getElementById('loginEmail').value.trim();
+        const password = document.getElementById('loginPassword').value;
+        const errEl = document.getElementById('loginError');
+        errEl.classList.add('hidden');
+        const d = await Auth.login(email, password);
+        if (d.ok && d.user) {
+            applyUserState(d.user);
+            closeAuthModal();
+            showToast('Giriş yapıldı.', 'success');
+        } else {
+            errEl.textContent = d.message || 'E-posta veya şifre hatalı.';
+            errEl.classList.remove('hidden');
+        }
+    });
+
+    // Signup submit
+    document.getElementById('signupSubmit')?.addEventListener('click', async () => {
+        const email = document.getElementById('signupEmail').value.trim();
+        const password = document.getElementById('signupPassword').value;
+        const kvkk = document.getElementById('kvkkConsent').checked;
+        const marketing = document.getElementById('marketingConsent').checked;
+        const errEl = document.getElementById('signupError');
+        errEl.classList.add('hidden');
+        if (!kvkk) {
+            errEl.textContent = 'KVKK onayı zorunludur.';
+            errEl.classList.remove('hidden');
+            return;
+        }
+        const d = await Auth.signup(email, password, kvkk, marketing);
+        if (d.ok && d.user) {
+            applyUserState(d.user);
+            closeAuthModal();
+            showToast('Hesabınız oluşturuldu! Doğrulama e-postası gönderildi.', 'success', 6000);
+        } else {
+            errEl.textContent = d.message || 'Kayıt başarısız.';
+            errEl.classList.remove('hidden');
+        }
+    });
+
+    // Forgot submit
+    document.getElementById('forgotSubmit')?.addEventListener('click', async () => {
+        const email = document.getElementById('forgotEmail').value.trim();
+        await Auth.forgot(email);
+        document.getElementById('forgotMsg').style.display = 'block';
+    });
+
+    // Logout
+    document.getElementById('logoutBtn')?.addEventListener('click', async () => {
+        await Auth.logout();
+        applyUserState(null);
+        showToast('Çıkış yapıldı.', 'info');
+    });
+
+    // ── Pricing modal ────────────────────────────────────────────────────
+    const pricingModal = document.getElementById('pricingModal');
+    function openPricingModal() { pricingModal.classList.remove('hidden'); }
+    function closePricingModal() { pricingModal.classList.add('hidden'); }
+    document.getElementById('pricingModalClose')?.addEventListener('click', closePricingModal);
+    document.getElementById('pricingModalBackdrop')?.addEventListener('click', closePricingModal);
+
+    window.openCheckout = async function(period) {
+        if (!_currentUser) { openAuthModal('signup'); return; }
+        try {
+            const d = await fetch('/api/billing/checkout', {
+                method: 'POST', credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ period }),
+            }).then(r => r.json());
+            if (d.url) { window.location.href = d.url; }
+            else { showToast('Ödeme sayfası açılamadı.', 'danger'); }
+        } catch { showToast('Bağlantı hatası.', 'danger'); }
+    };
+
+    // Handle verify=ok query param from email link
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('verify') === 'ok') {
+        showToast('E-posta adresiniz doğrulandı!', 'success', 6000);
+        history.replaceState({}, '', '/');
+    } else if (urlParams.get('verify')) {
+        showToast('Doğrulama bağlantısı geçersiz veya süresi dolmuş.', 'danger', 6000);
+        history.replaceState({}, '', '/');
+    } else if (urlParams.get('checkout') === 'success') {
+        showToast('Premium aboneliğiniz aktif edildi!', 'success', 8000);
+        history.replaceState({}, '', '/');
+        Auth.me().then(d => { if (d.user) applyUserState(d.user); });
+    }
+
+    // ── Cookie banner ────────────────────────────────────────────────────
+    if (!localStorage.getItem('nebula.cookieConsent')) {
+        const banner = document.getElementById('cookieBanner');
+        if (banner) banner.classList.remove('hidden');
+        document.getElementById('cookieAccept')?.addEventListener('click', () => {
+            localStorage.setItem('nebula.cookieConsent', '1');
+            banner.classList.add('hidden');
+        });
+    }
+
 })();

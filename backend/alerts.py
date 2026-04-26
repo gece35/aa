@@ -1,4 +1,4 @@
-"""Özelleştirilebilir alarm sistemi.
+"""Özelleştirilebilir alarm sistemi (multi-tenant, SQLAlchemy).
 
 Desteklenen kriter tipleri:
   rsi_below, rsi_above      — RSI eşik değeri
@@ -13,18 +13,16 @@ Desteklenen kriter tipleri:
 
 from __future__ import annotations
 
-import json
 import logging
-import sqlite3
-import threading
-import time
-import uuid
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timezone
+from typing import Any, Callable, Dict, List, Optional
+
+from sqlalchemy import select, func as sa_func
+
+from .db import db
+from .models import Alert
 
 logger = logging.getLogger(__name__)
-
-DB_PATH = "alerts.db"
-_lock = threading.Lock()
 
 CONDITION_LABELS = {
     "rsi_below":       "RSI <",
@@ -40,35 +38,14 @@ CONDITION_LABELS = {
 }
 
 
-# ── Veritabanı kurulumu ───────────────────────────────────────────────────────
-
-def _get_conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
-def init_db() -> None:
-    with _lock, _get_conn() as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS alerts (
-                id TEXT PRIMARY KEY,
-                symbol TEXT NOT NULL,
-                condition_type TEXT NOT NULL,
-                condition_value REAL,
-                label TEXT,
-                created_at INTEGER NOT NULL,
-                triggered_at INTEGER,
-                is_active INTEGER NOT NULL DEFAULT 1,
-                dismissed INTEGER NOT NULL DEFAULT 0
-            )
-        """)
-        conn.commit()
-
-
 # ── CRUD ─────────────────────────────────────────────────────────────────────
 
-def create_alert(symbol: str, condition_type: str, condition_value: Optional[float] = None) -> Dict:
+def create_alert(
+    user_id: str,
+    symbol: str,
+    condition_type: str,
+    condition_value: Optional[float] = None,
+) -> Dict:
     symbol = symbol.upper().strip()
     if condition_type not in CONDITION_LABELS:
         raise ValueError(f"Geçersiz kriter: {condition_type}")
@@ -76,74 +53,77 @@ def create_alert(symbol: str, condition_type: str, condition_value: Optional[flo
     label_base = CONDITION_LABELS[condition_type]
     label = f"{label_base} {condition_value}" if condition_value is not None else label_base
 
-    alert = {
-        "id": str(uuid.uuid4())[:8],
-        "symbol": symbol,
-        "condition_type": condition_type,
-        "condition_value": condition_value,
-        "label": label,
-        "created_at": int(time.time()),
-        "triggered_at": None,
-        "is_active": True,
-        "dismissed": False,
-    }
+    a = Alert(
+        user_id=user_id,
+        symbol=symbol,
+        condition_type=condition_type,
+        condition_value=condition_value,
+        label=label,
+        is_active=True,
+        dismissed=False,
+    )
+    db.session.add(a)
+    db.session.commit()
+    return a.to_dict()
 
-    with _lock, _get_conn() as conn:
-        conn.execute(
-            "INSERT INTO alerts VALUES (:id,:symbol,:condition_type,:condition_value,:label,:created_at,:triggered_at,:is_active,:dismissed)",
-            {**alert, "is_active": 1, "dismissed": 0, "triggered_at": None},
+
+def list_alerts(user_id: str, include_dismissed: bool = False) -> List[Dict]:
+    q = select(Alert).where(Alert.user_id == user_id)
+    if not include_dismissed:
+        q = q.where(Alert.dismissed == False)  # noqa: E712
+    q = q.order_by(Alert.created_at.desc())
+    rows = db.session.execute(q).scalars().all()
+    return [a.to_dict() for a in rows]
+
+
+def get_triggered(user_id: str, limit: int = 20) -> List[Dict]:
+    q = (
+        select(Alert)
+        .where(
+            Alert.user_id == user_id,
+            Alert.triggered_at.is_not(None),
+            Alert.dismissed == False,  # noqa: E712
         )
-        conn.commit()
-
-    return alert
-
-
-def list_alerts(include_dismissed: bool = False) -> List[Dict]:
-    with _lock, _get_conn() as conn:
-        if include_dismissed:
-            rows = conn.execute("SELECT * FROM alerts ORDER BY created_at DESC").fetchall()
-        else:
-            rows = conn.execute(
-                "SELECT * FROM alerts WHERE dismissed=0 ORDER BY created_at DESC"
-            ).fetchall()
-    return [_row_to_dict(r) for r in rows]
+        .order_by(Alert.triggered_at.desc())
+        .limit(limit)
+    )
+    rows = db.session.execute(q).scalars().all()
+    return [a.to_dict() for a in rows]
 
 
-def get_triggered(limit: int = 20) -> List[Dict]:
-    with _lock, _get_conn() as conn:
-        rows = conn.execute(
-            "SELECT * FROM alerts WHERE triggered_at IS NOT NULL AND dismissed=0 ORDER BY triggered_at DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
-    return [_row_to_dict(r) for r in rows]
+def delete_alert(user_id: str, alert_id: str) -> bool:
+    a = db.session.get(Alert, alert_id)
+    if a is None or a.user_id != user_id:
+        return False
+    db.session.delete(a)
+    db.session.commit()
+    return True
 
 
-def delete_alert(alert_id: str) -> bool:
-    with _lock, _get_conn() as conn:
-        cur = conn.execute("DELETE FROM alerts WHERE id=?", (alert_id,))
-        conn.commit()
-    return cur.rowcount > 0
+def dismiss_alert(user_id: str, alert_id: str) -> bool:
+    a = db.session.get(Alert, alert_id)
+    if a is None or a.user_id != user_id:
+        return False
+    a.dismissed = True
+    db.session.commit()
+    return True
 
 
-def dismiss_alert(alert_id: str) -> bool:
-    with _lock, _get_conn() as conn:
-        cur = conn.execute("UPDATE alerts SET dismissed=1 WHERE id=?", (alert_id,))
-        conn.commit()
-    return cur.rowcount > 0
-
-
-def _row_to_dict(row: sqlite3.Row) -> Dict:
-    d = dict(row)
-    d["is_active"] = bool(d["is_active"])
-    d["dismissed"] = bool(d["dismissed"])
-    return d
+def count_active_alerts(user_id: str) -> int:
+    return db.session.scalar(
+        select(sa_func.count(Alert.id)).where(
+            Alert.user_id == user_id,
+            Alert.dismissed == False,  # noqa: E712
+            Alert.triggered_at.is_(None),
+        )
+    ) or 0
 
 
 # ── Alarm kontrol mantığı ──────────────────────────────────────────────────
 
-def _check_single(alert: Dict, detail: Dict) -> bool:
-    ct = alert["condition_type"]
-    cv = alert.get("condition_value")
+def _check_single(alert: Alert, detail: Dict) -> bool:
+    ct = alert.condition_type
+    cv = alert.condition_value
 
     indicators: Dict[str, Any] = {
         ind["key"]: ind for ind in detail.get("indicators", [])
@@ -195,86 +175,52 @@ def _check_single(alert: Dict, detail: Dict) -> bool:
     return False
 
 
-def check_alerts(detail_fetcher) -> List[Dict]:
-    """Aktif alarmları kontrol eder. Tetiklenenlerı döner.
-
-    detail_fetcher: symbol -> dict  (score_symbol_detailed çıktısı)
-    """
-    with _lock, _get_conn() as conn:
-        rows = conn.execute(
-            "SELECT * FROM alerts WHERE is_active=1 AND triggered_at IS NULL AND dismissed=0"
-        ).fetchall()
-    active = [_row_to_dict(r) for r in rows]
+def check_alerts_for_user(
+    user_id: str,
+    detail_fetcher: Callable[[str], Dict],
+    notifier: Optional[Callable[[Alert], None]] = None,
+) -> List[Dict]:
+    """Bir kullanıcının aktif alarmlarını kontrol eder."""
+    q = select(Alert).where(
+        Alert.user_id == user_id,
+        Alert.is_active == True,  # noqa: E712
+        Alert.triggered_at.is_(None),
+        Alert.dismissed == False,  # noqa: E712
+    )
+    active = db.session.execute(q).scalars().all()
 
     if not active:
         return []
 
-    symbols = list({a["symbol"] for a in active})
+    symbols = list({a.symbol for a in active})
     details: Dict[str, Dict] = {}
     for sym in symbols:
         try:
-            details[sym] = detail_fetcher(sym)
+            details[sym] = detail_fetcher(sym) or {}
         except Exception as exc:
             logger.warning("Alarm kontrol verisi alinamadi %s: %s", sym, exc)
 
-    triggered = []
-    now = int(time.time())
+    triggered: List[Dict] = []
+    now = datetime.now(timezone.utc)
     for alert in active:
-        sym = alert["symbol"]
-        d = details.get(sym)
-        if d is None:
+        d = details.get(alert.symbol)
+        if not d:
             continue
         try:
             fired = _check_single(alert, d)
         except Exception:
             continue
-
         if fired:
-            with _lock, _get_conn() as conn:
-                conn.execute(
-                    "UPDATE alerts SET triggered_at=?, is_active=0 WHERE id=?",
-                    (now, alert["id"]),
-                )
-                conn.commit()
-            alert["triggered_at"] = now
-            alert["is_active"] = False
-            triggered.append(alert)
-            logger.info("Alarm tetiklendi: %s %s", sym, alert["label"])
+            alert.triggered_at = now
+            alert.is_active = False
+            triggered.append(alert.to_dict())
+            if notifier:
+                try:
+                    notifier(alert)
+                except Exception:
+                    logger.exception("Alarm notifier hatası")
+            logger.info("Alarm tetiklendi: user=%s %s %s", user_id, alert.symbol, alert.label)
 
+    if triggered:
+        db.session.commit()
     return triggered
-
-
-# ── Arka plan worker ──────────────────────────────────────────────────────────
-
-_worker_thread: Optional[threading.Thread] = None
-_stop_event = threading.Event()
-
-
-def start_worker(detail_fetcher, interval_seconds: int = 300) -> None:
-    global _worker_thread
-    if _worker_thread and _worker_thread.is_alive():
-        return
-
-    _stop_event.clear()
-
-    def run():
-        logger.info("Alarm worker başlatıldı (interval=%ds)", interval_seconds)
-        while not _stop_event.wait(interval_seconds):
-            try:
-                fired = check_alerts(detail_fetcher)
-                if fired:
-                    logger.info("%d alarm tetiklendi", len(fired))
-            except Exception:
-                logger.exception("Alarm worker hatası")
-
-    _worker_thread = threading.Thread(target=run, daemon=True, name="alert-worker")
-    _worker_thread.start()
-
-
-def stop_worker() -> None:
-    _stop_event.set()
-
-
-# ── Başlangıç ─────────────────────────────────────────────────────────────────
-
-init_db()

@@ -9,3 +9,19 @@ beautifulsoup4>=4.12.0
 lxml>=5.0.0
 gunicorn>=21.2.0
 deep-translator>=1.11.4
+
+# Production stack
+SQLAlchemy>=2.0,<2.1
+Flask-SQLAlchemy>=3.1
+Flask-Migrate>=4.0
+Flask-Login>=0.6.3
+Flask-Limiter>=3.5
+Flask-WTF>=1.2
+psycopg[binary]>=3.1
+redis>=5.0
+bcrypt>=4.0
+itsdangerous>=2.2
+python-dotenv>=1.0
+pydantic>=2.5
+email-validator>=2.1
+sentry-sdk[flask]>=2.0

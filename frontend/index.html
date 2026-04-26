@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Nebula Scanner — BIST ve ABD hisse senetleri için teknik analiz tabanlı tarama, puanlama ve alarm sistemi." />
     <title>Nebula Scanner | Hisse Tarama ve Puanlama</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -18,6 +19,12 @@
         <div class="stars"></div>
     </div>
 
+    <!-- SPK Disclaimer Banner -->
+    <div class="disclaimer-bar" id="disclaimerBar">
+        <span>⚠ Nebula Scanner yatırım danışmanlığı hizmeti vermez. Tüm içerikler eğitim amaçlıdır. &nbsp;
+        <a href="/legal/risk" class="disclaimer-link">Risk Uyarısı</a></span>
+    </div>
+
     <header class="header glass">
         <div class="brand">
             <div class="logo">
@@ -25,21 +32,33 @@
             </div>
             <div class="brand-text">
                 <h1>Nebula <span class="accent">Scanner</span></h1>
-                <p>Teknik analiz goestergeleriyle 0-5 hisse puanlamasi</p>
+                <p>Teknik analiz göstergeleriyle 0-5 hisse puanlaması</p>
             </div>
         </div>
         <div class="header-meta">
             <div class="meta-card">
-                <span class="meta-label">Son guncelleme</span>
+                <span class="meta-label">Son güncelleme</span>
                 <span id="lastUpdated" class="meta-value">-</span>
             </div>
             <div class="meta-card">
                 <span class="meta-label">Cache</span>
                 <span id="cacheState" class="meta-value">-</span>
             </div>
-            <button id="refreshBtn" class="btn btn-primary" title="Zorla yenile">
+            <!-- Auth area -->
+            <div id="authArea" class="auth-area">
+                <button id="loginBtn" class="btn btn-ghost">Giriş Yap</button>
+                <button id="signupBtn" class="btn btn-primary">Üye Ol</button>
+            </div>
+            <div id="userArea" class="user-area hidden">
+                <div class="user-pill" id="userPill">
+                    <span id="userEmail" class="user-email"></span>
+                    <span id="planBadge" class="plan-badge free">Free</span>
+                </div>
+                <button id="upgradeBtn" class="btn btn-premium hidden">⭐ Premium</button>
+                <button id="logoutBtn" class="btn btn-ghost">Çıkış</button>
+            </div>
+            <button id="refreshBtn" class="btn btn-ghost" title="Zorla yenile">
                 <span class="btn-ic">&#x21bb;</span>
-                <span>Yenile</span>
             </button>
         </div>
     </header>
@@ -47,7 +66,7 @@
     <section class="market-switcher glass">
         <div class="ms-title">
             <span class="ms-label">Pazar</span>
-            <span class="ms-hint">BIST ya da US hisseleri arasinda gecis yap</span>
+            <span class="ms-hint">BIST ya da US hisseleri arasında geçiş yap</span>
         </div>
         <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
             <div class="market-buttons" id="marketButtons"></div>
@@ -83,22 +102,22 @@
             </div>
 
             <div class="filters glass">
-                <input type="search" id="searchInput" placeholder="Hisse ara ( / ile hizli odakla)" />
+                <input type="search" id="searchInput" placeholder="Hisse ara ( / ile hızlı odakla)" />
                 <div class="chip-group" id="scoreFilters">
-                    <button class="chip active" data-min="0">Tumu</button>
+                    <button class="chip active" data-min="0">Tümü</button>
                     <button class="chip" data-min="3">&ge; 3 Puan</button>
                     <button class="chip" data-min="4">&ge; 4 Puan</button>
                     <button class="chip" data-min="5">Sadece 5/5</button>
                     <button class="chip chip-star" data-watch="1" title="Sadece favoriler">&#9733; Favoriler</button>
                 </div>
                 <div class="sort-wrap">
-                    <label for="sortSelect" class="sort-label">Sirala</label>
+                    <label for="sortSelect" class="sort-label">Sırala</label>
                     <select id="sortSelect" class="sort-select">
-                        <option value="score">Puan (yuksek)</option>
-                        <option value="change_desc">Gunluk Degisim &#x2191;</option>
-                        <option value="change_asc">Gunluk Degisim &#x2193;</option>
-                        <option value="week">Haftalik Degisim</option>
-                        <option value="month">Aylik Degisim</option>
+                        <option value="score">Puan (yüksek)</option>
+                        <option value="change_desc">Günlük Değişim &#x2191;</option>
+                        <option value="change_asc">Günlük Değişim &#x2193;</option>
+                        <option value="week">Haftalık Değişim</option>
+                        <option value="month">Aylık Değişim</option>
                         <option value="symbol">Sembol (A-Z)</option>
                     </select>
                 </div>
@@ -124,6 +143,7 @@
         </section>
     </main>
 
+    <!-- Hisse detay modalı -->
     <div id="stockModal" class="modal hidden" role="dialog">
         <div class="modal-backdrop"></div>
         <div class="modal-card glass">
@@ -131,10 +151,6 @@
             <div id="modalContent"></div>
         </div>
     </div>
-
-    <footer class="footer">
-        <span>Nebula Scanner &bull; Egitim amacli arac. Yatirim tavsiyesi degildir.</span>
-    </footer>
 
     <!-- TradingView Lightweight Charts -->
     <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
@@ -159,25 +175,154 @@
             <div class="alert-form">
                 <label class="af-label">Hisse Sembolü</label>
                 <input id="af-symbol" class="af-input" type="text" placeholder="TSLA, MGROS, AAPL..." autocomplete="off" />
-
                 <label class="af-label">Kriter</label>
                 <select id="af-condition" class="af-input">
                     <option value="">-- Kriter seç --</option>
                 </select>
-
                 <div id="af-value-wrap" class="hidden">
                     <label class="af-label" id="af-value-label">Eşik Değeri</label>
                     <input id="af-value" class="af-input" type="number" step="any" placeholder="örn. 30" />
                 </div>
-
                 <div id="af-error" style="color:var(--danger);font-size:12px;margin-top:4px;display:none;"></div>
                 <button id="af-submit" class="btn btn-primary" style="width:100%;margin-top:12px;">Alarm Kur</button>
             </div>
         </div>
     </div>
 
+    <!-- Auth modalı (Giriş / Kayıt) -->
+    <div id="authModal" class="modal hidden" role="dialog" aria-label="Giriş / Kayıt">
+        <div class="modal-backdrop" id="authModalBackdrop"></div>
+        <div class="modal-card glass auth-modal-card">
+            <button class="modal-close" id="authModalClose">&times;</button>
+            <div class="auth-tabs">
+                <button class="auth-tab active" data-auth="login">Giriş Yap</button>
+                <button class="auth-tab" data-auth="signup">Üye Ol</button>
+            </div>
+
+            <!-- Giriş formu -->
+            <div id="authFormLogin" class="auth-form">
+                <label class="af-label">E-posta</label>
+                <input id="loginEmail" class="af-input" type="email" placeholder="ornek@mail.com" autocomplete="email" />
+                <label class="af-label">Şifre</label>
+                <input id="loginPassword" class="af-input" type="password" placeholder="Şifreniz" autocomplete="current-password" />
+                <div id="loginError" class="auth-error hidden"></div>
+                <button id="loginSubmit" class="btn btn-primary" style="width:100%;margin-top:16px;">Giriş Yap</button>
+                <p style="text-align:center;margin-top:12px;font-size:13px;color:var(--text-3)">
+                    <a href="#" id="forgotPasswordLink" style="color:var(--accent);">Şifremi unuttum</a>
+                </p>
+            </div>
+
+            <!-- Kayıt formu -->
+            <div id="authFormSignup" class="auth-form hidden">
+                <label class="af-label">E-posta</label>
+                <input id="signupEmail" class="af-input" type="email" placeholder="ornek@mail.com" autocomplete="email" />
+                <label class="af-label">Şifre <span style="color:var(--text-3);font-size:11px;">(en az 10 karakter, harf+rakam)</span></label>
+                <input id="signupPassword" class="af-input" type="password" placeholder="Güçlü bir şifre" autocomplete="new-password" />
+
+                <div class="consent-block">
+                    <label class="consent-row">
+                        <input type="checkbox" id="kvkkConsent" />
+                        <span><a href="/legal/gizlilik" target="_blank" style="color:var(--accent)">KVKK Aydınlatma Metni</a>'ni okudum ve kişisel verilerimin işlenmesine onay veriyorum. <strong>(Zorunlu)</strong></span>
+                    </label>
+                    <label class="consent-row">
+                        <input type="checkbox" id="marketingConsent" />
+                        <span>Nebula Scanner'dan pazarlama e-postaları almak istiyorum. (İsteğe bağlı)</span>
+                    </label>
+                </div>
+
+                <p style="font-size:12px;color:var(--text-3);margin-top:4px;">
+                    Kayıt olarak <a href="/legal/kosullar" target="_blank" style="color:var(--accent)">Kullanım Koşulları</a>'nı kabul etmiş sayılırsınız.
+                </p>
+                <div id="signupError" class="auth-error hidden"></div>
+                <button id="signupSubmit" class="btn btn-primary" style="width:100%;margin-top:16px;">Hesap Oluştur</button>
+            </div>
+
+            <!-- Şifre sıfırlama formu -->
+            <div id="authFormForgot" class="auth-form hidden">
+                <p style="color:var(--text-2);font-size:14px;margin-bottom:16px;">
+                    E-posta adresinizi girin; şifre sıfırlama bağlantısı gönderelim.
+                </p>
+                <label class="af-label">E-posta</label>
+                <input id="forgotEmail" class="af-input" type="email" placeholder="ornek@mail.com" autocomplete="email" />
+                <div id="forgotMsg" style="font-size:13px;margin-top:8px;color:var(--success);display:none;">
+                    Bağlantı gönderildi — gelen kutunuzu kontrol edin.
+                </div>
+                <button id="forgotSubmit" class="btn btn-primary" style="width:100%;margin-top:16px;">Sıfırlama Bağlantısı Gönder</button>
+                <p style="text-align:center;margin-top:12px;font-size:13px;">
+                    <a href="#" id="backToLoginLink" style="color:var(--accent);">&larr; Giriş'e dön</a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Premium pricing modalı -->
+    <div id="pricingModal" class="modal hidden" role="dialog" aria-label="Premium Planlar">
+        <div class="modal-backdrop" id="pricingModalBackdrop"></div>
+        <div class="modal-card glass pricing-modal-card">
+            <button class="modal-close" id="pricingModalClose">&times;</button>
+            <h2 style="font-family:'Outfit';font-size:24px;margin:0 0 6px;">Nebula Scanner Premium</h2>
+            <p style="color:var(--text-3);margin-bottom:28px;">Tüm pazarlara, sınırsız alarmlara ve gelişmiş özelliklere erişin.</p>
+
+            <div class="pricing-grid">
+                <div class="pricing-card glass">
+                    <div class="price-label">Aylık</div>
+                    <div class="price-amount">₺149<span class="price-period">/ay</span></div>
+                    <button class="btn btn-primary" onclick="openCheckout('monthly')">Aylık Başla</button>
+                </div>
+                <div class="pricing-card glass pricing-card-featured">
+                    <div class="price-label">Yıllık <span class="price-save">%28 indirim</span></div>
+                    <div class="price-amount">₺1.290<span class="price-period">/yıl</span></div>
+                    <div class="price-monthly-eq">≈ ₺107,50/ay</div>
+                    <button class="btn btn-premium" onclick="openCheckout('yearly')">Yıllık Başla</button>
+                </div>
+            </div>
+
+            <div class="feature-list">
+                <div class="feature-row"><span class="f-check">✓</span> BIST + US piyasaları</div>
+                <div class="feature-row"><span class="f-check">✓</span> Sınırsız hisse detay sorgulama</div>
+                <div class="feature-row"><span class="f-check">✓</span> Hisse başına son haberler</div>
+                <div class="feature-row"><span class="f-check">✓</span> 50 aktif alarm (Free: 3)</div>
+                <div class="feature-row"><span class="f-check">✓</span> 5 dakikada bir alarm kontrolü (Free: saatlik)</div>
+                <div class="feature-row"><span class="f-check">✓</span> 100 favori + 50 portföy pozisyonu</div>
+                <div class="feature-row"><span class="f-check">✓</span> Tam formasyon analizi (11 patern)</div>
+            </div>
+
+            <p style="text-align:center;font-size:12px;color:var(--text-3);margin-top:20px;">
+                Ödeme LemonSqueezy güvencesiyle işlenir. İstediğiniz zaman iptal edebilirsiniz.<br/>
+                <a href="/legal/mesafeli-satis" target="_blank" style="color:var(--accent)">Mesafeli Satış Sözleşmesi</a> &bull;
+                <a href="/legal/iade" target="_blank" style="color:var(--accent)">İade Politikası</a>
+            </p>
+        </div>
+    </div>
+
+    <!-- Çerez Banner -->
+    <div id="cookieBanner" class="cookie-banner hidden">
+        <span>Bu site yalnızca zorunlu oturum çerezleri kullanır.
+        <a href="/legal/cerez" style="color:var(--accent);">Çerez Politikası</a></span>
+        <button id="cookieAccept" class="btn btn-primary" style="padding:6px 16px;font-size:13px;">Tamam</button>
+    </div>
+
     <!-- Toast bildirimleri -->
     <div id="toastContainer" aria-live="polite"></div>
+
+    <footer class="footer">
+        <div class="footer-disclaimer">
+            ⚠ Bu uygulama eğitim amaçlıdır. Sunulan analiz, skor ve sinyaller yatırım tavsiyesi değildir.
+            Yatırım kararlarınız için SPK lisanslı bir kuruluşa danışınız. —
+            <a href="/legal/risk">Risk Uyarısı</a>
+        </div>
+        <div class="footer-legal">
+            <span id="footerEntity">Nebula Scanner</span> &bull;
+            <a href="mailto:destek@nebulascanner.com">destek@nebulascanner.com</a> &bull;
+            <a href="/legal/kosullar">Kullanım Koşulları</a> &bull;
+            <a href="/legal/gizlilik">Gizlilik / KVKK</a> &bull;
+            <a href="/legal/mesafeli-satis">Mesafeli Satış</a> &bull;
+            <a href="/legal/iade">İade</a> &bull;
+            <a href="/legal/cerez">Çerezler</a> &bull;
+            <a href="/legal/risk">Risk Uyarısı</a>
+        </div>
+        <div class="footer-copy">&copy; 2025 Nebula Scanner</div>
+    </footer>
 
     <script src="app.js"></script>
 </body>

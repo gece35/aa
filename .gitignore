@@ -5,7 +5,15 @@ __pycache__/
 venv/
 env/
 .env
+.env.local
 .DS_Store
 *.log
 .idea/
 .vscode/
+*.db
+*.sqlite
+*.sqlite3
+instance/
+.pytest_cache/
+htmlcov/
+.coverage
