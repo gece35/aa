@@ -1,4 +1,4 @@
-"""AI destekli kullanıcı destek chatbot'u — Claude Haiku ile."""
+"""AI destekli kullanıcı destek chatbot'u — Groq (Llama 3.3) ile."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 support_bp = Blueprint("support", __name__)
 
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 
 SYSTEM_PROMPT = """Sen Nebula Scanner'ın Türkçe konuşan yardım asistanısın.
 Kullanıcıların site hakkındaki sorularını yanıtlarsın ve sorunlarını çözmeye çalışırsın.
@@ -90,7 +90,7 @@ Eğer soruyu yanıtlayamıyorsan veya teknik bir sorunla karşılaştıysa, şun
 
 @support_bp.route("/api/support/chat", methods=["POST"])
 def chat():
-    if not ANTHROPIC_API_KEY:
+    if not GROQ_API_KEY:
         return jsonify({"error": "config_error", "message": "Destek servisi şu an kullanılamıyor."}), 503
 
     data = request.get_json(silent=True) or {}
@@ -102,7 +102,6 @@ def chat():
     if len(user_message) > 1000:
         return jsonify({"error": "bad_request", "message": "Mesaj çok uzun (max 1000 karakter)."}), 400
 
-    # Son 10 mesajı tut (context window tasarrufu)
     safe_history = []
     for turn in history[-10:]:
         role = turn.get("role")
@@ -113,17 +112,16 @@ def chat():
     safe_history.append({"role": "user", "content": user_message})
 
     try:
-        import anthropic
-        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-        response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+        from groq import Groq
+        client = Groq(api_key=GROQ_API_KEY)
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
             max_tokens=512,
-            system=SYSTEM_PROMPT,
-            messages=safe_history,
+            messages=[{"role": "system", "content": SYSTEM_PROMPT}] + safe_history,
         )
-        reply = response.content[0].text
-    except Exception as exc:
-        logger.exception("Claude API hatası")
+        reply = response.choices[0].message.content
+    except Exception:
+        logger.exception("Groq API hatası")
         return jsonify({"error": "ai_error", "message": "Şu an yanıt veremiyorum, lütfen daha sonra tekrar deneyin."}), 503
 
     needs_escalation = any(phrase in reply for phrase in [
