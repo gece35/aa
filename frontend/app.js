@@ -180,7 +180,7 @@
         }
 
         renderSkeletons(8);
-        els.resultsArea.querySelectorAll('.stock-card, .empty, .loader-sentinel').forEach((x) => x.remove());
+        els.resultsArea.querySelectorAll('.stock-card, .empty, .loader-sentinel, .plan-gate-banner').forEach((x) => x.remove());
 
         try {
             await loadNextChunk(force);
@@ -324,7 +324,7 @@
 
         filtered = sortResults(filtered);
 
-        els.resultsArea.querySelectorAll('.stock-card, .empty, .loader-sentinel').forEach((x) => x.remove());
+        els.resultsArea.querySelectorAll('.stock-card, .empty, .loader-sentinel, .plan-gate-banner').forEach((x) => x.remove());
 
         if (!filtered.length && !m.loading) {
             const empty = document.createElement('div');
@@ -1864,15 +1864,26 @@
         const email = document.getElementById('loginEmail').value.trim();
         const password = document.getElementById('loginPassword').value;
         const errEl = document.getElementById('loginError');
+        const btn = document.getElementById('loginSubmit');
         errEl.classList.add('hidden');
-        const d = await Auth.login(email, password);
-        if (d.ok && d.user) {
-            applyUserState(d.user);
-            closeAuthModal();
-            showToast('Giriş yapıldı.', 'success');
-        } else {
-            errEl.textContent = d.message || 'E-posta veya şifre hatalı.';
+        btn.disabled = true;
+        btn.textContent = 'Giriş yapılıyor...';
+        try {
+            const d = await Auth.login(email, password);
+            if (d.ok && d.user) {
+                applyUserState(d.user);
+                closeAuthModal();
+                showToast('Giriş yapıldı.', 'success');
+            } else {
+                errEl.textContent = d.message || 'E-posta veya şifre hatalı.';
+                errEl.classList.remove('hidden');
+            }
+        } catch (err) {
+            errEl.textContent = 'Bağlantı hatası: ' + err.message;
             errEl.classList.remove('hidden');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Giriş Yap';
         }
     });
 
@@ -1883,20 +1894,31 @@
         const kvkk = document.getElementById('kvkkConsent').checked;
         const marketing = document.getElementById('marketingConsent').checked;
         const errEl = document.getElementById('signupError');
+        const btn = document.getElementById('signupSubmit');
         errEl.classList.add('hidden');
         if (!kvkk) {
             errEl.textContent = 'KVKK onayı zorunludur.';
             errEl.classList.remove('hidden');
             return;
         }
-        const d = await Auth.signup(email, password, kvkk, marketing);
-        if (d.ok && d.user) {
-            applyUserState(d.user);
-            closeAuthModal();
-            showToast('Hesabınız oluşturuldu! Doğrulama e-postası gönderildi.', 'success', 6000);
-        } else {
-            errEl.textContent = d.message || 'Kayıt başarısız.';
+        btn.disabled = true;
+        btn.textContent = 'Hesap oluşturuluyor...';
+        try {
+            const d = await Auth.signup(email, password, kvkk, marketing);
+            if (d.ok && d.user) {
+                applyUserState(d.user);
+                closeAuthModal();
+                showToast('Hesabınız oluşturuldu! Doğrulama e-postası gönderildi.', 'success', 6000);
+            } else {
+                errEl.textContent = d.message || 'Kayıt başarısız.';
+                errEl.classList.remove('hidden');
+            }
+        } catch (err) {
+            errEl.textContent = 'Bağlantı hatası: ' + err.message;
             errEl.classList.remove('hidden');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Hesap Oluştur';
         }
     });
 
