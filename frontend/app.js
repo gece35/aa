@@ -145,6 +145,11 @@
                              <span style="opacity:.6;font-weight:500">&middot; ${m.ticker_count}</span>`;
             btn.addEventListener('click', () => {
                 if (state.market === m.code) return;
+                // Misafir ABD'ye geçemez
+                if (m.code === 'us' && !_currentUser) {
+                    showMarketGate();
+                    return;
+                }
                 document.querySelectorAll('.market-btn').forEach((x) => x.classList.remove('active'));
                 btn.classList.add('active');
                 state.market = m.code;
@@ -567,15 +572,33 @@
         els.modal.classList.remove('hidden');
         els.modalContent.innerHTML = '<div class="empty">Yukleniyor...</div>';
         try {
+            // Misafir hisse detayına tıklayınca login modal açılır
+            if (!_currentUser) {
+                els.modal.classList.add('hidden');
+                openAuthModal('signup');
+                return;
+            }
             const [data, newsData] = await Promise.all([
                 API.stock(symbol),
                 API.stockNews(symbol).catch(() => ({ items: [] })),
             ]);
+            if (data.error === 'auth_required') {
+                els.modal.classList.add('hidden');
+                openAuthModal('login');
+                return;
+            }
+            if (data.error === 'quota_exceeded') {
+                els.modalContent.innerHTML = `<div class="empty">
+                    <p>Günlük 5 hisse detay hakkınız doldu.</p>
+                    <p><a href="#" onclick="openPricingModal();return false;" style="color:var(--accent-2)">Premium ile sınırsız detay görün →</a></p>
+                </div>`;
+                return;
+            }
             if (data.error) throw new Error(data.error);
             els.modalContent.innerHTML = renderStockDetail(data, newsData);
             drawDetailChart(data.history || [], data.supports || [], data.resistances || [], data.stop_loss, data.take_profit);
             wireModalWatchToggle(data.symbol);
-        wireModalPortfolioForm(data);
+            wireModalPortfolioForm(data);
         } catch (err) {
             els.modalContent.innerHTML = `<div class="empty">Detay yuklenemedi: ${err.message}</div>`;
         }
@@ -1738,6 +1761,11 @@
 
     // Auth modal
     const authModal = document.getElementById('authModal');
+    function showMarketGate() {
+        // Misafir ABD sekmesine geçmeye çalışınca kayıt modalı açılır
+        openAuthModal('signup');
+    }
+
     function openAuthModal(tab) {
         authModal.classList.remove('hidden');
         document.querySelectorAll('.auth-tab').forEach(t => {

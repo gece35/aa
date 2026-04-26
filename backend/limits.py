@@ -17,11 +17,11 @@ PLANS = {
     "guest": {
         "label": "Misafir",
         "price_try": 0,
-        "markets": ["bist", "us"],
+        "markets": ["bist"],
         "max_bist_tickers": 30,
-        "max_us_tickers": 30,
+        "max_us_tickers": 0,
         "allow_force_refresh": False,
-        "stock_detail_per_day": 5,
+        "stock_detail_per_day": 0,
         "stock_news_per_stock": False,
         "watchlist_max": 0,
         "portfolio_max": 0,
@@ -31,13 +31,13 @@ PLANS = {
         "csv_export": False,
     },
     "free": {
-        "label": "Bedava",
+        "label": "Üye",
         "price_try": 0,
         "markets": ["bist", "us"],
-        "max_bist_tickers": 50,
-        "max_us_tickers": 50,
+        "max_bist_tickers": None,
+        "max_us_tickers": 30,
         "allow_force_refresh": False,
-        "stock_detail_per_day": 10,
+        "stock_detail_per_day": 5,
         "stock_news_per_stock": False,
         "watchlist_max": 5,
         "portfolio_max": 3,
@@ -102,9 +102,13 @@ def quota(scope: str, per: str = "day"):
     def deco(fn):
         @wraps(fn)
         def wrapper(*args, **kwargs):
-            if not current_user.is_authenticated:
-                return jsonify({"error": "auth_required"}), 401
             plan = get_plan(current_user)
+            if not current_user.is_authenticated:
+                return jsonify({
+                    "error": "auth_required",
+                    "message": "Bu özellik için giriş yapmanız gerekir.",
+                    "upgrade_url": "/",
+                }), 401
             limit_key = f"{scope}_per_{per}"
             limit = plan.get(limit_key)
             if limit is None:  # premium / unlimited
