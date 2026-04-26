@@ -982,19 +982,23 @@
         const wedge = detectWedge(d.history || []);
         const reasons = [];
 
+        // ── Hemen Sat ────────────────────────────────────────────────────────
         if (sl && price <= sl) {
             reasons.push('Stop loss seviyesi kırıldı, kayıpları sınırla');
-            if (weekPct < -5) reasons.push(`Bu hafta %${weekPct.toFixed(1)} düşüş`);
+            if (weekPct < -5) reasons.push(`Bu hafta %${Math.abs(weekPct).toFixed(1)} düşüş`);
             return { level: 'sat_hemen', label: 'Hemen Sat', reasons };
         }
-        if (pnlPct < -15 && score === 0 && trend === 'down') {
-            reasons.push(`%${Math.abs(pnlPct).toFixed(1)} zarar, al sinyali kalmadı`);
+        // Büyük zarar + zayıf sinyal + düşüş trendi (score=0-1 yeterli, score===0 gerekmez)
+        if (pnlPct < -15 && score <= 1 && trend === 'down') {
+            reasons.push(`%${Math.abs(pnlPct).toFixed(1)} zarar, al sinyali çok zayıf`);
             reasons.push('Düşüş trendi devam ediyor');
             return { level: 'sat_hemen', label: 'Hemen Sat', reasons };
         }
 
-        if (tp && price >= tp * 0.98) {
-            reasons.push('Kar al hedefine ulaşıldı');
+        // ── Kar Al (yalnızca gerçek karda) ───────────────────────────────────
+        // TP hedefi direnç bölgesidir; kullanıcı zarardayken "Kar Al" göstermek yanlış
+        if (tp && price >= tp * 0.98 && pnlPct > 3) {
+            reasons.push('Kar al hedefine (direnç bölgesi) ulaşıldı');
             if (d.near_peak) reasons.push('52 haftalık zirveye çok yakın');
             return { level: 'kar_al', label: 'Kar Al', reasons };
         }
@@ -1009,14 +1013,22 @@
             return { level: 'kar_al', label: 'Kar Al', reasons };
         }
 
+        // ── Satışı Düşün ─────────────────────────────────────────────────────
         let bearish = 0;
         if (sl && price < sl * 1.035) { reasons.push("Stop loss'a %3'ten az mesafe kaldı"); bearish += 2; }
-        if (score <= 1 && weekPct < -3) { reasons.push(`${score}/5 sinyal, haftalık ${weekPct.toFixed(1)}%`); bearish++; }
+        // Orta-büyük zarar + düşüş trendi: score fark etmeksizin uyar
+        if (pnlPct < -10 && trend === 'down') {
+            reasons.push(`%${Math.abs(pnlPct).toFixed(1)} zararda ve düşüş trendi`);
+            bearish += 2;
+        }
+        if (score <= 1 && weekPct < -3) { reasons.push(`${score}/5 sinyal, haftalık %${weekPct.toFixed(1)}`); bearish++; }
+        // Karda ama tüm sinyaller söndü
         if (pnlPct > 18 && score === 0) { reasons.push(`%${pnlPct.toFixed(1)} karda ama tüm sinyaller söndü`); bearish += 2; }
         if (wedge === 'rising' && score <= 2) { reasons.push('Yükselen kama kırılım riski (bearish)'); bearish++; }
-        if (trend === 'down' && score <= 1 && pnlPct < 0) { reasons.push('Düşüş trendi + negatif pozisyon'); bearish++; }
+        if (trend === 'down' && score <= 1 && pnlPct < 0) { reasons.push('Düşüş trendi + zararda pozisyon'); bearish++; }
         if (bearish >= 2) return { level: 'sat_dusun', label: 'Satışı Düşün', reasons: reasons.slice(0, 3) };
 
+        // ── Tut ──────────────────────────────────────────────────────────────
         let bullish = 0;
         const bullReasons = [];
         if (score >= 4) { bullReasons.push(`${score}/5 güçlü al sinyali`); bullish += 2; }
@@ -1027,6 +1039,7 @@
         if (weekPct > 3 && score >= 2) { bullReasons.push(`Haftalık +%${weekPct.toFixed(1)} güçlü ivme`); bullish++; }
         if (bullish >= 3) return { level: 'tut', label: 'Tut', reasons: bullReasons.slice(0, 3) };
 
+        // ── İzle ─────────────────────────────────────────────────────────────
         const watchReasons = [];
         if (score >= 2) watchReasons.push(`${score}/5 sinyal var, güçlenme bekleniyor`);
         if (Math.abs(weekPct) <= 2) watchReasons.push('Yatay seyir, net yön bekleniyor');
