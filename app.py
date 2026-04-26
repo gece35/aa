@@ -105,7 +105,7 @@ def create_app() -> Flask:
         if isinstance(e, HTTPException):
             return jsonify({"error": e.name.lower().replace(" ", "_"), "message": e.description}), e.code
         logger.exception("İşlenmeyen hata")
-        msg = str(e) if DEBUG else "Sunucu hatası oluştu."
+        msg = str(e)  # temporary: always show error for debugging
         return jsonify({"error": "server_error", "message": msg}), 500
 
     # ── Statik sayfalar ────────────────────────────────────────────────────
