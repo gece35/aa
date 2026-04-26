@@ -5,6 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Nebula Scanner — BIST ve ABD hisse senetleri için teknik analiz tabanlı tarama, puanlama ve alarm sistemi." />
     <title>Nebula Scanner | Hisse Tarama ve Puanlama</title>
+    <!-- Open Graph / Twitter Card -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Nebula Scanner | BIST ve ABD Hisse Tarama" />
+    <meta property="og:description" content="Teknik analiz göstergeleriyle 0-5 hisse puanlaması. BIST ve ABD hisselerini ücretsiz tara, alarm kur, portföy takip et." />
+    <meta property="og:url" content="https://nebulascanner.com/" />
+    <meta property="og:image" content="https://nebulascanner.com/og-image.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Nebula Scanner | BIST ve ABD Hisse Tarama" />
+    <meta name="twitter:description" content="Teknik analiz ile 0-5 puanlama. Ücretsiz kayıt ol, tüm hisselere eriş." />
+    <meta name="twitter:image" content="https://nebulascanner.com/og-image.png" />
+    <!-- Google Analytics 4: GA_MEASUREMENT_ID'yi kendi ölçüm kimliğinle değiştir -->
+    <!-- <script async src="https://www.googletagmanager.com/gtag/js?id=GA_MEASUREMENT_ID"></script>
+    <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','GA_MEASUREMENT_ID');</script> -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -282,6 +295,24 @@
         </div>
         <div class="footer-copy">&copy; 2025 Nebula Scanner</div>
     </footer>
+
+    <!-- Yardım / Destek Chatbot -->
+    <button id="supportFab" class="support-fab" title="Yardım" aria-label="Yardım asistanı aç">?</button>
+    <div id="supportChat" class="support-chat hidden" role="dialog" aria-label="Yardım Asistanı">
+        <div class="support-header">
+            <span class="support-title">Yardım Asistanı</span>
+            <button id="supportClose" class="support-close" aria-label="Kapat">&times;</button>
+        </div>
+        <div id="supportMessages" class="support-messages" aria-live="polite"></div>
+        <div id="supportEscalate" class="support-escalate hidden">
+            <span>Sorunu çözemedik mi?</span>
+            <a href="mailto:destek@nebulascanner.com" class="support-escalate-link">E-posta ile iletişime geç &rarr;</a>
+        </div>
+        <div class="support-input-row">
+            <input id="supportInput" class="support-input" type="text" placeholder="Sorunuzu yazın..." autocomplete="off" maxlength="500" />
+            <button id="supportSend" class="support-send btn btn-primary">Gönder</button>
+        </div>
+    </div>
 
     <script src="app.js"></script>
 </body>

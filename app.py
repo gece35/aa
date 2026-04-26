@@ -24,6 +24,7 @@ from backend.alerts import (
 )
 from backend.auth import admin_required, auth_bp
 from backend.billing import billing_bp
+from backend.support import support_bp
 from backend.cache import (
     exchange_cache, scan_cache, stock_cache, stock_news_cache, symbol_cache,
 )
@@ -104,6 +105,7 @@ def create_app() -> Flask:
 
     flask_app.register_blueprint(auth_bp)
     flask_app.register_blueprint(billing_bp)
+    flask_app.register_blueprint(support_bp)
 
     @flask_app.errorhandler(Exception)
     def handle_exception(e):
@@ -119,6 +121,12 @@ def create_app() -> Flask:
     @flask_app.route("/")
     def index():
         return send_from_directory(FRONTEND_DIR, "index.html")
+
+    @flask_app.route("/robots.txt")
+    @flask_app.route("/sitemap.xml")
+    def seo_files():
+        fname = request.path.lstrip("/")
+        return send_from_directory(FRONTEND_DIR, fname)
 
     @flask_app.route("/legal/<path:slug>")
     def legal_page(slug):

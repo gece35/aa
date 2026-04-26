@@ -1952,4 +1952,88 @@
         });
     }
 
+    // ── Destek Chatbot ───────────────────────────────────────────────────
+    (function initSupportChat() {
+        const fab    = document.getElementById('supportFab');
+        const chat   = document.getElementById('supportChat');
+        const closeBtn = document.getElementById('supportClose');
+        const messages = document.getElementById('supportMessages');
+        const input  = document.getElementById('supportInput');
+        const sendBtn = document.getElementById('supportSend');
+        const escalate = document.getElementById('supportEscalate');
+        if (!fab || !chat) return;
+
+        let history = [];
+        let isOpen = false;
+        let isSending = false;
+
+        function toggleChat() {
+            isOpen = !isOpen;
+            chat.classList.toggle('hidden', !isOpen);
+            if (isOpen && messages.children.length === 0) {
+                appendMessage('assistant', 'Merhaba! Size nasıl yardımcı olabilirim? Kayıt, tarama, alarmlar veya teknik bir sorun için buradayım.');
+            }
+            if (isOpen) input.focus();
+        }
+
+        function appendMessage(role, text) {
+            const div = document.createElement('div');
+            div.className = `support-msg support-msg-${role}`;
+            div.textContent = text;
+            messages.appendChild(div);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        function appendTyping() {
+            const div = document.createElement('div');
+            div.className = 'support-msg support-msg-assistant support-typing';
+            div.id = 'supportTyping';
+            div.textContent = '...';
+            messages.appendChild(div);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        async function sendMessage() {
+            const text = input.value.trim();
+            if (!text || isSending) return;
+            isSending = true;
+            input.value = '';
+            sendBtn.disabled = true;
+            appendMessage('user', text);
+            appendTyping();
+            try {
+                const res = await fetch('/api/support/chat', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: text, history }),
+                });
+                document.getElementById('supportTyping')?.remove();
+                const ct = res.headers.get('content-type') || '';
+                if (!ct.includes('application/json')) throw new Error('server');
+                const data = await res.json();
+                const reply = data.reply || 'Şu an yanıt veremiyorum, lütfen daha sonra tekrar deneyin.';
+                appendMessage('assistant', reply);
+                history.push({ role: 'user', content: text });
+                history.push({ role: 'assistant', content: reply });
+                if (data.needs_escalation) {
+                    escalate.classList.remove('hidden');
+                }
+            } catch {
+                document.getElementById('supportTyping')?.remove();
+                appendMessage('assistant', 'Bağlantı hatası. Lütfen daha sonra tekrar deneyin.');
+                escalate.classList.remove('hidden');
+            } finally {
+                isSending = false;
+                sendBtn.disabled = false;
+                input.focus();
+            }
+        }
+
+        fab.addEventListener('click', toggleChat);
+        closeBtn.addEventListener('click', toggleChat);
+        sendBtn.addEventListener('click', sendMessage);
+        input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
+    })();
+
 })();
