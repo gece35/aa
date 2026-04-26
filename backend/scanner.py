@@ -40,7 +40,7 @@ def _compute_scores(data: Dict) -> List[dict]:
     return results
 
 
-def scan_market(market: str, force: bool = False) -> dict:
+def scan_market(market: str, force: bool = False, max_tickers: int = None) -> dict:
     market = (market or "").lower()
     if market not in MARKETS:
         raise ValueError(f"Desteklenmeyen pazar: {market}")
@@ -52,10 +52,15 @@ def scan_market(market: str, force: bool = False) -> dict:
             cached = dict(cached)
             cached["cached"] = True
             cached["cache_age_remaining"] = scan_cache.age(cache_key)
+            if max_tickers is not None:
+                cached["results"] = cached.get("results", [])[:max_tickers]
+                cached["total"] = min(cached.get("total", 0), max_tickers)
             return cached
 
     info = MARKETS[market]
     tickers = get_tickers(market)
+    if max_tickers is not None:
+        tickers = tickers[:max_tickers]
 
     started = time.time()
     data = download_ohlcv(tickers, period="200d", interval="1d")
@@ -118,11 +123,12 @@ def _sort_tickers(tickers: List[str], sort: str) -> List[str]:
     return [sym for sym, _ in scored] + unscored
 
 
-def scan_market_chunk(market: str, offset: int, limit: int, force: bool = False, sort: str = "score") -> dict:
+def scan_market_chunk(market: str, offset: int, limit: int, force: bool = False, sort: str = "score", max_tickers: int = None) -> dict:
     """Sadece `tickers[offset:offset+limit]` dilimini tarar, kalanini lazy birakir.
 
     - Per-sembol cache'den faydalanir, tekrar istenen hisseyi yeniden indirmez.
     - sort parametresi ile cache'deki skorlara gore ticker sirasi yeniden duzenlenir.
+    - max_tickers: plan limiti; None ise sinir yok.
     """
     market = (market or "").lower()
     if market not in MARKETS:
@@ -130,6 +136,8 @@ def scan_market_chunk(market: str, offset: int, limit: int, force: bool = False,
 
     info = MARKETS[market]
     tickers = get_tickers(market)
+    if max_tickers is not None:
+        tickers = tickers[:max_tickers]
     total = len(tickers)
 
     if sort == "symbol":

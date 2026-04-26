@@ -176,21 +176,12 @@ def create_app() -> Flask:
             if limit_raw is not None:
                 offset = int(offset_raw) if offset_raw else 0
                 limit = int(limit_raw)
-                try:
-                    payload = scan_market_chunk(
+                payload = scan_market_chunk(
                         market=market, offset=offset, limit=limit,
                         force=force, sort=sort, max_tickers=max_tickers,
                     )
-                except TypeError:
-                    payload = scan_market_chunk(
-                        market=market, offset=offset, limit=limit,
-                        force=force, sort=sort,
-                    )
             else:
-                try:
-                    payload = scan_market(market=market, force=force, max_tickers=max_tickers)
-                except TypeError:
-                    payload = scan_market(market=market, force=force)
+                payload = scan_market(market=market, force=force, max_tickers=max_tickers)
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 400
         except Exception as exc:

@@ -1219,6 +1219,15 @@
         let d = null;
         try {
             d = await API.stock(r.symbol);
+            if (d.error === 'auth_required') {
+                modal.classList.add('hidden');
+                openAuthModal('signup');
+                return;
+            }
+            if (d.error === 'quota_exceeded') {
+                if (headerEl) headerEl.innerHTML = `<div style="color:var(--warn);padding:8px 0;">Günlük 5 hisse detay hakkınız doldu. <a href="#" onclick="openPricingModal();return false;" style="color:var(--accent-2)">Premium ile sınırsız →</a></div>`;
+                return;
+            }
             if (d.error) throw new Error(d.error);
         } catch (err) {
             if (headerEl) headerEl.innerHTML = `<div style="color:var(--danger);padding:8px;">Veri yüklenemedi: ${escapeHtml(err.message)}</div>`;
