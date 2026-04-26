@@ -166,7 +166,10 @@ def create_app() -> Flask:
             }), 402
 
         force = force_raw and plan.get("allow_force_refresh", False)
-        max_tickers = plan.get("max_bist_tickers") if market == "bist" else None
+        if market == "bist":
+            max_tickers = plan.get("max_bist_tickers")
+        else:
+            max_tickers = plan.get("max_us_tickers")
 
         sort = request.args.get("sort", "score")
         try:

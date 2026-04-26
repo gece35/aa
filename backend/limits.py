@@ -14,11 +14,28 @@ logger = logging.getLogger(__name__)
 
 # Plan tanımları — UI ve backend tek noktadan okur.
 PLANS = {
+    "guest": {
+        "label": "Misafir",
+        "price_try": 0,
+        "markets": ["bist", "us"],
+        "max_bist_tickers": 30,
+        "max_us_tickers": 30,
+        "allow_force_refresh": False,
+        "stock_detail_per_day": 5,
+        "stock_news_per_stock": False,
+        "watchlist_max": 0,
+        "portfolio_max": 0,
+        "alerts_max": 0,
+        "alert_check_interval_seconds": None,
+        "patterns_full": False,
+        "csv_export": False,
+    },
     "free": {
         "label": "Bedava",
         "price_try": 0,
-        "markets": ["bist"],
+        "markets": ["bist", "us"],
         "max_bist_tickers": 50,
+        "max_us_tickers": 50,
         "allow_force_refresh": False,
         "stock_detail_per_day": 10,
         "stock_news_per_stock": False,
@@ -57,7 +74,7 @@ class PlanLimitError(Exception):
 
 def get_plan(user) -> dict:
     if user is None or not getattr(user, "is_authenticated", False):
-        return PLANS["free"]
+        return PLANS["guest"]
     return PLANS["premium"] if getattr(user, "is_premium", False) else PLANS["free"]
 
 
