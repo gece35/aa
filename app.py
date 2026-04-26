@@ -253,6 +253,28 @@ def create_app() -> Flask:
     def health():
         return jsonify({"ok": True, "ts": int(time.time())})
 
+    _DEV_SECRET = os.environ.get("DEV_SECRET", "")
+
+    @flask_app.route("/api/dev/make-premium", methods=["POST"])
+    def dev_make_premium():
+        if not DEBUG and not _DEV_SECRET:
+            return jsonify({"error": "not_allowed"}), 403
+        body = request.get_json(silent=True) or {}
+        secret = body.get("secret", "")
+        if _DEV_SECRET and secret != _DEV_SECRET:
+            return jsonify({"error": "forbidden"}), 403
+        email = (body.get("email") or "").strip().lower()
+        if not email:
+            return jsonify({"error": "email_required"}), 400
+        from backend.models import User
+        user = db.session.execute(db.select(User).where(User.email == email)).scalar_one_or_none()
+        if not user:
+            return jsonify({"error": "not_found"}), 404
+        user.plan = "premium"
+        user.subscription_status = "active"
+        db.session.commit()
+        return jsonify({"ok": True, "email": user.email, "plan": user.plan, "is_premium": user.is_premium})
+
     @flask_app.route("/api/cache/clear", methods=["POST"])
     @login_required
     @admin_required
