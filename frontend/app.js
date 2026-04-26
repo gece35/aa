@@ -365,7 +365,16 @@
                         <div class="plan-gate-icon">🔒</div>
                         <div class="plan-gate-text">
                             <strong>BIST'te ${m.results.length} hisse tarandı</strong>
-                            <span>Tüm BIST hisselerini görmek ve hisse detaylarına ulaşmak için <a href="#" onclick="openAuthModal('signup');return false;">ücretsiz kayıt olun →</a></span>
+                            <span>50 hisseye erişmek için <a href="#" onclick="openAuthModal('signup');return false;">ücretsiz kayıt olun</a>, tüm BIST için <a href="#" onclick="openPricingModal();return false;">Premium'a geçin →</a></span>
+                        </div>
+                    </div>`;
+            } else if (_currentUser && _currentUser.plan !== 'premium' && state.market === 'bist') {
+                bannerHtml = `
+                    <div class="plan-gate-banner">
+                        <div class="plan-gate-icon">🔒</div>
+                        <div class="plan-gate-text">
+                            <strong>BIST'te ${m.results.length} hisse gösteriliyor</strong>
+                            <span>Tüm BIST hisselerine ve sınırsız detay analizine ulaşmak için <a href="#" onclick="openPricingModal();return false;">Premium'a geçin →</a></span>
                         </div>
                     </div>`;
             } else if (_currentUser && _currentUser.plan !== 'premium' && state.market === 'us') {

@@ -34,7 +34,7 @@ PLANS = {
         "label": "Üye",
         "price_try": 0,
         "markets": ["bist", "us"],
-        "max_bist_tickers": None,
+        "max_bist_tickers": 50,
         "max_us_tickers": 30,
         "allow_force_refresh": False,
         "stock_detail_per_day": 5,
