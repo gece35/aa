@@ -99,6 +99,15 @@ def create_app() -> Flask:
     flask_app.register_blueprint(auth_bp)
     flask_app.register_blueprint(billing_bp)
 
+    @flask_app.errorhandler(Exception)
+    def handle_exception(e):
+        from werkzeug.exceptions import HTTPException
+        if isinstance(e, HTTPException):
+            return jsonify({"error": e.name.lower().replace(" ", "_"), "message": e.description}), e.code
+        logger.exception("İşlenmeyen hata")
+        msg = str(e) if DEBUG else "Sunucu hatası oluştu."
+        return jsonify({"error": "server_error", "message": msg}), 500
+
     # ── Statik sayfalar ────────────────────────────────────────────────────
 
     @flask_app.route("/")

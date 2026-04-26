@@ -1755,29 +1755,40 @@
                 return d;
             } catch { return { authenticated: false }; }
         },
+        async _safeJson(r) {
+            const ct = r.headers.get('content-type') || '';
+            if (!ct.includes('application/json')) {
+                throw new Error(`Sunucu hatası (HTTP ${r.status}). Lütfen daha sonra tekrar deneyin.`);
+            }
+            return r.json();
+        },
         async login(email, password) {
-            return fetch('/api/auth/login', {
+            const r = await fetch('/api/auth/login', {
                 method: 'POST', credentials: 'include',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password }),
-            }).then(r => r.json());
+            });
+            return this._safeJson(r);
         },
         async signup(email, password, kvkk_consent, marketing_consent) {
-            return fetch('/api/auth/signup', {
+            const r = await fetch('/api/auth/signup', {
                 method: 'POST', credentials: 'include',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password, kvkk_consent, marketing_consent }),
-            }).then(r => r.json());
+            });
+            return this._safeJson(r);
         },
         async logout() {
-            return fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).then(r => r.json());
+            const r = await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+            return this._safeJson(r);
         },
         async forgot(email) {
-            return fetch('/api/auth/forgot', {
+            const r = await fetch('/api/auth/forgot', {
                 method: 'POST', credentials: 'include',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email }),
-            }).then(r => r.json());
+            });
+            return this._safeJson(r);
         },
     };
 
