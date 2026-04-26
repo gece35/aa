@@ -357,40 +357,17 @@
             els.resultsArea.appendChild(sentinel);
             observeSentinel(sentinel);
         } else if (m.loadedOnce) {
-            // Plan gate banner — limit dolduğunda listenin sonunda göster
-            let bannerHtml = null;
-            if (!_currentUser && state.market === 'bist') {
-                bannerHtml = `
-                    <div class="plan-gate-banner">
-                        <div class="plan-gate-icon">🔒</div>
-                        <div class="plan-gate-text">
-                            <strong>BIST'te ${m.results.length} hisse tarandı</strong>
-                            <span>50 hisseye erişmek için <a href="#" onclick="openAuthModal('signup');return false;">ücretsiz kayıt olun</a>, tüm BIST için <a href="#" onclick="openPricingModal();return false;">Premium'a geçin →</a></span>
-                        </div>
-                    </div>`;
-            } else if (_currentUser && _currentUser.plan !== 'premium' && state.market === 'bist') {
-                bannerHtml = `
-                    <div class="plan-gate-banner">
-                        <div class="plan-gate-icon">🔒</div>
-                        <div class="plan-gate-text">
-                            <strong>BIST'te ${m.results.length} hisse gösteriliyor</strong>
-                            <span>Tüm BIST hisselerine ve sınırsız detay analizine ulaşmak için <a href="#" onclick="openPricingModal();return false;">Premium'a geçin →</a></span>
-                        </div>
-                    </div>`;
-            } else if (_currentUser && _currentUser.plan !== 'premium' && state.market === 'us') {
-                bannerHtml = `
-                    <div class="plan-gate-banner">
-                        <div class="plan-gate-icon">🔒</div>
-                        <div class="plan-gate-text">
-                            <strong>ABD borsasında ${m.results.length} hisse gösteriliyor</strong>
-                            <span>Tüm ABD hisselerine ve sınırsız detay analizine ulaşmak için <a href="#" onclick="openPricingModal();return false;">Premium'a geçin →</a></span>
-                        </div>
-                    </div>`;
-            }
-            if (bannerHtml) {
+            // Sadece misafir kullanıcılara kayıt motivasyonu göster
+            if (!_currentUser) {
                 const banner = document.createElement('div');
-                banner.innerHTML = bannerHtml;
-                els.resultsArea.appendChild(banner.firstElementChild);
+                banner.className = 'plan-gate-banner';
+                banner.innerHTML = `
+                    <div class="plan-gate-icon">🔒</div>
+                    <div class="plan-gate-text">
+                        <strong>BIST'te ${m.results.length} hisse tarandı</strong>
+                        <span>Tüm hisselere, ABD borsasına ve detay analizine ulaşmak için <a href="#" onclick="openAuthModal('signup');return false;">ücretsiz kayıt olun →</a></span>
+                    </div>`;
+                els.resultsArea.appendChild(banner);
             }
         }
     }
@@ -620,14 +597,7 @@
             ]);
             if (data.error === 'auth_required') {
                 els.modal.classList.add('hidden');
-                openAuthModal('login');
-                return;
-            }
-            if (data.error === 'quota_exceeded') {
-                els.modalContent.innerHTML = `<div class="empty">
-                    <p>Günlük 5 hisse detay hakkınız doldu.</p>
-                    <p><a href="#" onclick="openPricingModal();return false;" style="color:var(--accent-2)">Premium ile sınırsız detay görün →</a></p>
-                </div>`;
+                openAuthModal('signup');
                 return;
             }
             if (data.error) throw new Error(data.error);
@@ -1273,10 +1243,6 @@
                 openAuthModal('signup');
                 return;
             }
-            if (d.error === 'quota_exceeded') {
-                if (headerEl) headerEl.innerHTML = `<div style="color:var(--warn);padding:8px 0;">Günlük 5 hisse detay hakkınız doldu. <a href="#" onclick="openPricingModal();return false;" style="color:var(--accent-2)">Premium ile sınırsız →</a></div>`;
-                return;
-            }
             if (d.error) throw new Error(d.error);
         } catch (err) {
             if (headerEl) headerEl.innerHTML = `<div style="color:var(--danger);padding:8px;">Veri yüklenemedi: ${escapeHtml(err.message)}</div>`;
@@ -1806,13 +1772,8 @@
             authArea.classList.add('hidden');
             userArea.classList.remove('hidden');
             userEmailEl.textContent = user.email;
-            planBadge.textContent = user.plan === 'premium' ? 'Premium' : 'Free';
-            planBadge.className = 'plan-badge ' + user.plan;
-            if (user.plan !== 'premium') {
-                upgradeBtn.classList.remove('hidden');
-            } else {
-                upgradeBtn.classList.add('hidden');
-            }
+            if (planBadge) planBadge.classList.add('hidden');
+            if (upgradeBtn) upgradeBtn.classList.add('hidden');
         } else {
             authArea.classList.remove('hidden');
             userArea.classList.add('hidden');

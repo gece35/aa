@@ -34,24 +34,24 @@ PLANS = {
         "label": "Üye",
         "price_try": 0,
         "markets": ["bist", "us"],
-        "max_bist_tickers": 50,
-        "max_us_tickers": 30,
-        "allow_force_refresh": False,
-        "stock_detail_per_day": 5,
-        "stock_news_per_stock": False,
-        "watchlist_max": 5,
-        "portfolio_max": 3,
-        "alerts_max": 3,
-        "alert_check_interval_seconds": 3600,
-        "patterns_full": False,
-        "csv_export": False,
+        "max_bist_tickers": None,
+        "max_us_tickers": None,
+        "allow_force_refresh": True,
+        "stock_detail_per_day": None,
+        "stock_news_per_stock": True,
+        "watchlist_max": 100,
+        "portfolio_max": 50,
+        "alerts_max": 50,
+        "alert_check_interval_seconds": 300,
+        "patterns_full": True,
+        "csv_export": True,
     },
     "premium": {
         "label": "Premium",
-        "price_try_monthly": 149,
-        "price_try_yearly": 1290,
+        "price_try": 0,
         "markets": ["bist", "us"],
-        "max_bist_tickers": None,  # unlimited
+        "max_bist_tickers": None,
+        "max_us_tickers": None,
         "allow_force_refresh": True,
         "stock_detail_per_day": None,
         "stock_news_per_stock": True,
@@ -75,7 +75,7 @@ class PlanLimitError(Exception):
 def get_plan(user) -> dict:
     if user is None or not getattr(user, "is_authenticated", False):
         return PLANS["guest"]
-    return PLANS["premium"] if getattr(user, "is_premium", False) else PLANS["free"]
+    return PLANS["free"]  # all registered users get full access
 
 
 def requires_plan(plan_name: str):

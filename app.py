@@ -79,6 +79,12 @@ def create_app() -> Flask:
     db.init_app(flask_app)
     migrate.init_app(flask_app, db)
 
+    with flask_app.app_context():
+        try:
+            db.create_all()
+        except Exception:
+            logger.exception("db.create_all basarisiz — migration bekleniyor")
+
     CORS(
         flask_app,
         resources={r"/api/*": {"origins": [APP_BASE_URL] if APP_BASE_URL else "*"}},
