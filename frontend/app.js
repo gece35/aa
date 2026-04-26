@@ -34,8 +34,8 @@
     }
 
     const state = {
-        market: 'us',
-        currency: 'USD',
+        market: 'bist',
+        currency: 'TRY',
         minScore: 0,
         onlyWatched: false,
         search: '',
@@ -356,6 +356,33 @@
                 <span class="loader-text">${m.loading ? 'Yukleniyor...' : `Daha fazlasi... (${m.results.length}/${m.total})`}</span>`;
             els.resultsArea.appendChild(sentinel);
             observeSentinel(sentinel);
+        } else if (m.loadedOnce) {
+            // Plan gate banner — limit dolduğunda listenin sonunda göster
+            let bannerHtml = null;
+            if (!_currentUser && state.market === 'bist') {
+                bannerHtml = `
+                    <div class="plan-gate-banner">
+                        <div class="plan-gate-icon">🔒</div>
+                        <div class="plan-gate-text">
+                            <strong>BIST'te ${m.results.length} hisse tarandı</strong>
+                            <span>Tüm BIST hisselerini görmek ve hisse detaylarına ulaşmak için <a href="#" onclick="openAuthModal('signup');return false;">ücretsiz kayıt olun →</a></span>
+                        </div>
+                    </div>`;
+            } else if (_currentUser && _currentUser.plan !== 'premium' && state.market === 'us') {
+                bannerHtml = `
+                    <div class="plan-gate-banner">
+                        <div class="plan-gate-icon">🔒</div>
+                        <div class="plan-gate-text">
+                            <strong>ABD borsasında ${m.results.length} hisse gösteriliyor</strong>
+                            <span>Tüm ABD hisselerine ve sınırsız detay analizine ulaşmak için <a href="#" onclick="openPricingModal();return false;">Premium'a geçin →</a></span>
+                        </div>
+                    </div>`;
+            }
+            if (bannerHtml) {
+                const banner = document.createElement('div');
+                banner.innerHTML = bannerHtml;
+                els.resultsArea.appendChild(banner.firstElementChild);
+            }
         }
     }
 

@@ -550,6 +550,23 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
     50% { opacity: 1; transform: scale(1.15); }
 }
 
+.plan-gate-banner {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 12px 0 24px;
+    padding: 16px 20px;
+    background: var(--bg-1);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-m);
+}
+.plan-gate-icon { font-size: 22px; flex-shrink: 0; }
+.plan-gate-text { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.plan-gate-text strong { color: var(--text-1); font-size: 14px; }
+.plan-gate-text span { color: var(--text-2); }
+.plan-gate-text a { color: var(--accent-2); text-decoration: none; font-weight: 600; }
+.plan-gate-text a:hover { text-decoration: underline; }
+
 /* volume spike badge */
 .badge.volume-spike {
     color: var(--warn);
