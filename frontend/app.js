@@ -13,6 +13,12 @@
         alertsDismiss: (id) => fetch(`/api/alerts/${id}/dismiss`, { method: 'POST' }).then((r) => r.json()),
         alertsTriggered: () => fetch('/api/alerts/triggered').then((r) => r.json()),
         alertsConditions: () => fetch('/api/alerts/conditions').then((r) => r.json()),
+        watchlistGet: () => fetch('/api/watchlist').then((r) => r.json()),
+        watchlistAdd: (symbol) => fetch('/api/watchlist', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol }) }).then((r) => r.json()),
+        watchlistRemove: (symbol) => fetch(`/api/watchlist/${encodeURIComponent(symbol)}`, { method: 'DELETE' }).then((r) => r.json()),
+        portfolioGet: () => fetch('/api/portfolio').then((r) => r.json()),
+        portfolioAdd: (body) => fetch('/api/portfolio', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json()),
+        portfolioRemove: (id) => fetch(`/api/portfolio/${id}`, { method: 'DELETE' }).then((r) => r.json()),
     };
 
     const WATCHLIST_KEY = 'nebula.watchlist.v1';
@@ -104,21 +110,39 @@
     };
 
     // --- watchlist ---
-    function loadWatchlist() {
-        try {
-            const raw = localStorage.getItem(WATCHLIST_KEY);
-            if (raw) state.watchlist = new Set(JSON.parse(raw));
-        } catch (_) { state.watchlist = new Set(); }
+    async function loadWatchlist() {
+        if (_currentUser) {
+            try {
+                const d = await API.watchlistGet();
+                state.watchlist = new Set(d.watchlist || []);
+            } catch (_) { state.watchlist = new Set(); }
+        } else {
+            try {
+                const raw = localStorage.getItem(WATCHLIST_KEY);
+                if (raw) state.watchlist = new Set(JSON.parse(raw));
+            } catch (_) { state.watchlist = new Set(); }
+        }
     }
 
     function saveWatchlist() {
+        if (_currentUser) return;
         try { localStorage.setItem(WATCHLIST_KEY, JSON.stringify([...state.watchlist])); } catch (_) {}
     }
 
     function toggleWatch(symbol) {
-        if (state.watchlist.has(symbol)) state.watchlist.delete(symbol);
-        else state.watchlist.add(symbol);
-        saveWatchlist();
+        if (_currentUser) {
+            if (state.watchlist.has(symbol)) {
+                state.watchlist.delete(symbol);
+                API.watchlistRemove(symbol).catch(() => state.watchlist.add(symbol));
+            } else {
+                state.watchlist.add(symbol);
+                API.watchlistAdd(symbol).catch(() => state.watchlist.delete(symbol));
+            }
+        } else {
+            if (state.watchlist.has(symbol)) state.watchlist.delete(symbol);
+            else state.watchlist.add(symbol);
+            saveWatchlist();
+        }
     }
 
     // --- skeletons ---
@@ -860,15 +884,30 @@
     const PORTFOLIO_KEY = 'nebula.portfolio.v2';
     const port = { positions: [], details: {}, loading: new Set() };
 
-    function loadPortfolio() {
-        try {
-            const raw = localStorage.getItem(PORTFOLIO_KEY);
-            if (raw) port.positions = JSON.parse(raw);
-        } catch (_) { port.positions = []; }
+    async function loadPortfolio() {
+        if (_currentUser) {
+            try {
+                const d = await API.portfolioGet();
+                port.positions = (d.portfolio || []).map(p => ({
+                    id: p.id,
+                    symbol: p.symbol,
+                    market: p.currency === 'TRY' ? 'bist' : 'us',
+                    buyDate: '',
+                    buyPrice: p.avg_price,
+                    qty: p.qty,
+                }));
+            } catch (_) { port.positions = []; }
+        } else {
+            try {
+                const raw = localStorage.getItem(PORTFOLIO_KEY);
+                if (raw) port.positions = JSON.parse(raw);
+            } catch (_) { port.positions = []; }
+        }
         updatePortBadge();
     }
 
     function savePortfolio() {
+        if (_currentUser) { updatePortBadge(); return; }
         try { localStorage.setItem(PORTFOLIO_KEY, JSON.stringify(port.positions)); } catch (_) {}
         updatePortBadge();
     }
@@ -881,21 +920,49 @@
         badge.classList.toggle('hidden', n === 0);
     }
 
-    function addPosition(symbol, market, buyDate, buyPrice, qty) {
-        port.positions.push({
-            id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-            symbol: symbol.toUpperCase(),
-            market: market || 'us',
-            buyDate,
-            buyPrice: parseFloat(buyPrice),
-            qty: parseFloat(qty) || 1,
-        });
-        savePortfolio();
+    async function addPosition(symbol, market, buyDate, buyPrice, qty) {
+        if (_currentUser) {
+            try {
+                const currency = market === 'bist' ? 'TRY' : 'USD';
+                const d = await API.portfolioAdd({
+                    symbol: symbol.toUpperCase(),
+                    qty: parseFloat(qty) || 1,
+                    avg_price: parseFloat(buyPrice),
+                    currency,
+                });
+                if (d.ok && d.position) {
+                    port.positions.push({
+                        id: d.position.id,
+                        symbol: d.position.symbol,
+                        market,
+                        buyDate,
+                        buyPrice: d.position.avg_price,
+                        qty: d.position.qty,
+                    });
+                }
+            } catch (_) {}
+        } else {
+            port.positions.push({
+                id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+                symbol: symbol.toUpperCase(),
+                market: market || 'us',
+                buyDate,
+                buyPrice: parseFloat(buyPrice),
+                qty: parseFloat(qty) || 1,
+            });
+            savePortfolio();
+        }
+        updatePortBadge();
     }
 
-    function removePosition(id) {
+    async function removePosition(id) {
         port.positions = port.positions.filter(p => p.id !== id);
-        savePortfolio();
+        if (_currentUser) {
+            API.portfolioRemove(id).catch(() => {});
+        } else {
+            savePortfolio();
+        }
+        updatePortBadge();
     }
 
     async function fetchPortfolioDetails(force = false) {
@@ -1504,13 +1571,7 @@
         if (ms().results.length) renderResults();
     });
 
-    // bootstrap
-    loadWatchlist();
-    loadPortfolio();
-    loadMarkets().then(() => {
-        if (state.market === 'bist') fetchExchangeRate();
-        loadScan();
-    });
+    // bootstrap — Auth.me() önce beklenir, sonra watchlist/portfolio API'den çekilir
 
     // ── Toast bildirimleri ────────────────────────────────────────────────────
 
@@ -1780,13 +1841,17 @@
         }
     }
 
-    // Bootstrap auth state
-    Auth.me().then(d => {
+    // Bootstrap: önce auth durumunu öğren, sonra watchlist/portfolio yükle
+    Auth.me().then(async d => {
         if (d.authenticated && d.user) {
             applyUserState(d.user);
         } else {
             applyUserState(null);
         }
+        await Promise.all([loadWatchlist(), loadPortfolio()]);
+        await loadMarkets();
+        if (state.market === 'bist') fetchExchangeRate();
+        loadScan();
     });
 
     // Auth modal
