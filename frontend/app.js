@@ -1546,8 +1546,8 @@
         if (alertSec) alertSec.classList.toggle('hidden', tab !== 'alerts');
         document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tab));
         if (tab === 'portfolio') {
-            if (!state.usdRate) fetchExchangeRate();
-            fetchPortfolioDetails().then(() => renderPortfolioTab());
+            const rateP = state.usdRate ? Promise.resolve() : fetchExchangeRate();
+            rateP.then(() => fetchPortfolioDetails()).then(() => renderPortfolioTab());
         }
         if (tab === 'alerts') loadAlerts();
     }
@@ -1880,7 +1880,7 @@
         }
         await Promise.all([loadWatchlist(), loadPortfolio()]);
         await loadMarkets();
-        if (state.market === 'bist') fetchExchangeRate();
+        fetchExchangeRate();
         loadScan();
     });
 
