@@ -302,13 +302,15 @@ def create_app() -> Flask:
     @login_required
     @admin_required
     def email_test():
-        from backend.config import RESEND_API_KEY, SMTP_HOST, SMTP_PASS, SMTP_PORT, SMTP_USER
-        from backend.email import _send
+        from backend.email import _cfg, _send
+        cfg = _cfg()
         config_info = {
-            "smtp_configured": bool(SMTP_HOST and SMTP_USER and SMTP_PASS),
-            "resend_configured": bool(RESEND_API_KEY),
-            "smtp_host": SMTP_HOST or "(boş)",
-            "smtp_user": SMTP_USER or "(boş)",
+            "brevo_configured": bool(cfg["brevo_key"] and cfg["brevo_from"]),
+            "smtp_configured": bool(cfg["smtp_host"] and cfg["smtp_user"] and cfg["smtp_pass"]),
+            "resend_configured": bool(cfg["resend_key"]),
+            "brevo_from": cfg["brevo_from"] or "(boş)",
+            "smtp_host": cfg["smtp_host"] or "(boş)",
+            "smtp_user": cfg["smtp_user"] or "(boş)",
         }
         to = request.get_json(silent=True, force=True).get("to", current_user.email) if request.data else current_user.email
         ok = _send(to, "Nebula Scanner — E-posta test", "<p>Test maili başarıyla gönderildi.</p>", "Test maili başarıyla gönderildi.")

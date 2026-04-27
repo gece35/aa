@@ -1,6 +1,11 @@
-"""Transactional mail gönderimi — SMTP (Gmail vb.) veya Resend API.
+"""Transactional mail gönderimi — Brevo, SMTP veya Resend.
 
-Öncelik: SMTP_HOST varsa SMTP, yoksa RESEND_API_KEY varsa Resend, yoksa stdout log.
+Öncelik:
+  1. BREVO_API_KEY (HTTP API — Railway gibi SMTP'i bloklayan platformlar için)
+  2. SMTP_HOST     (local dev, paid Railway, vb.)
+  3. RESEND_API_KEY
+  4. stdout log
+
 Config her çağrıda os.environ'dan okunur — Railway env var değişince redeploy yeterli.
 """
 
@@ -20,6 +25,7 @@ from .config import APP_BASE_URL, EMAIL_FROM
 logger = logging.getLogger(__name__)
 
 RESEND_URL = "https://api.resend.com/emails"
+BREVO_URL = "https://api.brevo.com/v3/smtp/email"
 
 
 def _cfg():
@@ -30,19 +36,52 @@ def _cfg():
         "smtp_user": os.environ.get("SMTP_USER", ""),
         "smtp_pass": os.environ.get("SMTP_PASS", ""),
         "resend_key": os.environ.get("RESEND_API_KEY", ""),
+        "brevo_key": os.environ.get("BREVO_API_KEY", ""),
+        "brevo_from": os.environ.get("BREVO_FROM_EMAIL") or os.environ.get("SMTP_USER", ""),
     }
 
 
 def _send(to: str, subject: str, html: str, text: Optional[str] = None) -> bool:
     cfg = _cfg()
+    if cfg["brevo_key"] and cfg["brevo_from"]:
+        logger.info("E-posta Brevo üzerinden gönderiliyor: %s → %s", cfg["brevo_from"], to)
+        return _send_brevo(to, subject, html, text, cfg["brevo_key"], cfg["brevo_from"])
     if cfg["smtp_host"] and cfg["smtp_user"] and cfg["smtp_pass"]:
         logger.info("E-posta SMTP üzerinden gönderiliyor: %s → %s", cfg["smtp_user"], to)
         return _send_smtp(to, subject, html, text, cfg)
     if cfg["resend_key"]:
         logger.info("E-posta Resend üzerinden gönderiliyor → %s", to)
         return _send_resend(to, subject, html, text, cfg["resend_key"])
-    logger.warning("[DEV-EMAIL - SMTP/RESEND YAPILANDIRILMADI] To=%s | %s\n%s", to, subject, text or html)
+    logger.warning("[DEV-EMAIL - HİÇBİR SAĞLAYICI YAPILANDIRILMADI] To=%s | %s\n%s", to, subject, text or html)
     return True
+
+
+def _send_brevo(to: str, subject: str, html: str, text: Optional[str], api_key: str, from_email: str) -> bool:
+    try:
+        r = requests.post(
+            BREVO_URL,
+            headers={
+                "api-key": api_key,
+                "Content-Type": "application/json",
+                "accept": "application/json",
+            },
+            json={
+                "sender": {"name": "Nebula Scanner", "email": from_email},
+                "to": [{"email": to}],
+                "subject": subject,
+                "htmlContent": html,
+                **({"textContent": text} if text else {}),
+            },
+            timeout=10,
+        )
+        if r.status_code >= 300:
+            logger.error("Brevo hata %s: %s", r.status_code, r.text)
+            return False
+        logger.info("Brevo gönderimi başarılı → %s", to)
+        return True
+    except requests.RequestException as exc:
+        logger.exception("Brevo gönderilemedi: %s", exc)
+        return False
 
 
 def _send_smtp(to: str, subject: str, html: str, text: Optional[str], cfg: dict) -> bool:
