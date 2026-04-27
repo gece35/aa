@@ -54,3 +54,12 @@ LEGAL_ENTITY_ADDRESS = os.environ.get("LEGAL_ENTITY_ADDRESS", "")
 SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL", "destek@nebulascanner.com")
 
 ADMIN_EMAILS: Set[str] = _csv("ADMIN_EMAILS")
+
+# SMTP (Gmail veya başka bir SMTP sunucusu ile ücretsiz e-posta)
+SMTP_HOST = os.environ.get("SMTP_HOST", "")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USER = os.environ.get("SMTP_USER", "")
+SMTP_PASS = os.environ.get("SMTP_PASS", "")
+
+# Google Analytics 4
+GA_MEASUREMENT_ID = os.environ.get("GA_MEASUREMENT_ID", "")

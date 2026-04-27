@@ -29,8 +29,8 @@ from backend.cache import (
     exchange_cache, scan_cache, stock_cache, stock_news_cache, symbol_cache,
 )
 from backend.config import (
-    APP_BASE_URL, DATABASE_URL, DEBUG, LEGAL_ENTITY_ADDRESS, LEGAL_ENTITY_NAME,
-    LOG_LEVEL, SECRET_KEY, SENTRY_DSN, SUPPORT_EMAIL,
+    APP_BASE_URL, DATABASE_URL, DEBUG, GA_MEASUREMENT_ID, LEGAL_ENTITY_ADDRESS,
+    LEGAL_ENTITY_NAME, LOG_LEVEL, SECRET_KEY, SENTRY_DSN, SUPPORT_EMAIL,
 )
 from backend.data_fetcher import download_ohlcv, fetch_exchange_rate
 from backend.db import db, migrate
@@ -113,8 +113,7 @@ def create_app() -> Flask:
         if isinstance(e, HTTPException):
             return jsonify({"error": e.name.lower().replace(" ", "_"), "message": e.description}), e.code
         logger.exception("İşlenmeyen hata")
-        msg = str(e)  # temporary: always show error for debugging
-        return jsonify({"error": "server_error", "message": msg}), 500
+        return jsonify({"error": "server_error", "message": "Bir hata oluştu, lütfen tekrar deneyin."}), 500
 
     # ── Statik sayfalar ────────────────────────────────────────────────────
 
@@ -146,6 +145,7 @@ def create_app() -> Flask:
             "legal_entity_address": LEGAL_ENTITY_ADDRESS,
             "support_email": SUPPORT_EMAIL,
             "plans": PLANS,
+            "ga_measurement_id": GA_MEASUREMENT_ID,
         })
 
     @flask_app.route("/api/markets")

@@ -248,7 +248,18 @@
                 <button id="signupSubmit" class="btn btn-primary" style="width:100%;margin-top:16px;">Hesap Oluştur</button>
             </div>
 
-            <!-- Şifre sıfırlama formu -->
+            <!-- Yeni şifre belirleme formu (reset linki tıklandıktan sonra) -->
+            <div id="authFormReset" class="auth-form hidden">
+                <p style="color:var(--text-2);font-size:14px;margin-bottom:16px;">
+                    Yeni şifrenizi belirleyin.
+                </p>
+                <label class="af-label">Yeni Şifre <span style="color:var(--text-3);font-size:11px;">(en az 10 karakter, harf+rakam)</span></label>
+                <input id="resetPassword" class="af-input" type="password" placeholder="Yeni şifreniz" autocomplete="new-password" />
+                <div id="resetMsg" style="font-size:13px;margin-top:8px;display:none;"></div>
+                <button id="resetSubmit" class="btn btn-primary" style="width:100%;margin-top:16px;">Şifremi Güncelle</button>
+            </div>
+
+            <!-- Şifre sıfırlama e-posta formu -->
             <div id="authFormForgot" class="auth-form hidden">
                 <p style="color:var(--text-2);font-size:14px;margin-bottom:16px;">
                     E-posta adresinizi girin; şifre sıfırlama bağlantısı gönderelim.

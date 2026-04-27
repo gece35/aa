@@ -1798,12 +1798,15 @@
 
     function openAuthModal(tab) {
         authModal.classList.remove('hidden');
+        const isReset = tab === 'reset';
+        document.querySelector('.auth-tabs').style.display = isReset ? 'none' : '';
         document.querySelectorAll('.auth-tab').forEach(t => {
             t.classList.toggle('active', t.dataset.auth === tab);
         });
         document.getElementById('authFormLogin').classList.toggle('hidden', tab !== 'login');
         document.getElementById('authFormSignup').classList.toggle('hidden', tab !== 'signup');
         document.getElementById('authFormForgot').classList.add('hidden');
+        document.getElementById('authFormReset').classList.toggle('hidden', tab !== 'reset');
     }
     function closeAuthModal() { authModal.classList.add('hidden'); }
 
@@ -1901,6 +1904,42 @@
         document.getElementById('forgotMsg').style.display = 'block';
     });
 
+    // Reset password submit
+    let _pendingResetToken = '';
+    document.getElementById('resetSubmit')?.addEventListener('click', async () => {
+        const password = document.getElementById('resetPassword').value;
+        const msgEl = document.getElementById('resetMsg');
+        const btn = document.getElementById('resetSubmit');
+        msgEl.style.display = 'none';
+        btn.disabled = true;
+        btn.textContent = 'Güncelleniyor...';
+        try {
+            const d = await fetch('/api/auth/reset', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: _pendingResetToken, password }),
+            }).then(r => r.json());
+            if (d.ok) {
+                msgEl.textContent = 'Şifreniz güncellendi! Giriş yapabilirsiniz.';
+                msgEl.style.color = 'var(--success)';
+                msgEl.style.display = 'block';
+                setTimeout(() => openAuthModal('login'), 2000);
+            } else {
+                msgEl.textContent = d.message || 'Geçersiz veya süresi dolmuş bağlantı.';
+                msgEl.style.color = 'var(--danger)';
+                msgEl.style.display = 'block';
+            }
+        } catch {
+            msgEl.textContent = 'Bağlantı hatası.';
+            msgEl.style.color = 'var(--danger)';
+            msgEl.style.display = 'block';
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Şifremi Güncelle';
+        }
+    });
+
     // Logout
     document.getElementById('logoutBtn')?.addEventListener('click', async () => {
         await Auth.logout();
@@ -1928,7 +1967,7 @@
         } catch { showToast('Bağlantı hatası.', 'danger'); }
     };
 
-    // Handle verify=ok query param from email link
+    // Handle URL query params from email links
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('verify') === 'ok') {
         showToast('E-posta adresiniz doğrulandı!', 'success', 6000);
@@ -1940,7 +1979,25 @@
         showToast('Premium aboneliğiniz aktif edildi!', 'success', 8000);
         history.replaceState({}, '', '/');
         Auth.me().then(d => { if (d.user) applyUserState(d.user); });
+    } else if (urlParams.get('reset_token')) {
+        _pendingResetToken = urlParams.get('reset_token');
+        history.replaceState({}, '', '/');
+        openAuthModal('reset');
     }
+
+    // GA4 — dinamik yükleme (Railway'de GA_MEASUREMENT_ID set edilince otomatik aktif)
+    fetch('/api/config').then(r => r.json()).then(cfg => {
+        if (cfg.ga_measurement_id) {
+            const s = document.createElement('script');
+            s.async = true;
+            s.src = `https://www.googletagmanager.com/gtag/js?id=${cfg.ga_measurement_id}`;
+            document.head.appendChild(s);
+            window.dataLayer = window.dataLayer || [];
+            window.gtag = function(){ window.dataLayer.push(arguments); };
+            window.gtag('js', new Date());
+            window.gtag('config', cfg.ga_measurement_id);
+        }
+    }).catch(() => {});
 
     // ── Cookie banner ────────────────────────────────────────────────────
     if (!localStorage.getItem('nebula.cookieConsent')) {

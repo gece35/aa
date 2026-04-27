@@ -1,16 +1,22 @@
-"""Resend HTTP API üzerinden transactional mail gönderimi.
+"""Transactional mail gönderimi — SMTP (Gmail vb.) veya Resend API.
 
-RESEND_API_KEY tanımlı değilse stdout'a logla (dev modu).
+Öncelik: SMTP_HOST varsa SMTP, yoksa RESEND_API_KEY varsa Resend, yoksa stdout log.
 """
 
 from __future__ import annotations
 
 import logging
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from typing import Optional
 
 import requests
 
-from .config import APP_BASE_URL, EMAIL_FROM, RESEND_API_KEY
+from .config import (
+    APP_BASE_URL, EMAIL_FROM, RESEND_API_KEY,
+    SMTP_HOST, SMTP_PASS, SMTP_PORT, SMTP_USER,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -18,9 +24,35 @@ RESEND_URL = "https://api.resend.com/emails"
 
 
 def _send(to: str, subject: str, html: str, text: Optional[str] = None) -> bool:
-    if not RESEND_API_KEY:
-        logger.warning("[DEV-EMAIL] To=%s | %s\n%s", to, subject, text or html)
+    if SMTP_HOST and SMTP_USER and SMTP_PASS:
+        return _send_smtp(to, subject, html, text)
+    if RESEND_API_KEY:
+        return _send_resend(to, subject, html, text)
+    logger.warning("[DEV-EMAIL] To=%s | %s\n%s", to, subject, text or html)
+    return True
+
+
+def _send_smtp(to: str, subject: str, html: str, text: Optional[str]) -> bool:
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = EMAIL_FROM
+        msg["To"] = to
+        if text:
+            msg.attach(MIMEText(text, "plain", "utf-8"))
+        msg.attach(MIMEText(html, "html", "utf-8"))
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as s:
+            s.ehlo()
+            s.starttls()
+            s.login(SMTP_USER, SMTP_PASS)
+            s.sendmail(SMTP_USER, [to], msg.as_bytes())
         return True
+    except Exception as exc:
+        logger.exception("SMTP gönderimi başarısız: %s", exc)
+        return False
+
+
+def _send_resend(to: str, subject: str, html: str, text: Optional[str]) -> bool:
     try:
         r = requests.post(
             RESEND_URL,
@@ -42,19 +74,19 @@ def _send(to: str, subject: str, html: str, text: Optional[str] = None) -> bool:
             return False
         return True
     except requests.RequestException as exc:
-        logger.exception("Email gönderilemedi: %s", exc)
+        logger.exception("Resend gönderilemedi: %s", exc)
         return False
 
 
 def send_verify_email(to: str, token: str) -> bool:
-    link = f"{APP_BASE_URL}/auth/verify?token={token}"
+    link = f"{APP_BASE_URL}/api/auth/verify?token={token}"
     subject = "Nebula Scanner — E-posta doğrulama"
     html = f"""
     <div style="font-family:Inter,Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#111;">
       <h2 style="margin-top:0;">Hoş geldin!</h2>
       <p>Nebula Scanner hesabını doğrulamak için aşağıdaki butona tıkla.</p>
       <p style="text-align:center;margin:32px 0;">
-        <a href="{link}" style="background:#5b8def;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;">E-postamı doğrula</a>
+        <a href="{link}" style="background:#2563eb;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;">E-postamı doğrula</a>
       </p>
       <p style="color:#666;font-size:13px;">Buton çalışmazsa bu bağlantıyı tarayıcına yapıştır:<br/><a href="{link}">{link}</a></p>
       <p style="color:#999;font-size:12px;margin-top:32px;">Bu maili sen istemediysen yok say. Bağlantı 24 saat geçerli.</p>
@@ -65,14 +97,14 @@ def send_verify_email(to: str, token: str) -> bool:
 
 
 def send_password_reset(to: str, token: str) -> bool:
-    link = f"{APP_BASE_URL}/auth/reset?token={token}"
+    link = f"{APP_BASE_URL}/?reset_token={token}"
     subject = "Nebula Scanner — Şifre sıfırlama"
     html = f"""
     <div style="font-family:Inter,Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#111;">
       <h2 style="margin-top:0;">Şifre sıfırlama</h2>
       <p>Aşağıdaki bağlantıyla yeni bir şifre belirleyebilirsin.</p>
       <p style="text-align:center;margin:32px 0;">
-        <a href="{link}" style="background:#5b8def;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;">Şifremi sıfırla</a>
+        <a href="{link}" style="background:#2563eb;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;">Şifremi sıfırla</a>
       </p>
       <p style="color:#666;font-size:13px;"><a href="{link}">{link}</a></p>
       <p style="color:#999;font-size:12px;margin-top:32px;">Bu isteği sen yapmadıysan yok say. Bağlantı 1 saat geçerli.</p>
@@ -90,7 +122,7 @@ def send_alert_triggered(to: str, symbol: str, label: str) -> bool:
       <p>Belirlediğin alarm tetiklendi:</p>
       <p style="background:#f3f4f6;padding:12px 16px;border-radius:8px;font-weight:600;">{label}</p>
       <p style="text-align:center;margin:32px 0;">
-        <a href="{APP_BASE_URL}/?focus={symbol}" style="background:#5b8def;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;">Hisse detayını aç</a>
+        <a href="{APP_BASE_URL}/?focus={symbol}" style="background:#2563eb;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;">Hisse detayını aç</a>
       </p>
       <p style="color:#999;font-size:12px;margin-top:32px;">
         Bu bilgi yatırım tavsiyesi değildir. Eğitim ve bilgilendirme amaçlıdır.
