@@ -298,6 +298,22 @@ def create_app() -> Flask:
         db.session.commit()
         return jsonify({"ok": True, "email": user.email, "plan": user.plan, "is_premium": user.is_premium})
 
+    @flask_app.route("/api/admin/email-test", methods=["POST"])
+    @login_required
+    @admin_required
+    def email_test():
+        from backend.config import RESEND_API_KEY, SMTP_HOST, SMTP_PASS, SMTP_PORT, SMTP_USER
+        from backend.email import _send
+        config_info = {
+            "smtp_configured": bool(SMTP_HOST and SMTP_USER and SMTP_PASS),
+            "resend_configured": bool(RESEND_API_KEY),
+            "smtp_host": SMTP_HOST or "(boş)",
+            "smtp_user": SMTP_USER or "(boş)",
+        }
+        to = request.get_json(silent=True, force=True).get("to", current_user.email) if request.data else current_user.email
+        ok = _send(to, "Nebula Scanner — E-posta test", "<p>Test maili başarıyla gönderildi.</p>", "Test maili başarıyla gönderildi.")
+        return jsonify({"ok": ok, "config": config_info, "sent_to": to})
+
     @flask_app.route("/api/cache/clear", methods=["POST"])
     @login_required
     @admin_required

@@ -1,11 +1,13 @@
 """Transactional mail gönderimi — SMTP (Gmail vb.) veya Resend API.
 
 Öncelik: SMTP_HOST varsa SMTP, yoksa RESEND_API_KEY varsa Resend, yoksa stdout log.
+Config her çağrıda os.environ'dan okunur — Railway env var değişince redeploy yeterli.
 """
 
 from __future__ import annotations
 
 import logging
+import os
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -13,26 +15,37 @@ from typing import Optional
 
 import requests
 
-from .config import (
-    APP_BASE_URL, EMAIL_FROM, RESEND_API_KEY,
-    SMTP_HOST, SMTP_PASS, SMTP_PORT, SMTP_USER,
-)
+from .config import APP_BASE_URL, EMAIL_FROM
 
 logger = logging.getLogger(__name__)
 
 RESEND_URL = "https://api.resend.com/emails"
 
 
+def _cfg():
+    """Her çağrıda güncel env değerlerini döner (Railway yeniden deploy sonrası çalışır)."""
+    return {
+        "smtp_host": os.environ.get("SMTP_HOST", ""),
+        "smtp_port": int(os.environ.get("SMTP_PORT", "587")),
+        "smtp_user": os.environ.get("SMTP_USER", ""),
+        "smtp_pass": os.environ.get("SMTP_PASS", ""),
+        "resend_key": os.environ.get("RESEND_API_KEY", ""),
+    }
+
+
 def _send(to: str, subject: str, html: str, text: Optional[str] = None) -> bool:
-    if SMTP_HOST and SMTP_USER and SMTP_PASS:
-        return _send_smtp(to, subject, html, text)
-    if RESEND_API_KEY:
-        return _send_resend(to, subject, html, text)
-    logger.warning("[DEV-EMAIL] To=%s | %s\n%s", to, subject, text or html)
+    cfg = _cfg()
+    if cfg["smtp_host"] and cfg["smtp_user"] and cfg["smtp_pass"]:
+        logger.info("E-posta SMTP üzerinden gönderiliyor: %s → %s", cfg["smtp_user"], to)
+        return _send_smtp(to, subject, html, text, cfg)
+    if cfg["resend_key"]:
+        logger.info("E-posta Resend üzerinden gönderiliyor → %s", to)
+        return _send_resend(to, subject, html, text, cfg["resend_key"])
+    logger.warning("[DEV-EMAIL - SMTP/RESEND YAPILANDIRILMADI] To=%s | %s\n%s", to, subject, text or html)
     return True
 
 
-def _send_smtp(to: str, subject: str, html: str, text: Optional[str]) -> bool:
+def _send_smtp(to: str, subject: str, html: str, text: Optional[str], cfg: dict) -> bool:
     try:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
@@ -41,23 +54,27 @@ def _send_smtp(to: str, subject: str, html: str, text: Optional[str]) -> bool:
         if text:
             msg.attach(MIMEText(text, "plain", "utf-8"))
         msg.attach(MIMEText(html, "html", "utf-8"))
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as s:
+        with smtplib.SMTP(cfg["smtp_host"], cfg["smtp_port"], timeout=15) as s:
             s.ehlo()
             s.starttls()
-            s.login(SMTP_USER, SMTP_PASS)
-            s.sendmail(SMTP_USER, [to], msg.as_bytes())
+            s.login(cfg["smtp_user"], cfg["smtp_pass"])
+            s.sendmail(cfg["smtp_user"], [to], msg.as_bytes())
+        logger.info("SMTP gönderimi başarılı → %s", to)
         return True
+    except smtplib.SMTPAuthenticationError as exc:
+        logger.error("SMTP kimlik doğrulama hatası (App Password kontrol et): %s", exc)
+        return False
     except Exception as exc:
         logger.exception("SMTP gönderimi başarısız: %s", exc)
         return False
 
 
-def _send_resend(to: str, subject: str, html: str, text: Optional[str]) -> bool:
+def _send_resend(to: str, subject: str, html: str, text: Optional[str], api_key: str) -> bool:
     try:
         r = requests.post(
             RESEND_URL,
             headers={
-                "Authorization": f"Bearer {RESEND_API_KEY}",
+                "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
             },
             json={
@@ -72,6 +89,7 @@ def _send_resend(to: str, subject: str, html: str, text: Optional[str]) -> bool:
         if r.status_code >= 300:
             logger.error("Resend hata %s: %s", r.status_code, r.text)
             return False
+        logger.info("Resend gönderimi başarılı → %s", to)
         return True
     except requests.RequestException as exc:
         logger.exception("Resend gönderilemedi: %s", exc)
