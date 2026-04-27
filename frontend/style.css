@@ -772,6 +772,36 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
 }
 .port-ov-item { display: flex; flex-direction: column; gap: 6px; }
 
+.port-currency-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+    margin-bottom: 8px;
+    padding: 0 4px;
+}
+.port-ccy-btn {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    color: var(--text-2);
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s, color .15s;
+}
+.port-ccy-btn.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
+.port-ccy-note {
+    font-size: 11px;
+    color: var(--text-3);
+    margin-left: 4px;
+}
+
 /* portfolio list */
 .port-list { display: grid; gap: 14px; }
 

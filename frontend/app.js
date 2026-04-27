@@ -882,7 +882,7 @@
 
     // --- portfolio ---
     const PORTFOLIO_KEY = 'nebula.portfolio.v2';
-    const port = { positions: [], details: {}, loading: new Set() };
+    const port = { positions: [], details: {}, loading: new Set(), displayCurrency: 'TRY' };
 
     async function loadPortfolio() {
         if (_currentUser) {
@@ -1088,11 +1088,16 @@
 
     function fmtPortPrice(price, market) {
         if (market === 'bist') {
-            if (state.showUsd && state.usdRate)
-                return '$' + (price / state.usdRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             return '₺' + price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
         return '$' + price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    // Portföy toplam K/Z'yi seçili para birimine göre formatlar (TRY normalize edilmiş değer alır)
+    function fmtPortTotal(tryAmount) {
+        if (port.displayCurrency === 'USD' && state.usdRate)
+            return '$' + (tryAmount / state.usdRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return '₺' + tryAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
     function renderPortfolioTab() {
@@ -1113,31 +1118,45 @@
             return;
         }
 
-        let totalInvested = 0, totalCurrent = 0, loadedCount = 0;
+        // Tüm değerleri TRY'ye normalize ederek topla (USD pozisyonlar kur ile çarpılır)
+        const rate = state.usdRate || 1;
+        let totalInvestedTRY = 0, totalCurrentTRY = 0, loadedCount = 0;
+        const hasMixed = port.positions.some(p => p.market === 'us') && port.positions.some(p => p.market === 'bist');
         for (const pos of port.positions) {
             const d = port.details[pos.symbol];
-            totalInvested += pos.buyPrice * pos.qty;
-            if (d) { totalCurrent += d.price * pos.qty; loadedCount++; }
+            const posRate = pos.market === 'us' ? rate : 1;
+            totalInvestedTRY += pos.buyPrice * pos.qty * posRate;
+            if (d) { totalCurrentTRY += d.price * pos.qty * posRate; loadedCount++; }
         }
-        const totalPnl = totalCurrent - totalInvested;
-        const totalPnlPct = totalInvested > 0 ? totalPnl / totalInvested * 100 : 0;
-        const pnlColor = totalPnl >= 0 ? 'var(--neon)' : 'var(--danger)';
+        const totalPnlTRY = totalCurrentTRY - totalInvestedTRY;
+        const totalPnlPct = totalInvestedTRY > 0 ? totalPnlTRY / totalInvestedTRY * 100 : 0;
+        const pnlColor = totalPnlTRY >= 0 ? 'var(--neon)' : 'var(--danger)';
+
+        const currencyLabel = port.displayCurrency === 'USD' ? 'USD' : 'TRY';
+        const otherCurrency = port.displayCurrency === 'USD' ? 'TRY' : 'USD';
+        const currencyToggleHtml = state.usdRate ? `
+            <div class="port-currency-toggle">
+                <span style="font-size:12px;color:var(--text-3);">Göster:</span>
+                <button class="port-ccy-btn ${port.displayCurrency === 'TRY' ? 'active' : ''}" data-ccy="TRY">₺ TRY</button>
+                <button class="port-ccy-btn ${port.displayCurrency === 'USD' ? 'active' : ''}" data-ccy="USD">$ USD</button>
+                ${hasMixed ? '<span class="port-ccy-note">Kur dahil</span>' : ''}
+            </div>` : '';
 
         overview.innerHTML = `
             <div class="port-overview glass">
                 <div class="port-ov-item">
                     <span class="s-label">Toplam Yatırım</span>
-                    <span class="s-value">${fmtPortPrice(totalInvested, state.market)}</span>
+                    <span class="s-value">${fmtPortTotal(totalInvestedTRY)}</span>
                 </div>
                 <div class="port-ov-item">
                     <span class="s-label">Güncel Değer</span>
-                    <span class="s-value">${loadedCount ? fmtPortPrice(totalCurrent, state.market) : '...'}</span>
+                    <span class="s-value">${loadedCount ? fmtPortTotal(totalCurrentTRY) : '...'}</span>
                 </div>
                 <div class="port-ov-item">
                     <span class="s-label">Toplam K/Z</span>
                     <span class="s-value" style="color:${pnlColor}">
                         ${loadedCount
-                            ? (totalPnl >= 0 ? '+' : '') + fmtPortPrice(Math.abs(totalPnl), state.market) +
+                            ? (totalPnlTRY >= 0 ? '+' : '') + fmtPortTotal(Math.abs(totalPnlTRY)) +
                               ' (' + (totalPnlPct >= 0 ? '+' : '') + totalPnlPct.toFixed(2) + '%)'
                             : '...'}
                     </span>
@@ -1146,7 +1165,15 @@
                     <span class="s-label">Açık Pozisyon</span>
                     <span class="s-value">${port.positions.length}</span>
                 </div>
-            </div>`;
+            </div>
+            ${currencyToggleHtml}`;
+
+        overview.querySelectorAll('.port-ccy-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                port.displayCurrency = btn.dataset.ccy;
+                renderPortfolioTab();
+            });
+        });
 
         const frag = document.createDocumentFragment();
         [...port.positions].reverse().forEach(pos => {
@@ -1518,7 +1545,10 @@
         if (portSec) portSec.classList.toggle('hidden', tab !== 'portfolio');
         if (alertSec) alertSec.classList.toggle('hidden', tab !== 'alerts');
         document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tab));
-        if (tab === 'portfolio') fetchPortfolioDetails().then(() => renderPortfolioTab());
+        if (tab === 'portfolio') {
+            if (!state.usdRate) fetchExchangeRate();
+            fetchPortfolioDetails().then(() => renderPortfolioTab());
+        }
         if (tab === 'alerts') loadAlerts();
     }
     document.querySelectorAll('.tab-btn').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
