@@ -49,7 +49,8 @@ def _send_smtp(to: str, subject: str, html: str, text: Optional[str], cfg: dict)
     try:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
-        msg["From"] = EMAIL_FROM
+        # Gmail SMTP, From adresi ile authenticate olan hesap aynı olmalı
+        msg["From"] = f"Nebula Scanner <{cfg['smtp_user']}>"
         msg["To"] = to
         if text:
             msg.attach(MIMEText(text, "plain", "utf-8"))
