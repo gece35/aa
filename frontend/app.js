@@ -693,7 +693,7 @@
 
         const slTpHtml = (sl || tp) ? `
             <div style="margin-top:14px;">
-                <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--text-3);margin-bottom:10px;">Stop Loss / Kar Al</div>
+                <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--text-3);margin-bottom:10px;">Stop Loss / Direnç Hedefi</div>
                 <div class="sl-tp-box">
                     ${sl ? `<div class="sl-tp-item stop-loss">
                         <span class="sl-tp-label">Stop Loss</span>
@@ -701,7 +701,7 @@
                         <span class="sl-tp-pct">${slPct}%</span>
                     </div>` : ''}
                     ${tp ? `<div class="sl-tp-item take-profit">
-                        <span class="sl-tp-label">Kar Al</span>
+                        <span class="sl-tp-label">Direnç</span>
                         <span class="sl-tp-value">${fmtPrice(tp, ccy)}</span>
                         <span class="sl-tp-pct">+${tpPct}%</span>
                     </div>` : ''}
@@ -1019,71 +1019,67 @@
         const wedge = detectWedge(d.history || []);
         const reasons = [];
 
-        // ── Hemen Sat ────────────────────────────────────────────────────────
+        // ── Yüksek Risk ───────────────────────────────────────────────────
         if (sl && price <= sl) {
-            reasons.push('Stop loss seviyesi kırıldı, kayıpları sınırla');
+            reasons.push('Stop loss seviyesi kırıldı');
             if (weekPct < -5) reasons.push(`Bu hafta %${Math.abs(weekPct).toFixed(1)} düşüş`);
-            return { level: 'sat_hemen', label: 'Hemen Sat', reasons };
+            return { level: 'sat_hemen', label: 'Yüksek Risk', reasons };
         }
-        // Büyük zarar + zayıf sinyal + düşüş trendi (score=0-1 yeterli, score===0 gerekmez)
         if (pnlPct < -15 && score <= 1 && trend === 'down') {
-            reasons.push(`%${Math.abs(pnlPct).toFixed(1)} zarar, al sinyali çok zayıf`);
+            reasons.push(`%${Math.abs(pnlPct).toFixed(1)} zarar, trend sağlığı zayıf`);
             reasons.push('Düşüş trendi devam ediyor');
-            return { level: 'sat_hemen', label: 'Hemen Sat', reasons };
+            return { level: 'sat_hemen', label: 'Yüksek Risk', reasons };
         }
 
-        // ── Kar Al (yalnızca gerçek karda) ───────────────────────────────────
-        // TP hedefi direnç bölgesidir; kullanıcı zarardayken "Kar Al" göstermek yanlış
+        // ── Direnç Bölgesinde ─────────────────────────────────────────────
         if (tp && price >= tp * 0.98 && pnlPct > 3) {
-            reasons.push('Kar al hedefine (direnç bölgesi) ulaşıldı');
+            reasons.push('Direnç bölgesine ulaşıldı');
             if (d.near_peak) reasons.push('52 haftalık zirveye çok yakın');
-            return { level: 'kar_al', label: 'Kar Al', reasons };
+            return { level: 'kar_al', label: 'Direnç Bölgesinde', reasons };
         }
         if (d.near_peak && pnlPct > 15) {
-            reasons.push(`%${pnlPct.toFixed(1)} kar var, zirve bölgesine girildi`);
-            reasons.push('Kısmi kar almayı değerlendirin');
-            return { level: 'kar_al', label: 'Kar Al', reasons };
+            reasons.push(`%${pnlPct.toFixed(1)} kar, zirve bölgesinde`);
+            reasons.push('Direnç seviyesi yakınında');
+            return { level: 'kar_al', label: 'Direnç Bölgesinde', reasons };
         }
         if (pnlPct > 30 && score <= 1) {
-            reasons.push(`%${pnlPct.toFixed(1)} büyük kar elde edildi`);
-            reasons.push('Sinyaller zayıfladı, karı koruma zamanı');
-            return { level: 'kar_al', label: 'Kar Al', reasons };
+            reasons.push(`%${pnlPct.toFixed(1)} kar mevcut`);
+            reasons.push('Trend sağlığı zayıfladı');
+            return { level: 'kar_al', label: 'Direnç Bölgesinde', reasons };
         }
 
-        // ── Satışı Düşün ─────────────────────────────────────────────────────
+        // ── Zayıflama Sinyalleri ──────────────────────────────────────────
         let bearish = 0;
         if (sl && price < sl * 1.035) { reasons.push("Stop loss'a %3'ten az mesafe kaldı"); bearish += 2; }
-        // Orta-büyük zarar + düşüş trendi: score fark etmeksizin uyar
         if (pnlPct < -10 && trend === 'down') {
             reasons.push(`%${Math.abs(pnlPct).toFixed(1)} zararda ve düşüş trendi`);
             bearish += 2;
         }
-        if (score <= 1 && weekPct < -3) { reasons.push(`${score}/5 sinyal, haftalık %${weekPct.toFixed(1)}`); bearish++; }
-        // Karda ama tüm sinyaller söndü
-        if (pnlPct > 18 && score === 0) { reasons.push(`%${pnlPct.toFixed(1)} karda ama tüm sinyaller söndü`); bearish += 2; }
-        if (wedge === 'rising' && score <= 2) { reasons.push('Yükselen kama kırılım riski (bearish)'); bearish++; }
+        if (score <= 1 && weekPct < -3) { reasons.push(`${score}/5 sağlık, haftalık %${weekPct.toFixed(1)}`); bearish++; }
+        if (pnlPct > 18 && score === 0) { reasons.push(`%${pnlPct.toFixed(1)} kar var ama trend bozuldu`); bearish += 2; }
+        if (wedge === 'rising' && score <= 2) { reasons.push('Yükselen kama kırılım riski'); bearish++; }
         if (trend === 'down' && score <= 1 && pnlPct < 0) { reasons.push('Düşüş trendi + zararda pozisyon'); bearish++; }
-        if (bearish >= 2) return { level: 'sat_dusun', label: 'Satışı Düşün', reasons: reasons.slice(0, 3) };
+        if (bearish >= 2) return { level: 'sat_dusun', label: 'Zayıflama Sinyalleri', reasons: reasons.slice(0, 3) };
 
-        // ── Tut ──────────────────────────────────────────────────────────────
+        // ── Trend Sağlıklı ────────────────────────────────────────────────
         let bullish = 0;
         const bullReasons = [];
-        if (score >= 4) { bullReasons.push(`${score}/5 güçlü al sinyali`); bullish += 2; }
-        else if (score === 3) { bullReasons.push('3/5 iyi sinyal seviyesi'); bullish++; }
+        if (score >= 4) { bullReasons.push(`${score}/5 güçlü trend sağlığı`); bullish += 2; }
+        else if (score === 3) { bullReasons.push('3/5 sağlıklı trend seviyesi'); bullish++; }
         if (trend === 'up') { bullReasons.push('Yukarı trend devam ediyor'); bullish++; }
-        if (d.volume_spike) { bullReasons.push('Hacim patlaması güç göstergesi'); bullish++; }
-        if (wedge === 'falling') { bullReasons.push('Düşen kama — yukarı kırılım beklentisi'); bullish++; }
-        if (weekPct > 3 && score >= 2) { bullReasons.push(`Haftalık +%${weekPct.toFixed(1)} güçlü ivme`); bullish++; }
-        if (bullish >= 3) return { level: 'tut', label: 'Tut', reasons: bullReasons.slice(0, 3) };
+        if (d.volume_spike) { bullReasons.push('Hacim ortalamanın üzerinde'); bullish++; }
+        if (wedge === 'falling') { bullReasons.push('Düşen kama — yukarı kırılım potansiyeli'); bullish++; }
+        if (weekPct > 3 && score >= 2) { bullReasons.push(`Haftalık +%${weekPct.toFixed(1)} pozitif ivme`); bullish++; }
+        if (bullish >= 3) return { level: 'tut', label: 'Trend Sağlıklı', reasons: bullReasons.slice(0, 3) };
 
-        // ── İzle ─────────────────────────────────────────────────────────────
+        // ── İzlemede ──────────────────────────────────────────────────────
         const watchReasons = [];
-        if (score >= 2) watchReasons.push(`${score}/5 sinyal var, güçlenme bekleniyor`);
+        if (score >= 2) watchReasons.push(`${score}/5 sağlık, gelişim bekleniyor`);
         if (Math.abs(weekPct) <= 2) watchReasons.push('Yatay seyir, net yön bekleniyor');
         else if (weekPct > 0) watchReasons.push(`Haftalık +%${weekPct.toFixed(1)} pozitif seyir`);
         if (wedge) watchReasons.push(wedge === 'rising' ? 'Yükselen kama: kırılımı izle' : 'Düşen kama: yukarı kırılım beklentisi');
-        if (!watchReasons.length) watchReasons.push('Karma sinyaller, izlemeye devam');
-        return { level: 'izle', label: 'İzle', reasons: watchReasons.slice(0, 2) };
+        if (!watchReasons.length) watchReasons.push('Karma sinyaller, izlemede');
+        return { level: 'izle', label: 'İzlemede', reasons: watchReasons.slice(0, 2) };
     }
 
     function fmtPortPrice(price, market) {
@@ -1236,7 +1232,7 @@
                         ${sl ? `<span class="port-level port-sl">SL: ${fmtPortPrice(sl, pos.market)}</span>` : ''}
                         ${tp ? `<span class="port-level port-tp">TP: ${fmtPortPrice(tp, pos.market)}</span>` : ''}
                         ${rr ? `<span class="port-level port-rr">R/R 1:${rr}</span>` : ''}
-                        <span class="port-level port-score">${d.score}/5 sinyal</span>
+                        <span class="port-level port-score">${d.score}/5 sağlık</span>
                     </div>
                     <div class="port-rec ${recClass}">
                         <span class="rec-badge">${escapeHtml(rec.label)}</span>

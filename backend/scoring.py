@@ -1,11 +1,14 @@
-"""Teknik gosterge bazli puanlama motoru.
+"""Teknik gosterge bazli "trend sagligi" puanlama motoru.
 
-5 gostergeden olusur, her AL sinyali +1 puan verir:
-  - RSI (14)          : Son 3 barda 30 yukari kesis veya sinyal cizgisi kesisi
-  - MACD (12, 26, 9)  : Son 3 barda MACD cizgisi sinyali yukari yonlu keser
-  - Bollinger (20, 2) : Son 3 barda alt banda dokup yukari donmus olmali
-  - EMA (50)          : Fiyat EMA50 uzerinde VE 52h zirvesinin %3 altinda
-  - Stochastic        : Son 3 barda %K %D'yi yukari keser, K < 80 (asiri alim degil)
+5 gostergeden olusur, her saglikli durum +1 puan verir (toplam 0-5):
+  - RSI (14)          : 50 <= RSI < 70 (yukari momentum, asiri alim degil)
+  - MACD (12, 26, 9)  : MACD > sinyal cizgisi VE MACD > 0 (pozitif momentum aktif)
+  - Bollinger (20, 2) : Fiyat orta band uzerinde VE ust banda < %95 (saglikli yukseliste, asiri uzanma yok)
+  - EMA               : Fiyat > EMA50 VE fiyat > EMA20 (kisa ve orta vade trend pozitif)
+  - Hacim             : Son 5 gunun ortalama hacmi, 20-gunluk ortalamadan >= %20 yuksek (gercek alici destegi)
+
+Skor "anlik giris firsati" degil "pozisyon hala saglikli mi?" sorusunu yanitlar.
+Trend devam ettigi surece skor yuksek kalir, bozulunca dusera.
 
 pandas_ta yerine saf pandas/numpy ile hesaplama yapilir.
 """
@@ -100,16 +103,6 @@ def _bbands(close: pd.Series, length=20, std_mult=2.0):
     return upper, mid, lower
 
 
-def _stoch(high: pd.Series, low: pd.Series, close: pd.Series, k=14, d=3, smooth_k=3) -> tuple:
-    lowest = low.rolling(window=k).min()
-    highest = high.rolling(window=k).max()
-    denom = (highest - lowest).replace(0, np.nan)
-    raw_k = 100 * (close - lowest) / denom
-    k_line = raw_k.rolling(window=smooth_k).mean()
-    d_line = k_line.rolling(window=d).mean()
-    return k_line, d_line
-
-
 def _safe_last(series: pd.Series):
     if series is None or len(series) == 0:
         return None
@@ -119,168 +112,147 @@ def _safe_last(series: pd.Series):
     return float(val)
 
 
-def _crosses_above_within(series_a: pd.Series, series_b, n: int = 3) -> bool:
-    """Son n barda series_a, series_b'yi en az bir kez yukari gecti mi?
-
-    n=3 → son 3 mum gecisini (3 art arda bar ciftini) kontrol eder.
-    """
-    if len(series_a) < 2:
-        return False
-    pairs = min(n, len(series_a) - 1)
-    for i in range(pairs):
-        a_now = series_a.iloc[-(i + 1)]
-        a_prev = series_a.iloc[-(i + 2)]
-        if isinstance(series_b, (int, float)):
-            b_now = b_prev = float(series_b)
-        else:
-            if len(series_b) < i + 2:
-                continue
-            b_now = series_b.iloc[-(i + 1)]
-            b_prev = series_b.iloc[-(i + 2)]
-        if any(pd.isna(v) for v in [a_now, a_prev, b_now, b_prev]):
-            continue
-        if float(a_prev) <= float(b_prev) and float(a_now) > float(b_now):
-            return True
-    return False
-
-
-# --- indikatör değerlendirmeleri ---
+# --- indikator degerlendirmeleri (trend sagligi tabanli) ---
 
 def _evaluate_rsi(close: pd.Series) -> IndicatorResult:
+    """RSI 50-70 araligi: yukari momentum aktif, asiri alim degil."""
     rsi = _rsi(close, 14)
-    if rsi.dropna().empty:
+    rsi_now = _safe_last(rsi)
+    if rsi_now is None:
         return IndicatorResult("RSI", "rsi", False, None, "veri yok")
 
-    signal_line = _sma(rsi, 9)
-    rsi_now = _safe_last(rsi)
+    healthy = 50.0 <= rsi_now < 70.0
+    if rsi_now >= 70:
+        detail = f"RSI {rsi_now:.0f} — asiri alim bolgesi"
+    elif rsi_now >= 50:
+        detail = f"RSI {rsi_now:.0f} — pozitif momentum"
+    elif rsi_now >= 30:
+        detail = f"RSI {rsi_now:.0f} — zayif momentum"
+    else:
+        detail = f"RSI {rsi_now:.0f} — asiri satim"
 
-    # Son 3 barda 30 cizgisini yukari gecti mi? (asiri satimdan kurtulus)
-    cross_30 = _crosses_above_within(rsi, 30, n=3)
-    # Son 3 barda sinyal cizgisini yukari gecti mi?
-    cross_signal = _crosses_above_within(rsi, signal_line, n=3)
-
-    signal = bool(cross_30 or cross_signal)
-    reason = []
-    if cross_30:
-        reason.append("son 3 barda 30 yukari kesis")
-    if cross_signal:
-        reason.append("sinyal kesisi")
-
-    detail = ", ".join(reason) if reason else (f"RSI={rsi_now:.1f}" if rsi_now else "notr")
     return IndicatorResult(
-        name="RSI", key="rsi", signal=signal,
-        value=round(rsi_now, 2) if rsi_now is not None else None,
+        name="RSI", key="rsi", signal=healthy,
+        value=round(rsi_now, 2),
         detail=detail,
     )
 
 
 def _evaluate_macd(close: pd.Series) -> IndicatorResult:
+    """MACD > sinyal cizgisi VE MACD > 0: pozitif momentum aktif."""
     macd_line, signal_line = _macd(close)
-    if macd_line.dropna().empty:
+    macd_now = _safe_last(macd_line)
+    sig_now = _safe_last(signal_line)
+    if macd_now is None or sig_now is None:
         return IndicatorResult("MACD", "macd", False, None, "veri yok")
 
-    # Son 3 barda MACD, sinyal cizgisini yukari gecti mi?
-    cross = _crosses_above_within(macd_line, signal_line, n=3)
-    macd_now = _safe_last(macd_line)
+    above_signal = macd_now > sig_now
+    above_zero = macd_now > 0
+    healthy = above_signal and above_zero
+
+    if healthy:
+        detail = "sinyal uzerinde, pozitif bolge"
+    elif above_signal and not above_zero:
+        detail = "sinyal uzerinde ama negatif bolge"
+    elif above_zero and not above_signal:
+        detail = "pozitif bolge ama sinyal altinda"
+    else:
+        detail = "negatif momentum"
 
     return IndicatorResult(
-        name="MACD", key="macd", signal=bool(cross),
-        value=round(macd_now, 4) if macd_now is not None else None,
-        detail="son 3 barda yukari kesis" if cross else "kesis yok",
+        name="MACD", key="macd", signal=healthy,
+        value=round(macd_now, 4),
+        detail=detail,
     )
 
 
 def _evaluate_bbands(close: pd.Series) -> IndicatorResult:
+    """Fiyat orta band uzerinde VE ust banda < %95: saglikli yukselis, asiri uzanma yok."""
     upper, middle, lower = _bbands(close)
     price = _safe_last(close)
-    lower_now = _safe_last(lower)
+    upper_now = _safe_last(upper)
+    middle_now = _safe_last(middle)
 
-    if price is None or lower_now is None:
+    if price is None or upper_now is None or middle_now is None:
         return IndicatorResult("BBands", "bbands", False, None, "veri yok")
 
-    # Son 3 barda alt banda dokup yukari donmus mu?
-    bounced = False
-    n_check = min(3, len(close) - 1)
-    for i in range(n_check):
-        try:
-            c_now = float(close.iloc[-(i + 1)])
-            c_prev = float(close.iloc[-(i + 2)])
-            l_now = float(lower.iloc[-(i + 1)])
-            l_prev = float(lower.iloc[-(i + 2)])
-            if any(pd.isna(v) for v in [c_now, c_prev, l_now, l_prev]):
-                continue
-            # Onceki mum alt bant bolgesi icindeydi (alt band * 1.01 altinda)
-            touched = c_prev <= l_prev * 1.01
-            # Simdi alt bandin uzerinde ve yukseliyor
-            bouncing = c_now > l_now and c_now > c_prev
-            if touched and bouncing:
-                bounced = True
-                break
-        except (IndexError, ValueError):
-            continue
+    above_mid = price > middle_now
+    not_extended = price < upper_now * 0.95
+    healthy = above_mid and not_extended
+
+    if not above_mid:
+        detail = "orta band altinda"
+    elif not not_extended:
+        detail = "ust banda asiri yakin"
+    else:
+        detail = "orta-ust band arasinda saglikli"
 
     return IndicatorResult(
-        name="BBands", key="bbands", signal=bounced,
-        value=round(lower_now, 4),
-        detail="son 3 barda alt banttan donus" if bounced else "notr",
+        name="BBands", key="bbands", signal=healthy,
+        value=round(middle_now, 4),
+        detail=detail,
     )
 
 
 def _evaluate_ema(close: pd.Series, high_52w: float | None = None) -> IndicatorResult:
-    ema = _ema(close, 50)
-    if ema.dropna().empty:
-        return IndicatorResult("EMA50", "ema50", False, None, "veri yok")
+    """Fiyat > EMA50 VE fiyat > EMA20: kisa ve orta vade trend pozitif."""
+    ema50 = _ema(close, 50)
+    ema20 = _ema(close, 20)
     price = _safe_last(close)
-    ema_now = _safe_last(ema)
-    if price is None or ema_now is None:
-        return IndicatorResult("EMA50", "ema50", False, None, "veri yok")
+    ema50_now = _safe_last(ema50)
+    ema20_now = _safe_last(ema20)
+    if price is None or ema50_now is None or ema20_now is None:
+        return IndicatorResult("EMA", "ema50", False, None, "veri yok")
 
-    above_ema = bool(price > ema_now)
-    # 52 haftalik zirvenin %3 icindeyse "tepe noktasina yakin" sayilir
-    near_peak = bool(high_52w and high_52w > 0 and price >= high_52w * 0.97)
+    above_50 = price > ema50_now
+    above_20 = price > ema20_now
+    healthy = above_50 and above_20
 
-    signal = above_ema and not near_peak
-
-    parts = []
-    if above_ema:
-        parts.append("fiyat EMA uzerinde")
+    if healthy:
+        detail = "fiyat EMA20 ve EMA50 uzerinde"
+    elif above_50:
+        detail = "fiyat EMA50 uzerinde, EMA20 altinda"
+    elif above_20:
+        detail = "fiyat EMA20 uzerinde, EMA50 altinda"
     else:
-        parts.append("fiyat EMA altinda")
-    if near_peak:
-        parts.append("52h zirveye yakin — sinyal yok")
+        detail = "fiyat her iki EMA altinda"
 
     return IndicatorResult(
-        name="EMA50", key="ema50", signal=signal,
-        value=round(ema_now, 4),
-        detail=", ".join(parts),
+        name="EMA", key="ema50", signal=healthy,
+        value=round(ema50_now, 4),
+        detail=detail,
     )
 
 
-def _evaluate_stoch(high: pd.Series, low: pd.Series, close: pd.Series) -> IndicatorResult:
-    k_line, d_line = _stoch(high, low, close)
-    if k_line.dropna().empty:
-        return IndicatorResult("Stoch", "stoch", False, None, "veri yok")
+def _evaluate_volume(volume: pd.Series) -> IndicatorResult:
+    """Son 5 gunun ortalama hacmi, 20-gunluk ortalamadan >= %20 yuksek: gercek alici destegi."""
+    if volume is None or volume.empty or len(volume) < 25:
+        return IndicatorResult("Hacim", "volume", False, None, "veri yok")
 
-    # Son 3 barda %K, %D'yi yukari gecti mi?
-    cross = _crosses_above_within(k_line, d_line, n=3)
-    k_now = _safe_last(k_line)
+    vol_clean = volume.dropna()
+    if len(vol_clean) < 25:
+        return IndicatorResult("Hacim", "volume", False, None, "veri yok")
 
-    # Asiri alim bolgesinde degil mi? (K >= 80 → asiri alim, sinyal gecersiz)
-    not_overbought = k_now is None or k_now < 80
-    signal = bool(cross and not_overbought)
+    avg_5d = float(vol_clean.iloc[-5:].mean())
+    avg_20d = float(vol_clean.iloc[-20:].mean())
+    if avg_20d <= 0:
+        return IndicatorResult("Hacim", "volume", False, None, "veri yok")
 
-    detail = "kesis yok"
-    if cross:
-        if k_now is not None and k_now >= 80:
-            detail = "asiri alim bolgesinde kesis — sinyal yok"
-        elif k_now is not None and k_now < 30:
-            detail = "asiri satimdan yukari kesis"
-        else:
-            detail = "son 3 barda yukari kesis"
+    ratio = avg_5d / avg_20d
+    healthy = ratio >= 1.20
+
+    if ratio >= 1.50:
+        detail = f"hacim ortalamanin %{(ratio - 1) * 100:.0f} ustunde — guclu ilgi"
+    elif ratio >= 1.20:
+        detail = f"hacim ortalamanin %{(ratio - 1) * 100:.0f} ustunde — alici destegi"
+    elif ratio >= 0.80:
+        detail = "hacim normal seviyede"
+    else:
+        detail = f"hacim ortalamanin %{(1 - ratio) * 100:.0f} altinda — ilgi azaliyor"
 
     return IndicatorResult(
-        name="Stoch", key="stoch", signal=signal,
-        value=round(k_now, 2) if k_now is not None else None,
+        name="Hacim", key="volume", signal=healthy,
+        value=round(ratio, 2),
         detail=detail,
     )
 
@@ -401,7 +373,7 @@ def score_symbol(symbol: str, df: pd.DataFrame) -> ScoreResult | None:
         _evaluate_macd(close),
         _evaluate_bbands(close),
         _evaluate_ema(close, high_52w=high_52),
-        _evaluate_stoch(high, low, close),
+        _evaluate_volume(volume),
     ]
 
     score = sum(1 for ind in indicators if ind.signal)
