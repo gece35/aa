@@ -2042,6 +2042,81 @@
         showToast('Çıkış yapıldı.', 'info');
     });
 
+    // ── Hesap Paneli ─────────────────────────────────────────────────────
+    const accountPanel = document.getElementById('accountPanel');
+    const userPill = document.getElementById('userPill');
+
+    userPill?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!accountPanel) return;
+        const isHidden = accountPanel.classList.contains('hidden');
+        accountPanel.classList.toggle('hidden', !isHidden);
+        if (!isHidden) return;
+        // E-postayı güncelle
+        const panelEmail = document.getElementById('accountPanelEmail');
+        if (panelEmail && _currentUser) panelEmail.textContent = _currentUser.email;
+    });
+    // Panel dışına tıklayınca kapat
+    document.addEventListener('click', (e) => {
+        if (accountPanel && !accountPanel.contains(e.target) && e.target !== userPill) {
+            accountPanel.classList.add('hidden');
+        }
+    });
+
+    // Veri indirme (KVKK export)
+    document.getElementById('exportDataBtn')?.addEventListener('click', async () => {
+        accountPanel?.classList.add('hidden');
+        try {
+            const r = await fetch('/api/auth/export');
+            if (!r.ok) { showToast('Veriler alınamadı.', 'error'); return; }
+            const data = await r.json();
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = 'nebula_verilerim.json'; a.click();
+            URL.revokeObjectURL(url);
+            showToast('Verileriniz indirildi.', 'success');
+        } catch { showToast('İndirme başarısız.', 'error'); }
+    });
+
+    // Hesap silme
+    const confirmDeleteModal = document.getElementById('confirmDeleteModal');
+    document.getElementById('deleteAccountBtn')?.addEventListener('click', () => {
+        accountPanel?.classList.add('hidden');
+        confirmDeleteModal?.classList.remove('hidden');
+        const errEl = document.getElementById('confirmDeleteError');
+        if (errEl) errEl.style.display = 'none';
+    });
+    document.getElementById('confirmDeleteCancel')?.addEventListener('click', () => {
+        confirmDeleteModal?.classList.add('hidden');
+    });
+    document.getElementById('confirmDeleteBackdrop')?.addEventListener('click', () => {
+        confirmDeleteModal?.classList.add('hidden');
+    });
+    document.getElementById('confirmDeleteOk')?.addEventListener('click', async () => {
+        const btn = document.getElementById('confirmDeleteOk');
+        const errEl = document.getElementById('confirmDeleteError');
+        btn.disabled = true;
+        btn.textContent = 'Siliniyor...';
+        try {
+            const r = await fetch('/api/auth/me', { method: 'DELETE' });
+            if (r.ok) {
+                confirmDeleteModal?.classList.add('hidden');
+                applyUserState(null);
+                port.positions = [];
+                state.watchlist = new Set();
+                showToast('Hesabınız silindi. Görüşmek üzere.', 'info');
+            } else {
+                const d = await r.json().catch(() => ({}));
+                if (errEl) { errEl.textContent = d.error || 'Bir hata oluştu.'; errEl.style.display = 'block'; }
+                btn.disabled = false; btn.textContent = 'Evet, Hesabımı Sil';
+            }
+        } catch {
+            if (errEl) { errEl.textContent = 'Bağlantı hatası.'; errEl.style.display = 'block'; }
+            btn.disabled = false; btn.textContent = 'Evet, Hesabımı Sil';
+        }
+    });
+
     // ── Pricing modal ────────────────────────────────────────────────────
     const pricingModal = document.getElementById('pricingModal');
     function openPricingModal() { pricingModal.classList.remove('hidden'); }

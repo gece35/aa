@@ -66,6 +66,21 @@
                 <div class="user-pill" id="userPill">
                     <span id="userEmail" class="user-email"></span>
                 </div>
+                <!-- Hesap paneli (user-pill tıklanınca açılır) -->
+                <div id="accountPanel" class="account-panel hidden">
+                    <div class="account-panel-email">
+                        <strong>Hesabım</strong>
+                        <span id="accountPanelEmail"></span>
+                    </div>
+                    <div class="account-panel-actions">
+                        <button id="exportDataBtn" class="account-panel-btn">
+                            &#x2193; Verilerimi İndir (KVKK)
+                        </button>
+                        <button id="deleteAccountBtn" class="account-panel-btn danger">
+                            &#x1F5D1; Hesabımı Sil
+                        </button>
+                    </div>
+                </div>
                 <button id="logoutBtn" class="btn btn-ghost">Çıkış</button>
             </div>
             <button id="refreshBtn" class="btn btn-ghost" title="Zorla yenile">
@@ -273,6 +288,20 @@
                 <p style="text-align:center;margin-top:12px;font-size:13px;">
                     <a href="#" id="backToLoginLink" style="color:var(--accent);">&larr; Giriş'e dön</a>
                 </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hesap silme onay modalı -->
+    <div id="confirmDeleteModal" class="modal hidden" role="dialog">
+        <div class="modal-backdrop" id="confirmDeleteBackdrop"></div>
+        <div class="modal-card glass confirm-modal-card">
+            <h3>Hesabı Sil</h3>
+            <p>Tüm verileriniz (favoriler, portföy, alarmlar) kalıcı olarak silinecek. Bu işlem <strong>geri alınamaz.</strong></p>
+            <div id="confirmDeleteError" style="color:var(--danger);font-size:13px;display:none;margin-bottom:12px;"></div>
+            <div class="confirm-modal-btns">
+                <button id="confirmDeleteCancel" class="btn btn-ghost">Vazgeç</button>
+                <button id="confirmDeleteOk" class="btn" style="background:var(--danger);color:#fff;border-color:var(--danger);">Evet, Hesabımı Sil</button>
             </div>
         </div>
     </div>

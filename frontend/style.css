@@ -1502,6 +1502,110 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
     .support-fab { bottom: 16px; right: 16px; }
 }
 
+/* ── Hesap Paneli (user-pill dropdown) ───────────────────────────────── */
+.user-area { position: relative; }
+.user-pill { cursor: pointer; user-select: none; }
+.user-pill:hover { border-color: var(--glass-brd); }
+
+.account-panel {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 260px;
+    background: var(--bg-1);
+    border: 1px solid var(--glass-brd);
+    border-radius: var(--radius-m);
+    box-shadow: 0 8px 32px rgba(0,0,0,.45);
+    padding: 16px;
+    z-index: 500;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.account-panel.hidden { display: none; }
+.account-panel-email {
+    font-size: 13px;
+    color: var(--text-2);
+    word-break: break-all;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--glass-brd-soft);
+}
+.account-panel-email strong { display: block; color: var(--text-1); margin-bottom: 2px; font-size: 14px; }
+.account-panel-actions { display: flex; flex-direction: column; gap: 6px; }
+.account-panel-btn {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%; padding: 9px 12px;
+    background: transparent;
+    border: 1px solid var(--glass-brd-soft);
+    border-radius: var(--radius-s);
+    color: var(--text-2);
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    text-align: left;
+    transition: background var(--trans), color var(--trans);
+}
+.account-panel-btn:hover { background: var(--glass-bg); color: var(--text-1); }
+.account-panel-btn.danger { color: var(--danger); border-color: rgba(220,38,38,.25); }
+.account-panel-btn.danger:hover { background: rgba(220,38,38,.1); color: var(--danger); }
+
+/* Onay modalı */
+.confirm-modal-card { max-width: 380px; width: 95%; padding: 28px; }
+.confirm-modal-card h3 { margin: 0 0 12px; font-size: 18px; }
+.confirm-modal-card p { font-size: 14px; color: var(--text-2); line-height: 1.6; margin: 0 0 20px; }
+.confirm-modal-btns { display: flex; gap: 10px; justify-content: flex-end; }
+
+/* ── Gelişmiş Mobil (≤600px) ─────────────────────────────────────────── */
+@media (max-width: 600px) {
+    /* Header: meta kartları gizle, kompakt layout */
+    .meta-card { display: none; }
+    .header { padding: 14px 16px; gap: 12px; margin-top: 12px; margin-bottom: 12px; }
+    .brand-text p { display: none; }
+    .brand-text h1 { font-size: 20px; }
+    .logo { width: 36px; height: 36px; }
+    .header-meta { gap: 8px; }
+    .btn-ghost, .btn-primary { padding: 7px 12px; font-size: 13px; }
+    .user-email { max-width: 110px; }
+
+    /* Market switcher: daha kompakt */
+    .market-switcher { padding: 12px 16px; gap: 10px; margin-bottom: 16px; }
+    .ms-title { display: none; }
+    .market-btn { padding: 10px 16px; font-size: 13px; }
+
+    /* Tab bar: büyük dokunmatik hedef */
+    .tab-bar { margin-left: 16px; gap: 4px; }
+    .tab-btn { padding: 10px 18px; font-size: 13px; min-height: 42px; }
+
+    /* Filtreler: chip grubu yatay kaydırılabilir */
+    .filters { padding: 10px 14px; gap: 10px; }
+    .chip-group {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        padding-bottom: 2px;
+    }
+    .chip-group::-webkit-scrollbar { display: none; }
+    .chip { white-space: nowrap; flex-shrink: 0; }
+    .filters input[type="search"] { min-width: 0; flex: 1 1 100%; }
+    .sort-wrap { width: 100%; }
+    .sort-select { width: 100%; }
+
+    /* Özet istatistikler: 2 sütun */
+    .summary-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 12px; }
+    .summary { padding: 12px 14px; }
+    .summary .s-value { font-size: 22px; }
+
+    /* Portföy: daha sıkı padding */
+    .port-card { padding: 0; }
+    .port-overview { padding: 14px 16px; gap: 12px; }
+
+    /* Hesap paneli: tam genişlik ekrana yapışık */
+    .account-panel { position: fixed; top: auto; bottom: 0; right: 0; left: 0; width: 100%;
+        border-radius: var(--radius-m) var(--radius-m) 0 0;
+        border-bottom: none; padding: 20px 20px 32px; }
+}
+
 /* ── Reklam Slotları (yalnızca misafir kullanıcılara gösterilir) ──────── */
 .ad-slot {
     background: var(--bg-1, #1e293b);
