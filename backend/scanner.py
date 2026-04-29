@@ -63,7 +63,7 @@ def scan_market(market: str, force: bool = False, max_tickers: int = None) -> di
         tickers = tickers[:max_tickers]
 
     started = time.time()
-    data = download_ohlcv(tickers, period="200d", interval="1d")
+    data = download_ohlcv(tickers, period="300d", interval="1d")
     download_secs = time.time() - started
 
     compute_started = time.time()
@@ -166,7 +166,7 @@ def scan_market_chunk(market: str, offset: int, limit: int, force: bool = False,
 
     if missing:
         started = time.time()
-        data = download_ohlcv(missing, period="200d", interval="1d")
+        data = download_ohlcv(missing, period="300d", interval="1d")
         download_secs = time.time() - started
 
         compute_started = time.time()

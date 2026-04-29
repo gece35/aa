@@ -276,7 +276,7 @@
         els.statScored.textContent = m.results.length || '-';
         const avg = m.results.length ? (m.results.reduce((s, r) => s + r.score, 0) / m.results.length) : 0;
         els.statAvg.textContent = avg ? avg.toFixed(2) : '-';
-        els.statPerfect.textContent = m.results.filter((r) => r.score >= 5).length;
+        els.statPerfect.textContent = m.results.filter((r) => r.score >= 9).length;
     }
 
     function updateMeta() {
@@ -435,7 +435,7 @@
             : '';
         const reason = buildScoreReason(r);
 
-        const chartBtnHtml = r.score >= 4
+        const chartBtnHtml = r.score >= 7
             ? `<button class="scan-chart-btn btn btn-sm" data-sym="${r.symbol}" title="Candlestick grafik ve formasyon analizi">&#128202; Grafik</button>`
             : '';
 
@@ -456,11 +456,16 @@
                 <div class="change ${changeClass}">${fmtChange(change)}</div>
             </div>
             <div class="indicators">
-                ${r.indicators.map((ind) => `<span class="badge ${ind.signal ? 'on' : ''}" title="${escapeAttr(ind.detail || '')}">${ind.name}</span>`).join('')}
+                ${r.indicators.map((ind) => {
+                    const cls = ind.score > 0 ? 'on' : (ind.score < 0 ? 'penalty' : '');
+                    const sign = ind.score > 0 ? '+' : '';
+                    const scoreLabel = ind.max_score > 0 ? ` ${sign}${ind.score}` : '';
+                    return `<span class="badge ${cls}" title="${escapeAttr(ind.detail || '')}">${ind.name}${scoreLabel}</span>`;
+                }).join('')}
                 ${spikeBadge}${nearPeakBadge}
             </div>
             <div class="score-chip" data-score="${r.score}">
-                <span class="star">&#9733;</span> ${r.score}/5
+                <span class="star">&#9733;</span> ${r.score}/10
             </div>
             ${reason ? `<div class="score-reason">${escapeHtml(reason)}</div>` : ''}
             ${chartBtnHtml}
@@ -502,23 +507,32 @@
         const byKey = {};
         r.indicators.forEach((ind) => { byKey[ind.key] = ind; });
 
+        const trend = byKey['trend'];
+        const momentum = byKey['momentum'];
         const rsi = byKey['rsi'];
-        const macd = byKey['macd'];
         const bbands = byKey['bbands'];
-        const ema = byKey['ema50'];
-        const stoch = byKey['stoch'];
 
-        if (rsi && rsi.signal) {
+        if (trend && trend.score === 3) parts.push('güçlü EMA dizilimi (20>50>200)');
+        else if (trend && trend.score === 2) parts.push('fiyat EMA50 ve EMA200 üzerinde');
+
+        if (momentum && momentum.score === 3) parts.push('MACD dipten taze dönüş');
+        else if (momentum && momentum.score === 2) parts.push('MACD pozitif, histogram artıyor');
+
+        if (rsi && rsi.score === 2) {
             const v = rsi.value != null ? ` (${rsi.value})` : '';
-            if (rsi.detail && rsi.detail.includes('30')) parts.push(`RSI${v} asiri satim bolgesinden cikis`);
-            else parts.push(`RSI${v} yukselis sinyali verdi`);
+            parts.push(`RSI${v} aşırı satımdan çıkış`);
+        } else if (rsi && rsi.score === 1) {
+            const v = rsi.value != null ? ` (${rsi.value})` : '';
+            parts.push(`RSI${v} pozitif eğim`);
+        } else if (rsi && rsi.score === -1) {
+            parts.push('dikkat: RSI aşırı alım bölgesinde');
         }
-        if (macd && macd.signal) parts.push('MACD alim sinyali verdi');
-        if (bbands && bbands.signal) parts.push('Bollinger alt bandından donus');
-        if (ema && ema.signal) parts.push('fiyat EMA50 uzerinde');
-        if (stoch && stoch.signal) parts.push('Stokastik al sinyali olustu');
-        if (r.volume_spike) parts.push('hacim patlamasi var');
-        if (r.near_peak) parts.push('dikkat: zirveye yakin');
+
+        if (bbands && bbands.score === 2) parts.push('Bollinger alt banttan yeşil dönüş');
+        else if (bbands && bbands.score === 1) parts.push('orta band yukarı kırılım');
+
+        if (r.volume_spike) parts.push('hacim ortalamanın üzerinde');
+        if (r.near_peak) parts.push('dikkat: zirveye yakın');
 
         if (!parts.length) return r.score === 0 ? 'Aktif teknik sinyal bulunmuyor.' : '';
         const sentence = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
@@ -737,7 +751,7 @@
                 <button id="modalStar" class="star-toggle ${isWatched ? 'active' : ''}" style="position:static;font-size:22px;" title="Favorilere ekle">&#9733;</button>
                 <div style="margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                     ${spikeHtml}${nearPeakHtml}
-                    <div class="score-chip" data-score="${d.score}"><span class="star">&#9733;</span> ${d.score}/5</div>
+                    <div class="score-chip" data-score="${d.score}"><span class="star">&#9733;</span> ${d.score}/10</div>
                 </div>
             </div>
             ${reason ? `<div style="margin-top:12px;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,.03);border:1px solid var(--glass-brd-soft);font-size:13px;color:var(--text-2);line-height:1.6;">${escapeHtml(reason)}</div>` : ''}
@@ -752,14 +766,21 @@
             ${slTpHtml}
             ${srHtml}
             <div style="margin-top:18px;">
-                ${d.indicators.map((ind) => `
+                ${d.indicators.map((ind) => {
+                    const cls = ind.score > 0 ? 'on' : (ind.score < 0 ? 'penalty' : '');
+                    const sign = ind.score > 0 ? '+' : '';
+                    const scoreLabel = ind.max_score > 0
+                        ? `${sign}${ind.score} / ${ind.max_score}`
+                        : (ind.score < 0 ? `${ind.score}` : '—');
+                    return `
                     <div class="detail-ind">
                         <div class="di-head">
                             <span class="di-name">${ind.name} ${ind.value != null ? `<span style="color:var(--text-3);font-weight:500">(${ind.value})</span>` : ''}</span>
-                            <span class="badge ${ind.signal ? 'on' : ''}">${ind.signal ? 'AL' : '-'}</span>
+                            <span class="badge ${cls}">${scoreLabel}</span>
                         </div>
                         <div class="di-reason">${ind.detail || ''}</div>
-                    </div>`).join('')}
+                    </div>`;
+                }).join('')}
             </div>
             <div style="margin-top:22px;">
                 <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--text-3);margin-bottom:10px;">Son Haberler</div>
@@ -1025,7 +1046,7 @@
             if (weekPct < -5) reasons.push(`Bu hafta %${Math.abs(weekPct).toFixed(1)} düşüş`);
             return { level: 'sat_hemen', label: 'Yüksek Risk', reasons };
         }
-        if (pnlPct < -15 && score <= 1 && trend === 'down') {
+        if (pnlPct < -15 && score <= 2 && trend === 'down') {
             reasons.push(`%${Math.abs(pnlPct).toFixed(1)} zarar, trend sağlığı zayıf`);
             reasons.push('Düşüş trendi devam ediyor');
             return { level: 'sat_hemen', label: 'Yüksek Risk', reasons };
@@ -1042,7 +1063,7 @@
             reasons.push('Direnç seviyesi yakınında');
             return { level: 'kar_al', label: 'Direnç Bölgesinde', reasons };
         }
-        if (pnlPct > 30 && score <= 1) {
+        if (pnlPct > 30 && score <= 3) {
             reasons.push(`%${pnlPct.toFixed(1)} kar mevcut`);
             reasons.push('Trend sağlığı zayıfladı');
             return { level: 'kar_al', label: 'Direnç Bölgesinde', reasons };
@@ -1055,26 +1076,26 @@
             reasons.push(`%${Math.abs(pnlPct).toFixed(1)} zararda ve düşüş trendi`);
             bearish += 2;
         }
-        if (score <= 1 && weekPct < -3) { reasons.push(`${score}/5 sağlık, haftalık %${weekPct.toFixed(1)}`); bearish++; }
-        if (pnlPct > 18 && score === 0) { reasons.push(`%${pnlPct.toFixed(1)} kar var ama trend bozuldu`); bearish += 2; }
-        if (wedge === 'rising' && score <= 2) { reasons.push('Yükselen kama kırılım riski'); bearish++; }
-        if (trend === 'down' && score <= 1 && pnlPct < 0) { reasons.push('Düşüş trendi + zararda pozisyon'); bearish++; }
+        if (score <= 3 && weekPct < -3) { reasons.push(`${score}/10 sağlık, haftalık %${weekPct.toFixed(1)}`); bearish++; }
+        if (pnlPct > 18 && score <= 1) { reasons.push(`%${pnlPct.toFixed(1)} kar var ama trend bozuldu`); bearish += 2; }
+        if (wedge === 'rising' && score <= 4) { reasons.push('Yükselen kama kırılım riski'); bearish++; }
+        if (trend === 'down' && score <= 2 && pnlPct < 0) { reasons.push('Düşüş trendi + zararda pozisyon'); bearish++; }
         if (bearish >= 2) return { level: 'sat_dusun', label: 'Zayıflama Sinyalleri', reasons: reasons.slice(0, 3) };
 
         // ── Trend Sağlıklı ────────────────────────────────────────────────
         let bullish = 0;
         const bullReasons = [];
-        if (score >= 4) { bullReasons.push(`${score}/5 güçlü trend sağlığı`); bullish += 2; }
-        else if (score === 3) { bullReasons.push('3/5 sağlıklı trend seviyesi'); bullish++; }
+        if (score >= 8) { bullReasons.push(`${score}/10 güçlü trend sağlığı`); bullish += 2; }
+        else if (score >= 6) { bullReasons.push(`${score}/10 sağlıklı trend seviyesi`); bullish++; }
         if (trend === 'up') { bullReasons.push('Yukarı trend devam ediyor'); bullish++; }
         if (d.volume_spike) { bullReasons.push('Hacim ortalamanın üzerinde'); bullish++; }
         if (wedge === 'falling') { bullReasons.push('Düşen kama — yukarı kırılım potansiyeli'); bullish++; }
-        if (weekPct > 3 && score >= 2) { bullReasons.push(`Haftalık +%${weekPct.toFixed(1)} pozitif ivme`); bullish++; }
+        if (weekPct > 3 && score >= 4) { bullReasons.push(`Haftalık +%${weekPct.toFixed(1)} pozitif ivme`); bullish++; }
         if (bullish >= 3) return { level: 'tut', label: 'Trend Sağlıklı', reasons: bullReasons.slice(0, 3) };
 
         // ── İzlemede ──────────────────────────────────────────────────────
         const watchReasons = [];
-        if (score >= 2) watchReasons.push(`${score}/5 sağlık, gelişim bekleniyor`);
+        if (score >= 4) watchReasons.push(`${score}/10 sağlık, gelişim bekleniyor`);
         if (Math.abs(weekPct) <= 2) watchReasons.push('Yatay seyir, net yön bekleniyor');
         else if (weekPct > 0) watchReasons.push(`Haftalık +%${weekPct.toFixed(1)} pozitif seyir`);
         if (wedge) watchReasons.push(wedge === 'rising' ? 'Yükselen kama: kırılımı izle' : 'Düşen kama: yukarı kırılım beklentisi');
@@ -1232,7 +1253,7 @@
                         ${sl ? `<span class="port-level port-sl">SL: ${fmtPortPrice(sl, pos.market)}</span>` : ''}
                         ${tp ? `<span class="port-level port-tp">TP: ${fmtPortPrice(tp, pos.market)}</span>` : ''}
                         ${rr ? `<span class="port-level port-rr">R/R 1:${rr}</span>` : ''}
-                        <span class="port-level port-score">${d.score}/5 sağlık</span>
+                        <span class="port-level port-score">${d.score}/10 sağlık</span>
                     </div>
                     <div class="port-rec ${recClass}">
                         <span class="rec-badge">${escapeHtml(rec.label)}</span>
@@ -1388,7 +1409,7 @@
                     <div class="chart-sym-row">
                         <span class="chart-sym">${displaySym}</span>
                         <span class="chart-market-badge">${market.toUpperCase()}</span>
-                        ${d && d.score != null ? `<span class="score-chip" data-score="${d.score}" style="font-size:12px;padding:3px 10px;"><span class="star">&#9733;</span> ${d.score}/5</span>` : ''}
+                        ${d && d.score != null ? `<span class="score-chip" data-score="${d.score}" style="font-size:12px;padding:3px 10px;"><span class="star">&#9733;</span> ${d.score}/10</span>` : ''}
                     </div>
                     ${contextHtml}
                 </div>
