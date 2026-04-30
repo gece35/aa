@@ -144,21 +144,21 @@ def _check_single(alert: Alert, detail: Dict) -> bool:
         return v is not None and cv is not None and v > cv
 
     if ct == "macd_cross_up":
-        return ind_sig("macd")
+        return ind_sig("momentum")
 
     if ct == "macd_cross_down":
-        v = ind_val("macd")
+        v = ind_val("momentum")
         return v is not None and v < 0
 
     if ct == "bb_lower_touch":
         return ind_sig("bbands")
 
     if ct == "bb_upper_touch":
-        v = ind_val("bbands")
-        return v is not None and v > 0.95
+        bbands_ind = indicators.get("bbands", {})
+        return "ust band" in bbands_ind.get("detail", "")
 
     if ct == "ema_cross_up":
-        return ind_sig("ema50")
+        return ind_sig("trend")
 
     if ct == "score_above":
         score = detail.get("score")
