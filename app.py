@@ -10,13 +10,11 @@ Varsayilan olarak http://127.0.0.1:5000 uzerinde calisir.
 
 from __future__ import annotations
 
-import csv
-import io
 import logging
 import os
 import time
 
-from flask import Flask, Response, jsonify, request, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 from flask_login import LoginManager, current_user, login_required
 
@@ -477,25 +475,6 @@ def create_app() -> Flask:
         db.session.delete(p)
         db.session.commit()
         return jsonify({"ok": True})
-
-    @flask_app.route("/api/portfolio/export.csv")
-    @login_required
-    def portfolio_export_csv():
-        def _tr(val):
-            """Ondalık sayıyı Türkçe formatına çevir (nokta → virgül)."""
-            return str(val).replace(".", ",") if val is not None else ""
-
-        buf = io.StringIO()
-        buf.write("﻿")  # UTF-8 BOM — Excel Türkçe locale için gerekli
-        writer = csv.writer(buf, delimiter=";")
-        writer.writerow(["Sembol", "Adet", "Ort. Maliyet (TL/USD)", "Para Birimi"])
-        for p in current_user.portfolio:
-            writer.writerow([p.symbol, _tr(p.qty), _tr(p.avg_price), p.currency])
-        return Response(
-            buf.getvalue(),
-            mimetype="text/csv; charset=utf-8-sig",
-            headers={"Content-Disposition": "attachment; filename=portfolyo.csv"},
-        )
 
     return flask_app
 
