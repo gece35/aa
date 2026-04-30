@@ -127,6 +127,10 @@ def create_app() -> Flask:
         fname = request.path.lstrip("/")
         return send_from_directory(FRONTEND_DIR, fname)
 
+    @flask_app.route("/rehber")
+    def rehber_page():
+        return send_from_directory(FRONTEND_DIR, "rehber.html")
+
     @flask_app.route("/legal/<path:slug>")
     def legal_page(slug):
         safe = slug.replace("..", "").strip("/")
