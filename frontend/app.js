@@ -1186,7 +1186,10 @@
                     <span class="s-value">${port.positions.length}</span>
                 </div>
             </div>
-            ${currencyToggleHtml}`;
+            ${currencyToggleHtml}
+            ${_currentUser ? `<div class="port-export-row">
+                <a href="/api/portfolio/export.csv" class="port-export-link" download>⬇ CSV İndir</a>
+            </div>` : ''}`;
 
         overview.querySelectorAll('.port-ccy-btn').forEach(btn => {
             btn.addEventListener('click', () => {

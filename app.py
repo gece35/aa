@@ -10,11 +10,13 @@ Varsayilan olarak http://127.0.0.1:5000 uzerinde calisir.
 
 from __future__ import annotations
 
+import csv
+import io
 import logging
 import os
 import time
 
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, Response, jsonify, request, send_from_directory
 from flask_cors import CORS
 from flask_login import LoginManager, current_user, login_required
 
@@ -475,6 +477,20 @@ def create_app() -> Flask:
         db.session.delete(p)
         db.session.commit()
         return jsonify({"ok": True})
+
+    @flask_app.route("/api/portfolio/export.csv")
+    @login_required
+    def portfolio_export_csv():
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(["Sembol", "Adet", "Ort. Maliyet", "Para Birimi"])
+        for p in current_user.portfolio:
+            writer.writerow([p.symbol, p.qty, p.avg_price, p.currency])
+        return Response(
+            buf.getvalue(),
+            mimetype="text/csv; charset=utf-8",
+            headers={"Content-Disposition": "attachment; filename=portfolyo.csv"},
+        )
 
     return flask_app
 
