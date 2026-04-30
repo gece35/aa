@@ -225,7 +225,16 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
 }
 .sort-select option { background: #10122a; color: var(--text-1); }
 
-.chip-group { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip-group { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.chip-help-link {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: 50%;
+    background: rgba(91,141,239,.1); border: 1px solid rgba(91,141,239,.25);
+    color: #93c5fd; font-size: 13px; font-weight: 700;
+    text-decoration: none; flex-shrink: 0;
+    transition: all var(--trans);
+}
+.chip-help-link:hover { background: rgba(91,141,239,.2); border-color: rgba(91,141,239,.45); }
 .chip-star.active {
     background: rgba(255, 209, 102, 0.18);
     color: #ffd166;

@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Kullanım Rehberi — Nebula Scanner</title>
+<meta name="description" content="Nebula Scanner puan sistemi nasıl çalışır? Hangi skor aralığı ne anlama gelir? Göstergeler ve kullanım kılavuzu." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="legal/legal.css" />
+<style>
+  .hero { margin-bottom: 48px; }
+  .hero-tag {
+    display: inline-block;
+    background: rgba(91,141,239,.12);
+    border: 1px solid rgba(91,141,239,.25);
+    color: #93c5fd;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 20px;
+    margin-bottom: 16px;
+  }
+  .hero p { font-size: 16px; color: #8b949e; max-width: 560px; }
+
+  /* Score band cards */
+  .band-grid {
+    display: grid;
+    gap: 12px;
+    margin: 24px 0 40px;
+  }
+  .band-card {
+    border-radius: 12px;
+    padding: 20px 24px;
+    border: 1px solid;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0 20px;
+    align-items: start;
+  }
+  .band-score {
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1;
+    grid-row: span 2;
+    align-self: center;
+  }
+  .band-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+  .band-desc { font-size: 14px; line-height: 1.55; margin: 0; }
+  .band-profile {
+    grid-column: 2;
+    font-size: 12px;
+    font-weight: 500;
+    margin-top: 10px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    display: inline-block;
+    width: fit-content;
+  }
+
+  /* Green — 8-10 */
+  .band-green {
+    background: rgba(34,197,94,.08);
+    border-color: rgba(34,197,94,.3);
+  }
+  .band-green .band-score { color: #86efac; }
+  .band-green .band-title { color: #86efac; }
+  .band-green .band-profile { background: rgba(34,197,94,.12); color: #86efac; }
+
+  /* Blue — 6-7 */
+  .band-blue {
+    background: rgba(59,130,246,.08);
+    border-color: rgba(59,130,246,.3);
+  }
+  .band-blue .band-score { color: #93c5fd; }
+  .band-blue .band-title { color: #93c5fd; }
+  .band-blue .band-profile { background: rgba(59,130,246,.12); color: #93c5fd; }
+
+  /* Yellow — 4-5 */
+  .band-yellow {
+    background: rgba(245,158,11,.07);
+    border-color: rgba(245,158,11,.25);
+  }
+  .band-yellow .band-score { color: #fcd34d; }
+  .band-yellow .band-title { color: #fcd34d; }
+  .band-yellow .band-profile { background: rgba(245,158,11,.10); color: #fcd34d; }
+
+  /* Gray — 0-3 */
+  .band-gray {
+    background: rgba(110,118,129,.06);
+    border-color: rgba(110,118,129,.2);
+  }
+  .band-gray .band-score { color: #6e7681; }
+  .band-gray .band-title { color: #8b949e; }
+  .band-gray .band-profile { background: rgba(110,118,129,.10); color: #8b949e; }
+
+  /* Indicators */
+  .indicator-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 20px 0 40px;
+  }
+  @media (max-width: 600px) { .indicator-grid { grid-template-columns: 1fr; } }
+  .ind-card {
+    background: rgba(255,255,255,.03);
+    border: 1px solid #21262d;
+    border-radius: 10px;
+    padding: 18px 20px;
+  }
+  .ind-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .ind-badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(91,141,239,.15);
+    color: #93c5fd;
+    letter-spacing: .04em;
+    white-space: nowrap;
+  }
+  .ind-badge.max3 { background: rgba(34,197,94,.12); color: #86efac; }
+  .ind-badge.max2 { background: rgba(59,130,246,.12); color: #93c5fd; }
+  .ind-title { font-size: 15px; font-weight: 600; color: #e6edf3; }
+  .ind-card p { font-size: 13.5px; color: #8b949e; margin: 0 0 8px; }
+  .ind-card ul { font-size: 13px; color: #8b949e; padding-left: 16px; margin: 0; }
+  .ind-card ul li { margin-bottom: 4px; }
+
+  /* Steps */
+  .steps { list-style: none; padding: 0; margin: 20px 0 40px; counter-reset: step; }
+  .step-item {
+    counter-increment: step;
+    display: grid;
+    grid-template-columns: 36px 1fr;
+    gap: 0 16px;
+    margin-bottom: 24px;
+    align-items: start;
+  }
+  .step-num {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(91,141,239,.15);
+    border: 1px solid rgba(91,141,239,.3);
+    color: #93c5fd;
+    font-weight: 700;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .step-body {}
+  .step-body strong { color: #e6edf3; display: block; margin-bottom: 4px; font-size: 15px; }
+  .step-body p { font-size: 13.5px; color: #8b949e; margin: 0; }
+
+  /* Comparison table */
+  .strategy-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+    margin: 16px 0 32px;
+  }
+  .strategy-table th {
+    text-align: left;
+    padding: 10px 14px;
+    color: #6e7681;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    border-bottom: 1px solid #21262d;
+  }
+  .strategy-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid #161b22;
+    color: #c9d1d9;
+    vertical-align: top;
+  }
+  .strategy-table tr:last-child td { border-bottom: none; }
+  .tag-blue { color: #93c5fd; font-weight: 600; }
+  .tag-green { color: #86efac; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="page">
+  <a class="back-link" href="/">&larr; Ana Sayfa</a>
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-tag">Kullanım Rehberi</div>
+    <h1>Puan Sistemi Nasıl Çalışır?</h1>
+    <p class="meta">Her hisse 0-10 arasında bir trend sağlığı skoru alır. Bu sayfa skorun ne anlama geldiğini ve nasıl yorumlanabileceğini açıklar.</p>
+    <p>Nebula Scanner dört teknik göstergeyi birleştirerek bir hissenin mevcut trend gücünü ölçer. Skor, "şu an giriş sinyali var mı?" değil, <strong>"bu trendin sağlığı ne durumda?"</strong> sorusuna yanıt verir.</p>
+  </div>
+
+  <div class="warning-box">
+    <strong>Yasal Uyarı:</strong> Bu sayfadaki bilgiler yalnızca eğitim amaçlıdır. Sunulan içerik yatırım tavsiyesi, alım-satım önerisi veya finansal danışmanlık hizmeti niteliğinde değildir. Yatırım kararlarınız için SPK lisanslı bir aracı kuruma başvurunuz.
+  </div>
+
+  <!-- Band cards -->
+  <h2>Skor Bantları</h2>
+  <p>Her bant farklı bir trend durumunu temsil eder:</p>
+
+  <div class="band-grid">
+    <div class="band-card band-green">
+      <div class="band-score">8–10</div>
+      <div class="band-title">Güçlü Trend</div>
+      <p class="band-desc">Dört göstergenin büyük çoğunluğu pozitif. Fiyat kısa ve orta vadeli ortalamaların üzerinde, momentum aktif, RSI sağlıklı aralıkta, Bollinger bant içinde. Trend devam ettikçe skor bu bölgede kalmaya eğilimlidir.</p>
+      <div class="band-profile">Trend takipçisi profil — onaylı hareket</div>
+    </div>
+
+    <div class="band-card band-blue">
+      <div class="band-score">6–7</div>
+      <div class="band-title">Momentum Geliyor</div>
+      <p class="band-desc">Göstergelerin önemli bir kısmı pozitife dönmüş, ancak tüm teyitler henüz tamamlanmamış. Trend henüz olgunlaşmadan, görece daha erken bir noktada yakalanmış olabilir. Bu durum potansiyel olarak daha fazla hareket alanı sunar; ancak teyidin eksikliği nedeniyle daha sıkı risk yönetimi gerektirir.</p>
+      <div class="band-profile">Erken hareket profili — sıkı stop önerilir</div>
+    </div>
+
+    <div class="band-card band-yellow">
+      <div class="band-score">4–5</div>
+      <div class="band-title">Karışık Sinyaller</div>
+      <p class="band-desc">Göstergeler ne net pozitif ne de net negatif. Bazı faktörler iyileşmeye işaret ederken diğerleri baskı altında. Yön belirsiz; trendin devamı ya da tersine dönmesi eşit derecede olası görünmektedir.</p>
+      <div class="band-profile">Yüksek belirsizlik — spekülatif</div>
+    </div>
+
+    <div class="band-card band-gray">
+      <div class="band-score">0–3</div>
+      <div class="band-title">Zayıf Trend</div>
+      <p class="band-desc">Göstergelerin çoğunluğu negatif. Fiyat ortalamaların altında, momentum aşağı yönlü ya da nötr. Bu aralıktaki hisseler genellikle aktif düşüş trendindedir ya da trend henüz oluşmamıştır.</p>
+      <div class="band-profile">İzleme listesi — bekleme</div>
+    </div>
+  </div>
+
+  <!-- Strategy comparison -->
+  <h2>İki Yaklaşım</h2>
+  <p>Skor bantları farklı risk profillerine göre iki ayrı şekilde kullanılabilir. Hangisinin "daha iyi" olduğu kişinin risk tercihine ve piyasa koşullarına göre değişir:</p>
+
+  <table class="strategy-table">
+    <thead>
+      <tr>
+        <th>Yaklaşım</th>
+        <th>Odak Bant</th>
+        <th>Avantaj</th>
+        <th>Dikkat Edilmesi Gereken</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Trend Takipçisi</strong></td>
+        <td><span class="tag-green">8–10</span></td>
+        <td>Hareket onaylı; daha az belirsizlik; portföy yönetimi görece daha basit</td>
+        <td>Başlangıç hareketini kaçırmış olma ihtimali; giriş noktası daha yukarıda olabilir</td>
+      </tr>
+      <tr>
+        <td><strong>Erken Hareket</strong></td>
+        <td><span class="tag-blue">6–7</span></td>
+        <td>Trend onaylanmadan önce daha düşük fiyat seviyesinden pozisyon mümkün; potansiyel hareket alanı daha geniş</td>
+        <td>Tüm sinyaller henüz doğrulanmamış; mutlaka stop-loss seviyesi belirlenmeli</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- Indicators -->
+  <h2>Göstergeler</h2>
+  <p>Toplam 10 puan dört göstergeye dağıtılır. Her gösterge koşula göre kısmi puan üretir; hacim yetersizse tam puan alan göstergelerden 1 puan düşülür.</p>
+
+  <div class="indicator-grid">
+    <div class="ind-card">
+      <div class="ind-header">
+        <span class="ind-badge max3">Maks +3</span>
+        <span class="ind-title">Trend / EMA</span>
+      </div>
+      <p>Fiyatın kısa, orta ve uzun vadeli üssel hareketli ortalamaların (EMA20, EMA50, EMA200) üzerinde olup olmadığını ölçer.</p>
+      <ul>
+        <li><strong>+3:</strong> Fiyat &gt; EMA20 &gt; EMA50 &gt; EMA200 — tam hizalama</li>
+        <li><strong>+2:</strong> Fiyat &gt; EMA50 ve EMA200 üzerinde</li>
+        <li><strong>+1:</strong> Fiyat yalnızca EMA50 üzerinde</li>
+        <li><strong>0:</strong> Fiyat EMA200 altında</li>
+      </ul>
+    </div>
+
+    <div class="ind-card">
+      <div class="ind-header">
+        <span class="ind-badge max3">Maks +3</span>
+        <span class="ind-title">Momentum / MACD</span>
+      </div>
+      <p>Alıcı baskısının büyüdüğünü ya da küçüldüğünü ölçen MACD göstergesi, sinyal çizgisine göre konumlanır.</p>
+      <ul>
+        <li><strong>+3:</strong> MACD sıfır altından sinyal çizgisini yukarı kesti — taze dönüş</li>
+        <li><strong>+2:</strong> MACD &gt; sinyal ve histogram büyüyor</li>
+        <li><strong>+1:</strong> MACD &gt; sinyal ama momentum azalıyor</li>
+        <li><strong>0:</strong> MACD &lt; sinyal</li>
+      </ul>
+    </div>
+
+    <div class="ind-card">
+      <div class="ind-header">
+        <span class="ind-badge max2">Maks +2</span>
+        <span class="ind-title">RSI</span>
+      </div>
+      <p>Göreceli güç endeksi, alımların aşırıya kaçıp kaçmadığını ve momentumun yönünü gösterir.</p>
+      <ul>
+        <li><strong>+2:</strong> RSI son 3 barda 30'u yukarı kesti</li>
+        <li><strong>+1:</strong> RSI 45-65 arasında ve yükseliyor</li>
+        <li><strong>0:</strong> Nötr ya da negatif</li>
+        <li><strong>-1 ceza:</strong> RSI &gt; 70 — aşırı alım bölgesi</li>
+      </ul>
+    </div>
+
+    <div class="ind-card">
+      <div class="ind-header">
+        <span class="ind-badge max2">Maks +2</span>
+        <span class="ind-title">Bollinger Bantları</span>
+      </div>
+      <p>Fiyatın volatilite bantlarına göre nerede olduğunu, dipten dönüş ya da orta banda geçiş gibi durumları takip eder.</p>
+      <ul>
+        <li><strong>+2:</strong> Alt banda değdi ve yeşil kapandı — dipten dönüş</li>
+        <li><strong>+1:</strong> Fiyat orta bandı yukarı geçti</li>
+        <li><strong>0:</strong> Fiyat üst bandın dışında ya da bant altında</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="info-box">
+    <strong>Hacim Filtresi:</strong> Herhangi bir gösterge tam puanını almışken son günün işlem hacmi 20 günlük ortalamanın altındaysa, o göstergeden 1 puan düşülür. Yeterli hacimle desteklenmeyen hareketler daha zayıf sinyaller üretir.
+  </div>
+
+  <!-- How to use -->
+  <h2>Nasıl Kullanılır?</h2>
+
+  <ol class="steps">
+    <li class="step-item">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <strong>Pazar ve Filtre Seç</strong>
+        <p>Ana ekranda BIST veya ABD pazarını seçin. Filtre çiplerinden hedef puan aralığınızı belirleyin: "≥ 6 Puan" erken momentum arayışı için, "≥ 8 Puan" onaylı trendler için kullanılabilir.</p>
+      </div>
+    </li>
+    <li class="step-item">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <strong>Hisse Detayını İncele</strong>
+        <p>Listeden bir hisseye tıklayarak gösterge detaylarını görün. Her göstergenin aldığı puan ve açıklaması gösterilir. Birden fazla göstergenin yüksek puan aldığı hisseler daha tutarlı sinyal üretir.</p>
+      </div>
+    </li>
+    <li class="step-item">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <strong>Alarm Kur</strong>
+        <p>"Alarmlar" sekmesinden bir hisse ve puan eşiği belirleyin. Hisse belirlediğiniz skora ulaştığında bildirim alırsınız; böylece sürekli tarama yapmak zorunda kalmazsınız.</p>
+      </div>
+    </li>
+    <li class="step-item">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <strong>Portföyü Takip Et</strong>
+        <p>"Portföy" sekmesine hisse ekleyerek pozisyonlarınızı izleyin. Her pozisyonun yanında canlı skor gösterilir: skor yüksek kaldığında trend devam ediyor demektir; skor düştüğünde "Zayıflama Sinyalleri" uyarısı görürsünüz.</p>
+      </div>
+    </li>
+    <li class="step-item">
+      <div class="step-num">5</div>
+      <div class="step-body">
+        <strong>Portföy Uyarılarını Yorumla</strong>
+        <p>Portföy badge'leri göstergelerin durumunu yansıtır. "Trend Sağlıklı" → skor 8+, göstergeler pozitif. "Zayıflama Sinyalleri" → skor düşmekte, göstergeler bozuluyor. "Yüksek Risk" → stop loss bölgesine yaklaşıldı veya skor 0-2. Bu etiketler yatırım tavsiyesi değil; gösterge durumunun özetidir.</p>
+      </div>
+    </li>
+  </ol>
+
+  <!-- FAQ -->
+  <h2>Sık Sorulan Sorular</h2>
+
+  <h3>Skor neden hızlı değişiyor?</h3>
+  <p>Skor, günlük kapanış fiyatlarına göre hesaplanır. Piyasa koşullarındaki hızlı değişimler göstergeleri etkileyerek skoru birkaç günde önemli ölçüde değiştirebilir. Bu nedenle tek bir güne değil, birkaç günlük trende bakmak daha sağlıklı bir değerlendirme sunar.</p>
+
+  <h3>8-10 aralığındaki her hisse "güvenli" midir?</h3>
+  <p>Hayır. Yüksek skor, teknik göstergelerin pozitif hizalandığını gösterir; ancak haber riskleri, makroekonomik değişimler ve şirket bazlı gelişmeler teknik analizin kapsamı dışındadır. Teknik skor, tek başına yeterli bir değerlendirme kriteri değildir.</p>
+
+  <h3>6-7 aralığı mı, 8-10 aralığı mı?</h3>
+  <p>İkisi de geçerlidir; fark risk tercihi ve stratejidedir. 6-7 aralığında trend henüz tam onaylanmamış olduğundan potansiyel hareket alanı daha geniş olabilir — ancak teyit eksikliği daha sıkı bir risk yönetimi gerektirir. 8-10 aralığında trend güçlü biçimde onaylanmıştır; giriş noktası görece daha yukarıda olabilir ama belirsizlik daha azdır.</p>
+
+  <h3>Veriler ne zaman güncellenir?</h3>
+  <p>Skorlar günlük kapanış verilerine dayanır ve piyasa kapandıktan sonra yenilenir. Gün içi fiyat hareketleri skora yansımaz. Tam tarama yenilemesi için ana ekranda "Yenile" butonunu kullanabilirsiniz.</p>
+
+  <footer class="legal-footer">
+    <p>Bu sayfa yalnızca eğitim amaçlıdır; yatırım tavsiyesi değildir.</p>
+    <p style="margin-top:8px">&copy; 2025 Nebula Scanner &bull; <a href="/legal/risk">Risk Uyarısı</a> &bull; <a href="/legal/kosullar">Kullanım Koşulları</a> &bull; <a href="/">Ana Sayfa</a></p>
+  </footer>
+</div>
+</body>
+</html>
