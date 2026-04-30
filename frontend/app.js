@@ -1074,7 +1074,7 @@
 
         // ── Zayıflama Sinyalleri ──────────────────────────────────────────
         let bearish = 0;
-        if (sl && price < sl * 1.035) { reasons.push("Stop loss'a %3'ten az mesafe kaldı"); bearish += 2; }
+        if (sl && price < sl * 1.035 && pnlPct < -2) { reasons.push("Stop loss'a %3'ten az mesafe kaldı"); bearish += 2; }
         if (pnlPct < -10 && trend === 'down') {
             reasons.push(`%${Math.abs(pnlPct).toFixed(1)} zararda ve düşüş trendi`);
             bearish += 2;
@@ -1083,7 +1083,8 @@
         if (pnlPct > 18 && score <= 1) { reasons.push(`%${pnlPct.toFixed(1)} kar var ama trend bozuldu`); bearish += 2; }
         if (wedge === 'rising' && score <= 4) { reasons.push('Yükselen kama kırılım riski'); bearish++; }
         if (trend === 'down' && score <= 2 && pnlPct < 0) { reasons.push('Düşüş trendi + zararda pozisyon'); bearish++; }
-        if (bearish >= 2) return { level: 'sat_dusun', label: 'Zayıflama Sinyalleri', reasons: reasons.slice(0, 3) };
+        const bearishThreshold = score >= 6 ? 3 : 2;
+        if (bearish >= bearishThreshold) return { level: 'sat_dusun', label: 'Zayıflama Sinyalleri', reasons: reasons.slice(0, 3) };
 
         // ── Trend Sağlıklı ────────────────────────────────────────────────
         let bullish = 0;
