@@ -22,6 +22,7 @@
     };
 
     const WATCHLIST_KEY = 'nebula.watchlist.v1';
+    const MARKET_KEY = 'nebula.market.v1';
     const BATCH_SIZE = 30;
     const IDLE_PREFETCH_MS = 1500;
 
@@ -40,7 +41,7 @@
     }
 
     const state = {
-        market: 'bist',
+        market: localStorage.getItem(MARKET_KEY) || 'bist',
         currency: 'TRY',
         minScore: 0,
         onlyWatched: false,
@@ -179,6 +180,7 @@
                 state.market = m.code;
                 state.currency = m.currency;
                 state.showUsd = false;
+                try { localStorage.setItem(MARKET_KEY, m.code); } catch (_) {}
                 updateCurrencyToggle();
                 if (m.code === 'bist') fetchExchangeRate();
                 loadScan();
@@ -977,6 +979,7 @@
     }
 
     async function removePosition(id) {
+        if (!confirm('Bu pozisyonu portföyden kaldırmak istiyor musunuz?')) return;
         port.positions = port.positions.filter(p => p.id !== id);
         if (_currentUser) {
             API.portfolioRemove(id).catch(() => {});

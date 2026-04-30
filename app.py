@@ -19,8 +19,8 @@ from flask_cors import CORS
 from flask_login import LoginManager, current_user, login_required
 
 from backend.alerts import (
-    CONDITION_LABELS, count_active_alerts, create_alert, delete_alert,
-    dismiss_alert, get_triggered, list_alerts,
+    CONDITION_LABELS, check_alerts_for_user, count_active_alerts, create_alert,
+    delete_alert, dismiss_alert, get_triggered, list_alerts,
 )
 from backend.auth import admin_required, auth_bp
 from backend.billing import billing_bp
@@ -378,6 +378,21 @@ def create_app() -> Flask:
     @flask_app.route("/api/alerts/triggered", methods=["GET"])
     @login_required
     def api_alerts_triggered():
+        def _fetcher(symbol: str) -> dict:
+            cache_key = f"stock:{symbol}"
+            cached = stock_cache.get(cache_key)
+            if cached:
+                return cached
+            data = download_ohlcv([symbol], period="200d", interval="1d")
+            df = data.get(symbol)
+            if df is None or df.empty:
+                return {}
+            return score_symbol_detailed(symbol, df) or {}
+
+        try:
+            check_alerts_for_user(current_user.id, _fetcher)
+        except Exception:
+            logger.exception("Alarm kontrol hatası user=%s", current_user.id)
         return jsonify({"triggered": get_triggered(current_user.id)})
 
     @flask_app.route("/api/alerts/conditions", methods=["GET"])
