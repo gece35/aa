@@ -26,7 +26,7 @@ from .tickers import get_tickers
 logger = logging.getLogger(__name__)
 
 # ── Strateji sabitleri ────────────────────────────────────────────────────────
-MIN_SCORE      = 7
+MIN_SCORE      = 8
 SL_PCT         = 0.05   # %5 stop-loss
 TP_PCT         = 0.10   # %10 take-profit
 MAX_HOLD_DAYS  = 45
@@ -161,7 +161,8 @@ def _simulate(symbol: str, df: pd.DataFrame, regime: Optional[pd.Series]) -> Lis
         score = int(scores.iloc[i])
 
         if not in_pos:
-            if score >= MIN_SCORE and bool(regime_aligned.iloc[i]):
+            prev_score = int(scores.iloc[i - 1]) if i > 0 else 0
+            if score >= MIN_SCORE and prev_score >= MIN_SCORE and bool(regime_aligned.iloc[i]):
                 next_open = float(open_.iloc[i + 1])
                 if next_open <= 0 or pd.isna(next_open):
                     continue
