@@ -161,6 +161,42 @@
   .step-body strong { color: #e6edf3; display: block; margin-bottom: 4px; font-size: 15px; }
   .step-body p { font-size: 13.5px; color: #8b949e; margin: 0; }
 
+  /* Backtest checklist */
+  .checklist-box {
+    background: rgba(255,255,255,.02);
+    border: 1px solid #21262d;
+    border-radius: 12px;
+    padding: 8px 0;
+    margin: 20px 0 16px;
+  }
+  .check-item {
+    display: grid;
+    grid-template-columns: 36px 1fr;
+    gap: 0 16px;
+    padding: 16px 20px;
+    border-bottom: 1px solid #161b22;
+    align-items: start;
+  }
+  .check-item:last-child { border-bottom: none; }
+  .check-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .check-green  { background: rgba(34,197,94,.15);  color: #86efac; border: 1px solid rgba(34,197,94,.3); }
+  .check-blue   { background: rgba(59,130,246,.15);  color: #93c5fd; border: 1px solid rgba(59,130,246,.3); }
+  .check-yellow { background: rgba(245,158,11,.12);  color: #fcd34d; border: 1px solid rgba(245,158,11,.25); }
+  .check-gray   { background: rgba(110,118,129,.12); color: #8b949e; border: 1px solid rgba(110,118,129,.25); }
+  .check-item strong { color: #e6edf3; font-size: 14.5px; display: block; margin-bottom: 4px; }
+  .check-item p { font-size: 13px; color: #8b949e; margin: 0; line-height: 1.5; }
+
   /* Comparison table */
   .strategy-table {
     width: 100%;
@@ -197,8 +233,8 @@
   <div class="hero">
     <div class="hero-tag">Kullanım Rehberi</div>
     <h1>Puan Sistemi Nasıl Çalışır?</h1>
-    <p class="meta">Her hisse 0-10 arasında bir trend sağlığı skoru alır. Bu sayfa skorun ne anlama geldiğini ve nasıl yorumlanabileceğini açıklar.</p>
-    <p>Nebula Scanner dört teknik göstergeyi birleştirerek bir hissenin mevcut trend gücünü ölçer. Skor, "şu an giriş sinyali var mı?" değil, <strong>"bu trendin sağlığı ne durumda?"</strong> sorusuna yanıt verir.</p>
+    <p class="meta">Her hisse 0-10 arasında bir trend sağlığı skoru alır. Bu sayfa skorun ne anlama geldiğini, nasıl yorumlanabileceğini ve geçmiş verilere dayalı giriş kriterlerini açıklar.</p>
+    <p>Nebula Scanner dört teknik göstergeyi birleştirerek bir hissenin mevcut trend gücünü ölçer. Skor, "şu an giriş sinyali var mı?" değil, <strong>"bu trendin sağlığı ne durumda?"</strong> sorusuna yanıt verir. Aşağıdaki kriterler, son 1 yıllık tarihsel veriyle backtest edilmiş parametrelere dayanmaktadır.</p>
   </div>
 
   <div class="warning-box">
@@ -212,16 +248,16 @@
   <div class="band-grid">
     <div class="band-card band-green">
       <div class="band-score">8–10</div>
-      <div class="band-title">Güçlü Trend</div>
-      <p class="band-desc">Dört göstergenin büyük çoğunluğu pozitif. Fiyat kısa ve orta vadeli ortalamaların üzerinde, momentum aktif, RSI sağlıklı aralıkta, Bollinger bant içinde. Trend devam ettikçe skor bu bölgede kalmaya eğilimlidir.</p>
-      <div class="band-profile">Trend takipçisi profil — onaylı hareket</div>
+      <div class="band-title">Güçlü Trend — Backtest Eşiği</div>
+      <p class="band-desc">Dört göstergenin büyük çoğunluğu pozitif. Fiyat kısa ve orta vadeli ortalamaların üzerinde, momentum aktif, RSI sağlıklı aralıkta, Bollinger bant içinde. Backtest verisi, bu bölgede <strong>2 gün üst üste skor 8+</strong> koşulunun en seçici ve en güvenilir giriş sinyalini ürettiğini göstermektedir.</p>
+      <div class="band-profile">Trend takipçisi profil — teyitli, backtest onaylı</div>
     </div>
 
     <div class="band-card band-blue">
       <div class="band-score">6–7</div>
       <div class="band-title">Momentum Geliyor</div>
-      <p class="band-desc">Göstergelerin önemli bir kısmı pozitife dönmüş, ancak tüm teyitler henüz tamamlanmamış. Trend henüz olgunlaşmadan, görece daha erken bir noktada yakalanmış olabilir. Bu durum potansiyel olarak daha fazla hareket alanı sunar; ancak teyidin eksikliği nedeniyle daha sıkı risk yönetimi gerektirir.</p>
-      <div class="band-profile">Erken hareket profili — sıkı stop önerilir</div>
+      <p class="band-desc">Göstergelerin önemli bir kısmı pozitife dönmüş, ancak tüm teyitler henüz tamamlanmamış. Backtest eşiğinin (8) altında kaldığından tarihsel performans bu bantta belirgin biçimde daha zayıftır. Erken pozisyon almak isteyenler için sıkı stop-loss zorunludur.</p>
+      <div class="band-profile">Erken hareket profili — backtest eşiği altında, yüksek risk</div>
     </div>
 
     <div class="band-card band-yellow">
@@ -241,7 +277,7 @@
 
   <!-- Strategy comparison -->
   <h2>İki Yaklaşım</h2>
-  <p>Skor bantları farklı risk profillerine göre iki ayrı şekilde kullanılabilir. Hangisinin "daha iyi" olduğu kişinin risk tercihine ve piyasa koşullarına göre değişir:</p>
+  <p>Skor bantları farklı risk profillerine göre iki ayrı şekilde kullanılabilir. Backtest verisi, 8+ bölgesinin tarihsel olarak daha yüksek kazanma oranı ürettiğini göstermektedir:</p>
 
   <table class="strategy-table">
     <thead>
@@ -256,14 +292,14 @@
       <tr>
         <td><strong>Trend Takipçisi</strong></td>
         <td><span class="tag-green">8–10</span></td>
-        <td>Hareket onaylı; daha az belirsizlik; portföy yönetimi görece daha basit</td>
-        <td>Başlangıç hareketini kaçırmış olma ihtimali; giriş noktası daha yukarıda olabilir</td>
+        <td>Hareket onaylı; daha az belirsizlik; backtest verisiyle desteklenmiş; 2 gün üst üste 8+ koşuluyla sinyal kalitesi artar</td>
+        <td>Başlangıç hareketini kaçırmış olma ihtimali; giriş noktası görece daha yukarıda olabilir</td>
       </tr>
       <tr>
         <td><strong>Erken Hareket</strong></td>
         <td><span class="tag-blue">6–7</span></td>
         <td>Trend onaylanmadan önce daha düşük fiyat seviyesinden pozisyon mümkün; potansiyel hareket alanı daha geniş</td>
-        <td>Tüm sinyaller henüz doğrulanmamış; mutlaka stop-loss seviyesi belirlenmeli</td>
+        <td>Backtest eşiğinin altında; tüm sinyaller doğrulanmamış; mutlaka stop-loss seviyesi belirlenmeli; kazanma oranı 8+ banda göre belirgin biçimde daha düşük</td>
       </tr>
     </tbody>
   </table>
@@ -333,6 +369,52 @@
     <strong>Hacim Filtresi:</strong> Herhangi bir gösterge tam puanını almışken son günün işlem hacmi 20 günlük ortalamanın altındaysa, o göstergeden 1 puan düşülür. Yeterli hacimle desteklenmeyen hareketler daha zayıf sinyaller üretir.
   </div>
 
+  <!-- Backtest criteria -->
+  <h2>Backtest Onaylı Giriş Kriterleri</h2>
+  <p>Aşağıdaki kriterler son 1 yıllık tarihsel veri üzerinde test edilmiştir. Bu kriterlerin hepsi aynı anda sağlandığında sinyal kalitesi tarihsel olarak en yüksek düzeyde olmuştur:</p>
+
+  <div class="checklist-box">
+    <div class="check-item">
+      <span class="check-icon check-green">1</span>
+      <div>
+        <strong>Skor ≥ 8 — 2 Gün Üst Üste</strong>
+        <p>Tek bir güne bakma, trend devamlılığını teyit et. Skor iki kapanışta da 8 veya üzerindeyse sinyal daha güvenilirdir.</p>
+      </div>
+    </div>
+    <div class="check-item">
+      <span class="check-icon check-blue">2</span>
+      <div>
+        <strong>Piyasa Rejimi — Endeks EMA200 Üzerinde</strong>
+        <p>BIST hisseleri için XU100, ABD hisseleri için S&P 500 endeksinin 200 günlük üssel ortalamasının üzerinde olduğunu kontrol et. Genel piyasa düşüş trendindeyken bireysel alım sinyalleri tarihsel olarak çok daha az başarılı olmuştur.</p>
+      </div>
+    </div>
+    <div class="check-item">
+      <span class="check-icon check-yellow">3</span>
+      <div>
+        <strong>Stop-Loss: Giriş Fiyatının %5 Altı</strong>
+        <p>Backtest parametresi olarak kullanılan stop seviyesi. Pozisyon açıldıktan sonra fiyat bu seviyeye gelirse çıkış yapılır. Maksimum kayıp önceden tanımlanmış olur.</p>
+      </div>
+    </div>
+    <div class="check-item">
+      <span class="check-icon check-green">4</span>
+      <div>
+        <strong>Hedef: Giriş Fiyatının %10 Üstü</strong>
+        <p>Backtest parametresi olarak kullanılan kâr alma seviyesi. 2:1 ödül/risk oranı (%10 kazanç / %5 kayıp), kazanma oranı %50 altında olsa bile pozitif beklenti değeri üretir.</p>
+      </div>
+    </div>
+    <div class="check-item">
+      <span class="check-icon check-gray">5</span>
+      <div>
+        <strong>Skor 3'e Düşerse Çık</strong>
+        <p>Pozisyonda iken skor 3 veya altına inerse trend bozulmuş demektir. Hedef fiyata ulaşılmamış olsa bile çıkış yapılması önerilir.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="warning-box" style="margin-top: 0;">
+    <strong>Hatırlatma:</strong> Backtest geçmiş performansı ölçer, gelecek getirileri garanti etmez. Bu kriterler yatırım tavsiyesi değil; sistemin tarihsel olarak ne zaman daha iyi çalıştığının bir özetidir.
+  </div>
+
   <!-- How to use -->
   <h2>Nasıl Kullanılır?</h2>
 
@@ -340,36 +422,43 @@
     <li class="step-item">
       <div class="step-num">1</div>
       <div class="step-body">
-        <strong>Pazar ve Filtre Seç</strong>
-        <p>Ana ekranda BIST veya ABD pazarını seçin. Filtre çiplerinden hedef puan aralığınızı belirleyin: "≥ 6 Puan" erken momentum arayışı için, "≥ 8 Puan" onaylı trendler için kullanılabilir.</p>
+        <strong>Piyasa Rejimini Kontrol Et</strong>
+        <p>Önce genel piyasanın durumuna bak. BIST için XU100, ABD için S&P 500 endeksi 200 günlük ortalamasının üzerinde olmalı. Endeks bu ortalamanın altındaysa sinyaller tarihsel olarak çok daha az başarılı olmuştur; bekleme moduna geçmek mantıklı olabilir.</p>
       </div>
     </li>
     <li class="step-item">
       <div class="step-num">2</div>
       <div class="step-body">
-        <strong>Hisse Detayını İncele</strong>
-        <p>Listeden bir hisseye tıklayarak gösterge detaylarını görün. Her göstergenin aldığı puan ve açıklaması gösterilir. Birden fazla göstergenin yüksek puan aldığı hisseler daha tutarlı sinyal üretir.</p>
+        <strong>"≥ 8 Puan" Filtresini Uygula</strong>
+        <p>Ana ekranda BIST veya ABD pazarını seçin. Filtre çiplerinden <strong>≥ 8 Puan</strong> seçeneğini etkinleştirin. Bu eşik, backtest verisiyle en iyi performansı gösteren giriş noktasını temsil eder.</p>
       </div>
     </li>
     <li class="step-item">
       <div class="step-num">3</div>
       <div class="step-body">
-        <strong>Alarm Kur</strong>
-        <p>"Alarmlar" sekmesinden bir hisse ve puan eşiği belirleyin. Hisse belirlediğiniz skora ulaştığında bildirim alırsınız; böylece sürekli tarama yapmak zorunda kalmazsınız.</p>
+        <strong>2 Gün Üst Üste Teyit Et</strong>
+        <p>Bir hisse 8+ skor aldığında hemen harekete geçme. Ertesi gün skoru yeniden kontrol et — eğer skor 8'in üzerinde kalmaya devam ediyorsa sinyal teyitlenmiştir. Bu ikinci gün kontrolü tek günlük sahte spike'ları filtreler.</p>
       </div>
     </li>
     <li class="step-item">
       <div class="step-num">4</div>
       <div class="step-body">
-        <strong>Portföyü Takip Et</strong>
-        <p>"Portföy" sekmesine hisse ekleyerek pozisyonlarınızı izleyin. Her pozisyonun yanında canlı skor gösterilir: skor yüksek kaldığında trend devam ediyor demektir; skor düştüğünde "Zayıflama Sinyalleri" uyarısı görürsünüz.</p>
+        <strong>Alarm Kur (Opsiyonel)</strong>
+        <p>"Alarmlar" sekmesinden bir hisse ve 8 puan eşiği belirleyin. Hisse belirlediğiniz skora ulaştığında bildirim alırsınız; böylece sürekli tarama yapmak zorunda kalmazsınız. Alarm aldıktan sonra ertesi gün skoru yeniden kontrol etmeyi unutmayın.</p>
       </div>
     </li>
     <li class="step-item">
       <div class="step-num">5</div>
       <div class="step-body">
+        <strong>Stop-Loss ve Hedef Belirle</strong>
+        <p>Pozisyon açmadan önce giriş fiyatının <strong>%5 altına stop-loss</strong>, <strong>%10 üstüne hedef</strong> belirle. Bu oran, kazanma oranı %50'nin altında olsa bile matematiksel olarak pozitif beklenti değeri üretir (2:1 ödül/risk).</p>
+      </div>
+    </li>
+    <li class="step-item">
+      <div class="step-num">6</div>
+      <div class="step-body">
         <strong>Portföy Uyarılarını Yorumla</strong>
-        <p>Portföy badge'leri göstergelerin durumunu yansıtır. "Trend Sağlıklı" → skor 8+, göstergeler pozitif. "Zayıflama Sinyalleri" → skor düşmekte, göstergeler bozuluyor. "Yüksek Risk" → stop loss bölgesine yaklaşıldı veya skor 0-2. Bu etiketler yatırım tavsiyesi değil; gösterge durumunun özetidir.</p>
+        <p>Portföy sekmesi rozet sistemiyle pozisyon sağlığını gösterir. "Trend Sağlıklı" → skor 8+, göstergeler pozitif. "Zayıflama Sinyalleri" → skor düşmekte, dikkatli ol. "Yüksek Risk" → stop-loss bölgesine yaklaşıldı veya skor 0-2, çıkışı değerlendir. Skor 3'e düşerse pozisyondan çıkmak backtest stratejisinin bir parçasıdır.</p>
       </div>
     </li>
   </ol>
@@ -384,7 +473,10 @@
   <p>Hayır. Yüksek skor, teknik göstergelerin pozitif hizalandığını gösterir; ancak haber riskleri, makroekonomik değişimler ve şirket bazlı gelişmeler teknik analizin kapsamı dışındadır. Teknik skor, tek başına yeterli bir değerlendirme kriteri değildir.</p>
 
   <h3>6-7 aralığı mı, 8-10 aralığı mı?</h3>
-  <p>İkisi de geçerlidir; fark risk tercihi ve stratejidedir. 6-7 aralığında trend henüz tam onaylanmamış olduğundan potansiyel hareket alanı daha geniş olabilir — ancak teyit eksikliği daha sıkı bir risk yönetimi gerektirir. 8-10 aralığında trend güçlü biçimde onaylanmıştır; giriş noktası görece daha yukarıda olabilir ama belirsizlik daha azdır.</p>
+  <p>Backtest verisi, 8+ eşiğinin tarihsel olarak daha yüksek kazanma oranı ürettiğini göstermektedir. 6-7 aralığında trend henüz tam onaylanmamış olduğundan tarihsel başarı oranı belirgin biçimde daha düşüktür. 8-10 aralığında ve ek olarak 2 gün üst üste bu skorun korunduğu durumlarda sinyal güvenilirliği en yüksek düzeyde olmuştur. 6-7 bandında işlem yapmak yüksek riskli bir yaklaşım olarak değerlendirilmelidir.</p>
+
+  <h3>Neden "2 gün üst üste" şartı var?</h3>
+  <p>Tek bir günde 8+ alan bazı hisseler ertesi gün hızla geri çekilebilir — bu "sahte sinyal" olarak adlandırılır. Backtest, giriş sinyalinin 2 ardışık gün korunduğu durumlarda kazanma oranının belirgin biçimde arttığını göstermektedir. Bu kısa bekleme, birkaç günlük girişi kaçırma pahasına sahte sinyallere karşı güçlü bir filtre işlevi görür.</p>
 
   <h3>Veriler ne zaman güncellenir?</h3>
   <p>Skorlar günlük kapanış verilerine dayanır ve piyasa kapandıktan sonra yenilenir. Gün içi fiyat hareketleri skora yansımaz. Tam tarama yenilemesi için ana ekranda "Yenile" butonunu kullanabilirsiniz.</p>
