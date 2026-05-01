@@ -30,8 +30,8 @@ ul, ol { padding-left: 20px; margin-bottom: 14px; }
 li { margin-bottom: 6px; }
 a { color: #5b8def; }
 .warning-box {
-  background: rgba(234, 179, 8, 0.1);
-  border: 1px solid rgba(234, 179, 8, 0.3);
+  background: #211600;
+  border: 1px solid #d97706;
   border-radius: 8px;
   padding: 16px 20px;
   margin: 24px 0;
@@ -39,12 +39,13 @@ a { color: #5b8def; }
   font-size: 14px;
 }
 .info-box {
-  background: rgba(91, 141, 239, 0.1);
-  border: 1px solid rgba(91, 141, 239, 0.2);
+  background: #0d1a3a;
+  border: 1px solid #3b82f6;
   border-radius: 8px;
   padding: 16px 20px;
   margin: 16px 0;
   font-size: 14px;
+  color: #c9d1d9;
 }
 footer.legal-footer {
   text-align: center;
