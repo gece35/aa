@@ -1,13 +1,15 @@
 """Backtest motoru — vektörleştirilmiş gösterge hesaplaması.
 
 Strateji parametreleri:
-  - Giriş : skor >= 6 olan ilk gün → ertesi gün açılışta al
+  - Giriş : skor >= 7 olan ilk gün VE piyasa rejimi bullish (endeks > EMA200)
+             → ertesi gün açılışta al
   - Çıkış (ilk tetiklenen):
       1. Stop-loss  : giriş fiyatının %5 altı
       2. Take-profit: giriş fiyatının %10 üstü
       3. Skor düşüşü: skor ≤ 3 olunca
       4. Süre limiti: 45 işlem günü
   - Dönem : son 252 işlem günü (≈ 1 yıl)
+  - Rejim filtresi: BIST → XU100.IS, US → ^GSPC endeksi EMA200 üzerindeyse bullish
 """
 
 from __future__ import annotations
@@ -24,12 +26,27 @@ from .tickers import get_tickers
 logger = logging.getLogger(__name__)
 
 # ── Strateji sabitleri ────────────────────────────────────────────────────────
-MIN_SCORE      = 6
+MIN_SCORE      = 7
 SL_PCT         = 0.05   # %5 stop-loss
 TP_PCT         = 0.10   # %10 take-profit
 MAX_HOLD_DAYS  = 45
 BACKTEST_DAYS  = 252    # ~1 yıl işlem günü
 MIN_HISTORY    = 250    # gösterge ısınması için minimum veri
+
+# Piyasa rejim filtresi için endeks sembolleri
+MARKET_INDICES: Dict[str, str] = {
+    "bist": "XU100.IS",
+    "us":   "^GSPC",
+}
+
+
+# ── Piyasa rejim serisi (endeks EMA200 filtresi) ──────────────────────────────
+
+def _regime_series(index_df: pd.DataFrame) -> pd.Series:
+    """Endeks EMA200 üzerindeyse True (bullish), altındaysa False döner."""
+    close = index_df["Close"].astype(float)
+    ema200 = close.ewm(span=200, adjust=False).mean()
+    return close > ema200
 
 
 # ── Vektörleştirilmiş skor serisi ────────────────────────────────────────────
@@ -46,7 +63,7 @@ def _score_series(df: pd.DataFrame) -> pd.Series:
     ema200 = close.ewm(span=200, adjust=False).mean()
 
     trend = pd.Series(0, index=df.index, dtype=int)
-    trend = trend.where(~(close > ema200), 0)           # EMA200 altı = 0 (zaten)
+    trend = trend.where(~(close > ema200), 0)
     above_50_200 = (close > ema50) & (close > ema200)
     trend[above_50_200] = 2
     full_align = (close > ema20) & (ema20 > ema50) & (ema50 > ema200)
@@ -61,13 +78,11 @@ def _score_series(df: pd.DataFrame) -> pd.Series:
 
     macd_above_sig = macd_line > signal_line
     hist_rising    = histogram > histogram.shift(1)
-    # MACD sinyal çizgisini sıfırın altında yukarı kesti (son 3 bar)
     cross_up = (
         macd_above_sig
         & ~macd_above_sig.shift(1).fillna(False)
         & (macd_line < 0)
     )
-    # 3 bar geriye bak
     cross_up_3 = cross_up | cross_up.shift(1).fillna(False) | cross_up.shift(2).fillna(False)
 
     momentum = pd.Series(0, index=df.index, dtype=int)
@@ -81,15 +96,15 @@ def _score_series(df: pd.DataFrame) -> pd.Series:
     rs  = avg_gain / avg_loss.replace(0, np.nan)
     rsi = 100 - (100 / (1 + rs))
 
-    rsi_cross30 = (rsi > 30) & (rsi.shift(1) <= 30)
+    rsi_cross30   = (rsi > 30) & (rsi.shift(1) <= 30)
     rsi_cross30_3 = rsi_cross30 | rsi_cross30.shift(1).fillna(False) | rsi_cross30.shift(2).fillna(False)
-    rsi_mid   = (rsi >= 45) & (rsi <= 65) & (rsi > rsi.shift(1))
-    rsi_ob    = rsi > 70
+    rsi_mid = (rsi >= 45) & (rsi <= 65) & (rsi > rsi.shift(1))
+    rsi_ob  = rsi > 70
 
     rsi_score = pd.Series(0, index=df.index, dtype=int)
-    rsi_score[rsi_mid]      = 1
+    rsi_score[rsi_mid]       = 1
     rsi_score[rsi_cross30_3] = 2
-    rsi_score[rsi_ob]       = -1
+    rsi_score[rsi_ob]        = -1
 
     # ── Bollinger (20, 2) ─────────────────────────────────────────────────────
     bb_mid   = close.rolling(20).mean()
@@ -97,25 +112,20 @@ def _score_series(df: pd.DataFrame) -> pd.Series:
     bb_upper = bb_mid + 2 * bb_std
     bb_lower = bb_mid - 2 * bb_std
 
-    # Üst band dışı = 0 puan
     above_upper = close > bb_upper
-    # Orta band kırılımı (+1) — son 3 bar
     mid_break   = (close > bb_mid) & (close.shift(1) <= bb_mid.shift(1))
     mid_break_3 = mid_break | mid_break.shift(1).fillna(False) | mid_break.shift(2).fillna(False)
-    # Alt band dokunuşu + yeşil mum (+2)
     lower_touch = (open_.shift(1) <= bb_lower.shift(1) * 1.01) & (close > open_)
 
     bb_score = pd.Series(0, index=df.index, dtype=int)
-    bb_score[mid_break_3]  = 1
-    bb_score[lower_touch]  = 2
-    bb_score[above_upper]  = 0  # üst band dışı sıfırlar
+    bb_score[mid_break_3] = 1
+    bb_score[lower_touch] = 2
+    bb_score[above_upper] = 0
 
     # ── Hacim filtresi ────────────────────────────────────────────────────────
     vol_sma20  = volume.rolling(20).mean()
     low_volume = volume < vol_sma20
-    # MACD 3 puan + düşük hacim → 2'ye indir
     momentum[(momentum == 3) & low_volume] = 2
-    # BB 2 puan + düşük hacim → 1'e indir
     bb_score[(bb_score == 2) & low_volume] = 1
 
     raw = trend + momentum + rsi_score + bb_score
@@ -124,7 +134,7 @@ def _score_series(df: pd.DataFrame) -> pd.Series:
 
 # ── Tek hisse işlem simülasyonu ───────────────────────────────────────────────
 
-def _simulate(symbol: str, df: pd.DataFrame) -> List[dict]:
+def _simulate(symbol: str, df: pd.DataFrame, regime: Optional[pd.Series]) -> List[dict]:
     if df is None or len(df) < MIN_HISTORY:
         return []
 
@@ -132,7 +142,12 @@ def _simulate(symbol: str, df: pd.DataFrame) -> List[dict]:
     close  = df["Close"].astype(float)
     open_  = df["Open"].astype(float) if "Open" in df.columns else close
 
-    # Son 252 günü test et; ilk 200 bar gösterge ısınması için kullanılıyor
+    # Rejim serisini hisse tarihleriyle hizala (eksik günler önceki değerle doldurulur)
+    if regime is not None:
+        regime_aligned = regime.reindex(df.index, method="ffill").fillna(False)
+    else:
+        regime_aligned = pd.Series(True, index=df.index)
+
     start  = max(len(df) - BACKTEST_DAYS, 200)
     trades: List[dict] = []
 
@@ -146,7 +161,7 @@ def _simulate(symbol: str, df: pd.DataFrame) -> List[dict]:
         score = int(scores.iloc[i])
 
         if not in_pos:
-            if score >= MIN_SCORE:
+            if score >= MIN_SCORE and bool(regime_aligned.iloc[i]):
                 next_open = float(open_.iloc[i + 1])
                 if next_open <= 0 or pd.isna(next_open):
                     continue
@@ -178,7 +193,6 @@ def _simulate(symbol: str, df: pd.DataFrame) -> List[dict]:
                 })
                 in_pos = False
 
-    # Dönem sonunda açık pozisyonu kapat
     if in_pos:
         last_price = float(close.iloc[-1])
         ret = (last_price - entry_price) / entry_price * 100
@@ -207,7 +221,6 @@ def _stats(trades: List[dict]) -> dict:
     losses   = [r for r in returns if r <= 0]
     hold_avg = sum(t["sure_gun"] for t in trades) / len(trades)
 
-    # Çıkış nedenlerine göre dağılım
     exit_dist: Dict[str, int] = {}
     for t in trades:
         exit_dist[t["cikis_nedeni"]] = exit_dist.get(t["cikis_nedeni"], 0) + 1
@@ -236,6 +249,25 @@ def run_backtest(market: str) -> dict:
 
     logger.info("Backtest başladı: market=%s sembol_sayısı=%d", market, len(tickers))
 
+    # Endeks verisini ayrıca çek (rejim filtresi için)
+    index_symbol = MARKET_INDICES.get(market)
+    regime: Optional[pd.Series] = None
+    if index_symbol:
+        try:
+            idx_data = download_ohlcv([index_symbol], period="500d", interval="1d")
+            idx_df   = idx_data.get(index_symbol)
+            if idx_df is not None and not idx_df.empty:
+                regime = _regime_series(idx_df)
+                bullish_days = int(regime.sum())
+                total_days   = len(regime)
+                logger.info(
+                    "Rejim filtresi: %s — %d/%d gün bullish (%.0f%%)",
+                    index_symbol, bullish_days, total_days,
+                    bullish_days / total_days * 100 if total_days else 0,
+                )
+        except Exception:
+            logger.exception("Endeks verisi alınamadı: %s — filtre devre dışı", index_symbol)
+
     # 500 gün veri çek — ilk 250 bar ısınma, son 252 bar test
     data: Dict[str, pd.DataFrame] = download_ohlcv(tickers, period="500d", interval="1d")
 
@@ -247,7 +279,7 @@ def run_backtest(market: str) -> dict:
         if df is None or df.empty:
             continue
         try:
-            trades = _simulate(symbol, df)
+            trades = _simulate(symbol, df, regime)
         except Exception:
             logger.exception("Backtest hatası: %s", symbol)
             continue
@@ -265,7 +297,6 @@ def run_backtest(market: str) -> dict:
         })
         all_trades.extend(trades)
 
-    # En iyi hisselere göre sırala
     hisse_sonuclari.sort(key=lambda x: x["toplam_getiri_pct"], reverse=True)
 
     genel_stats = _stats(all_trades)
@@ -287,6 +318,7 @@ def run_backtest(market: str) -> dict:
             "stop_loss_pct":     SL_PCT * 100,
             "take_profit_pct":   TP_PCT * 100,
             "max_sure_gun":      MAX_HOLD_DAYS,
+            "rejim_filtresi":    index_symbol or "kapalı",
         },
         "ozet":      genel_stats,
         "hisseler":  hisse_sonuclari,

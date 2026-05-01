@@ -1254,6 +1254,7 @@
                 <span class="bt-meta-item">🛑 Stop-loss: <strong>${params.stop_loss_pct}%</strong></span>
                 <span class="bt-meta-item">✅ Take-profit: <strong>${params.take_profit_pct}%</strong></span>
                 <span class="bt-meta-item">⏱ Maks süre: <strong>${params.max_sure_gun} gün</strong></span>
+                ${params.rejim_filtresi ? `<span class="bt-meta-item">📈 Rejim filtresi: <strong>${escapeHtml(params.rejim_filtresi)}</strong></span>` : ''}
             </div>
 
             ${exitHtml ? `<div class="bt-exits glass"><span class="bt-exits-title">Çıkış Dağılımı</span>${exitHtml}</div>` : ''}
