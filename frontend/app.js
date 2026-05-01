@@ -462,7 +462,7 @@
                     const cls = ind.score > 0 ? 'on' : (ind.score < 0 ? 'penalty' : '');
                     const sign = ind.score > 0 ? '+' : '';
                     const scoreLabel = ind.max_score > 0 ? ` ${sign}${ind.score}` : '';
-                    return `<span class="badge ${cls}" title="${escapeAttr(ind.detail || '')}">${ind.name}${scoreLabel}</span>`;
+                    return `<span class="badge ${cls}" title="${escapeAttr(ind.detail || '')}">${escapeHtml(ind.name)}${scoreLabel}</span>`;
                 }).join('')}
                 ${spikeBadge}${nearPeakBadge}
             </div>
@@ -747,8 +747,8 @@
         return `
             <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
                 <div>
-                    <h2 style="margin:0;font-family:'Outfit';font-size:28px;">${display}</h2>
-                    <div style="color:var(--text-3);font-size:12px;letter-spacing:1px;text-transform:uppercase;">${d.symbol}</div>
+                    <h2 style="margin:0;font-family:'Outfit';font-size:28px;">${escapeHtml(display)}</h2>
+                    <div style="color:var(--text-3);font-size:12px;letter-spacing:1px;text-transform:uppercase;">${escapeHtml(d.symbol)}</div>
                 </div>
                 <button id="modalStar" class="star-toggle ${isWatched ? 'active' : ''}" style="position:static;font-size:22px;" title="Favorilere ekle">&#9733;</button>
                 <div style="margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -777,10 +777,10 @@
                     return `
                     <div class="detail-ind">
                         <div class="di-head">
-                            <span class="di-name">${ind.name} ${ind.value != null ? `<span style="color:var(--text-3);font-weight:500">(${ind.value})</span>` : ''}</span>
+                            <span class="di-name">${escapeHtml(ind.name)} ${ind.value != null ? `<span style="color:var(--text-3);font-weight:500">(${ind.value})</span>` : ''}</span>
                             <span class="badge ${cls}">${scoreLabel}</span>
                         </div>
-                        <div class="di-reason">${ind.detail || ''}</div>
+                        <div class="di-reason">${escapeHtml(ind.detail || '')}</div>
                     </div>`;
                 }).join('')}
             </div>
@@ -1305,8 +1305,9 @@
         document.getElementById('posConfirmBtn')?.addEventListener('click', () => {
             const date = dateInput?.value;
             const price = parseFloat(priceInput?.value);
-            const qty = parseFloat(qtyInput?.value) || 1;
+            const qty = parseFloat(qtyInput?.value);
             if (!date || !price || isNaN(price) || price <= 0) { priceInput?.focus(); return; }
+            if (!qty || isNaN(qty) || qty <= 0) { qtyInput?.focus(); return; }
             addPosition(data.symbol, state.market, date, price, qty);
             form?.classList.add('hidden');
             if (toggle) {
