@@ -1,13 +1,14 @@
 """Backtest motoru — vektörleştirilmiş gösterge hesaplaması.
 
-Strateji parametreleri:
-  - Giriş : skor >= 7 olan ilk gün VE piyasa rejimi bullish (endeks > EMA200)
-             → ertesi gün açılışta al
+Strateji parametreleri (kademeli giriş/çıkış):
+  - 1. Giriş  : skor >= 6 → sermayenin %50'si ile giriş (ertesi gün açılışta)
+  - 2. Ekleme : skor >= 8'e ulaşırsa → kalan %50 de eklenir (ertesi gün açılışta)
   - Çıkış (ilk tetiklenen):
-      1. Stop-loss  : giriş fiyatının %5 altı
-      2. Take-profit: giriş fiyatının %10 üstü
-      3. Skor düşüşü: skor ≤ 3 olunca
-      4. Süre limiti: 45 işlem günü
+      1. Stop-loss   : ortalama giriş fiyatının %5 altı → tamamı satılır
+      2. Take-profit : ortalama giriş fiyatının %10 üstü → tamamı satılır
+      3. Tek günde 2 puan düşüş → ikinci yarı satılır (varsa), ilk yarı kalır
+      4. Skor ≤ 5 → tamamı satılır
+      5. Süre limiti : 45 işlem günü → tamamı satılır
   - Dönem : son 252 işlem günü (≈ 1 yıl)
   - Rejim filtresi: BIST → XU100.IS, US → ^GSPC endeksi EMA200 üzerindeyse bullish
 """
@@ -26,12 +27,15 @@ from .tickers import get_tickers
 logger = logging.getLogger(__name__)
 
 # ── Strateji sabitleri ────────────────────────────────────────────────────────
-MIN_SCORE      = 6
-SL_PCT         = 0.05   # %5 stop-loss
-TP_PCT         = 0.10   # %10 take-profit
-MAX_HOLD_DAYS  = 45
-BACKTEST_DAYS  = 252    # ~1 yıl işlem günü
-MIN_HISTORY    = 250    # gösterge ısınması için minimum veri
+MIN_SCORE          = 6    # ilk yarı giriş eşiği
+ADD_SCORE          = 8    # ikinci yarı ekleme eşiği
+EXIT_SCORE         = 5    # tam çıkış eşiği (skor ≤ EXIT_SCORE)
+SCORE_DROP_PARTIAL = 2    # tek günde bu kadar düşerse yarı çıkış
+SL_PCT             = 0.05  # %5 stop-loss (ortalama girişe göre)
+TP_PCT             = 0.10  # %10 take-profit (ortalama girişe göre)
+MAX_HOLD_DAYS      = 45
+BACKTEST_DAYS      = 252   # ~1 yıl işlem günü
+MIN_HISTORY        = 250   # gösterge ısınması için minimum veri
 
 # Piyasa rejim filtresi için endeks sembolleri
 MARKET_INDICES: Dict[str, str] = {
@@ -142,7 +146,6 @@ def _simulate(symbol: str, df: pd.DataFrame, regime: Optional[pd.Series]) -> Lis
     close  = df["Close"].astype(float)
     open_  = df["Open"].astype(float) if "Open" in df.columns else close
 
-    # Rejim serisini hisse tarihleriyle hizala (eksik günler önceki değerle doldurulur)
     if regime is not None:
         regime_aligned = regime.reindex(df.index, method="ffill").fillna(False)
     else:
@@ -151,56 +154,109 @@ def _simulate(symbol: str, df: pd.DataFrame, regime: Optional[pd.Series]) -> Lis
     start  = max(len(df) - BACKTEST_DAYS, 200)
     trades: List[dict] = []
 
-    in_pos      = False
-    entry_price = 0.0
-    entry_date  = None
-    hold_days   = 0
+    in_half1       = False   # ilk %50 pozisyon aktif mi
+    in_half2       = False   # ikinci %50 pozisyon aktif mi
+    add_half2_next = False   # ertesi gün açılışında half2 eklenecek
+    entry1_price   = 0.0
+    entry2_price   = 0.0
+    entry1_date    = None
+    entry2_date    = None
+    hold_days      = 0
 
     for i in range(start, len(df) - 1):
-        price = float(close.iloc[i])
-        score = int(scores.iloc[i])
+        price      = float(close.iloc[i])
+        score      = int(scores.iloc[i])
+        prev_score = int(scores.iloc[i - 1]) if i > 0 else score
 
-        if not in_pos:
-            prev_score = int(scores.iloc[i - 1]) if i > 0 else 0
-            if score >= MIN_SCORE and prev_score >= MIN_SCORE and bool(regime_aligned.iloc[i]):
-                next_open = float(open_.iloc[i + 1])
-                if next_open <= 0 or pd.isna(next_open):
+        if not in_half1:
+            if score >= MIN_SCORE and bool(regime_aligned.iloc[i]):
+                nxt = float(open_.iloc[i + 1])
+                if nxt <= 0 or pd.isna(nxt):
                     continue
-                entry_price = next_open
-                entry_date  = df.index[i + 1]
-                in_pos      = True
-                hold_days   = 0
-        else:
-            hold_days += 1
-            exit_reason: Optional[str] = None
+                entry1_price   = nxt
+                entry1_date    = df.index[i + 1]
+                in_half1       = True
+                add_half2_next = False
+                hold_days      = 0
+            continue
 
-            if   price <= entry_price * (1 - SL_PCT):  exit_reason = "stop_loss"
-            elif price >= entry_price * (1 + TP_PCT):  exit_reason = "take_profit"
-            elif hold_days >= MAX_HOLD_DAYS:            exit_reason = "sure_doldu"
+        hold_days += 1
 
-            if exit_reason:
-                ret = (price - entry_price) / entry_price * 100
-                trades.append({
-                    "sembol":       symbol,
-                    "giris_tarihi": str(entry_date.date()),
-                    "cikis_tarihi": str(df.index[i].date()),
-                    "giris_fiyati": round(entry_price, 4),
-                    "cikis_fiyati": round(price, 4),
-                    "getiri_pct":   round(ret, 2),
-                    "sure_gun":     hold_days,
-                    "cikis_nedeni": exit_reason,
-                    "kazandi":      ret > 0,
-                })
-                in_pos = False
+        # Önceki barda tetiklenen half2 girişini bugün açılışta gerçekleştir
+        if add_half2_next and not in_half2:
+            entry2_price   = float(open_.iloc[i])
+            entry2_date    = df.index[i]
+            in_half2       = True
+            add_half2_next = False
 
-    if in_pos:
+        avg_entry = (entry1_price + entry2_price) / 2 if in_half2 else entry1_price
+
+        # ── Tam çıkış koşulları ───────────────────────────────────────────────
+        full_exit: Optional[str] = None
+        if   price <= avg_entry * (1 - SL_PCT): full_exit = "stop_loss"
+        elif price >= avg_entry * (1 + TP_PCT): full_exit = "take_profit"
+        elif score <= EXIT_SCORE:               full_exit = "skor_dustu"
+        elif hold_days >= MAX_HOLD_DAYS:        full_exit = "sure_doldu"
+
+        if full_exit:
+            if in_half2:
+                r1  = (price - entry1_price) / entry1_price * 100
+                r2  = (price - entry2_price) / entry2_price * 100
+                ret = (r1 + r2) / 2
+            else:
+                ret = (price - entry1_price) / entry1_price * 100
+            trades.append({
+                "sembol":       symbol,
+                "giris_tarihi": str(entry1_date.date()),
+                "cikis_tarihi": str(df.index[i].date()),
+                "giris_fiyati": round(avg_entry, 4),
+                "cikis_fiyati": round(price, 4),
+                "getiri_pct":   round(ret, 2),
+                "sure_gun":     hold_days,
+                "cikis_nedeni": full_exit,
+                "kazandi":      ret > 0,
+            })
+            in_half1 = in_half2 = add_half2_next = False
+            continue
+
+        # ── Kısmi çıkış: tek günde 2+ puan düşüş → half2 satılır ─────────────
+        score_drop = prev_score - score
+        if score_drop >= SCORE_DROP_PARTIAL and in_half2:
+            ret2 = (price - entry2_price) / entry2_price * 100
+            trades.append({
+                "sembol":       symbol,
+                "giris_tarihi": str(entry2_date.date()),
+                "cikis_tarihi": str(df.index[i].date()),
+                "giris_fiyati": round(entry2_price, 4),
+                "cikis_fiyati": round(price, 4),
+                "getiri_pct":   round(ret2, 2),
+                "sure_gun":     hold_days,
+                "cikis_nedeni": "kismi_cikis",
+                "kazandi":      ret2 > 0,
+            })
+            in_half2       = False
+            add_half2_next = False
+            continue
+
+        # ── Half2 ekleme sinyali: skor ADD_SCORE'a ulaştı ────────────────────
+        if not in_half2 and not add_half2_next and score >= ADD_SCORE:
+            add_half2_next = True
+
+    # Döngü sonu — açık pozisyonları kapat
+    if in_half1:
         last_price = float(close.iloc[-1])
-        ret = (last_price - entry_price) / entry_price * 100
+        avg_entry  = (entry1_price + entry2_price) / 2 if in_half2 else entry1_price
+        if in_half2:
+            r1  = (last_price - entry1_price) / entry1_price * 100
+            r2  = (last_price - entry2_price) / entry2_price * 100
+            ret = (r1 + r2) / 2
+        else:
+            ret = (last_price - entry1_price) / entry1_price * 100
         trades.append({
             "sembol":       symbol,
-            "giris_tarihi": str(entry_date.date()),
+            "giris_tarihi": str(entry1_date.date()),
             "cikis_tarihi": str(df.index[-1].date()),
-            "giris_fiyati": round(entry_price, 4),
+            "giris_fiyati": round(avg_entry, 4),
             "cikis_fiyati": round(last_price, 4),
             "getiri_pct":   round(ret, 2),
             "sure_gun":     hold_days,
@@ -314,11 +370,14 @@ def run_backtest(market: str) -> dict:
         "market":    market,
         "donem":     "Son 1 yıl (~252 işlem günü)",
         "parametreler": {
-            "min_skor":          MIN_SCORE,
-            "stop_loss_pct":     SL_PCT * 100,
-            "take_profit_pct":   TP_PCT * 100,
-            "max_sure_gun":      MAX_HOLD_DAYS,
-            "rejim_filtresi":    index_symbol or "kapalı",
+            "giris_skoru":        MIN_SCORE,
+            "ekleme_skoru":       ADD_SCORE,
+            "cikis_skoru":        EXIT_SCORE,
+            "kismi_cikis_dusus":  SCORE_DROP_PARTIAL,
+            "stop_loss_pct":      SL_PCT * 100,
+            "take_profit_pct":    TP_PCT * 100,
+            "max_sure_gun":       MAX_HOLD_DAYS,
+            "rejim_filtresi":     index_symbol or "kapalı",
         },
         "ozet":      genel_stats,
         "hisseler":  hisse_sonuclari,
