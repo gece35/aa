@@ -11,7 +11,7 @@ from flask import Blueprint, jsonify, redirect, request, send_from_directory, ur
 from flask_login import current_user, login_required, login_user, logout_user
 from sqlalchemy import select
 
-from .config import APP_BASE_URL
+from .config import ADMIN_EMAILS, APP_BASE_URL
 from .db import db
 from .email import send_password_reset, send_verify_email
 from .models import EmailToken, User
@@ -113,6 +113,8 @@ def login():
 
     login_user(user, remember=True)
     user.last_login_at = now_utc()
+    if ADMIN_EMAILS and user.email in ADMIN_EMAILS and not user.is_admin:
+        user.is_admin = True
     db.session.commit()
     return jsonify({"ok": True, "user": user.to_public_dict()})
 
