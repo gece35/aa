@@ -1205,12 +1205,28 @@
         const stocks = data.hisseler || [];
 
         const exitDist = o.cikis_dagilimlari || {};
-        const exitLabels = { take_profit: 'Take Profit', stop_loss: 'Stop Loss', skor_dustu: 'Skor Düştü', sure_doldu: 'Süre Doldu', acik_pozisyon: 'Açık' };
+        const exitLabels = {
+            trailing_stop: 'Trailing Stop',
+            kismi_tp: 'Kısmi TP',
+            score_3bar: 'Skor (3 gün)',
+            score_crash: 'Skor Crash',
+            dead_money: 'Dead Money',
+            time_exit: 'Süre Doldu',
+            time_extended: 'Süre Uzatma',
+            dd_halt: 'DD Halt',
+            acik_pozisyon: 'Açık',
+            // eski stratejilerin geriye uyumluluğu
+            take_profit: 'Take Profit', stop_loss: 'Stop Loss',
+            skor_dustu: 'Skor Düştü', sure_doldu: 'Süre Doldu', kismi_cikis: 'Kısmi'
+        };
         const exitHtml = Object.entries(exitDist).map(([k, v]) =>
             `<span class="bt-exit-pill">${exitLabels[k] || k}: <strong>${v}</strong></span>`).join('');
 
         const winColor = (o.kazanma_orani_pct || 0) >= 50 ? 'var(--neon)' : 'var(--warn)';
         const retColor = (o.ortalama_getiri_pct || 0) >= 0 ? 'var(--neon)' : 'var(--danger)';
+        const pfColor = (o.profit_factor || 0) >= 1.5 ? 'var(--neon)' : ((o.profit_factor || 0) >= 1 ? 'var(--warn)' : 'var(--danger)');
+        const ddColor = (o.max_drawdown_pct || 0) <= 12 ? 'var(--neon)' : ((o.max_drawdown_pct || 0) <= 20 ? 'var(--warn)' : 'var(--danger)');
+        const portColor = (o.portfoy_getiri_pct || 0) >= 0 ? 'var(--neon)' : 'var(--danger)';
 
         el.innerHTML = `
             <div class="bt-summary-grid">
@@ -1246,15 +1262,40 @@
                     <span class="bt-stat-label">Sinyal Veren Hisse</span>
                     <span class="bt-stat-value">${o.sinyal_veren_hisse ?? '-'} / ${o.test_edilen_hisse ?? '-'}</span>
                 </div>
+                ${o.profit_factor != null ? `
+                <div class="bt-stat glass">
+                    <span class="bt-stat-label">Profit Factor</span>
+                    <span class="bt-stat-value" style="color:${pfColor}">${o.profit_factor}</span>
+                </div>` : ''}
+                ${o.max_drawdown_pct != null ? `
+                <div class="bt-stat glass">
+                    <span class="bt-stat-label">Max Drawdown</span>
+                    <span class="bt-stat-value" style="color:${ddColor}">-${o.max_drawdown_pct}%</span>
+                </div>` : ''}
+                ${o.portfoy_getiri_pct != null ? `
+                <div class="bt-stat glass">
+                    <span class="bt-stat-label">Portföy Getirisi</span>
+                    <span class="bt-stat-value" style="color:${portColor}">${o.portfoy_getiri_pct >= 0 ? '+' : ''}${o.portfoy_getiri_pct}%</span>
+                </div>` : ''}
+                ${o.sharpe_approx != null ? `
+                <div class="bt-stat glass">
+                    <span class="bt-stat-label">Sharpe (~)</span>
+                    <span class="bt-stat-value">${o.sharpe_approx}</span>
+                </div>` : ''}
             </div>
 
             <div class="bt-meta glass">
                 <span class="bt-meta-item">📅 ${escapeHtml(data.donem || '')}</span>
-                <span class="bt-meta-item">🎯 Min skor: <strong>${params.min_skor}</strong></span>
-                <span class="bt-meta-item">🛑 Stop-loss: <strong>${params.stop_loss_pct}%</strong></span>
-                <span class="bt-meta-item">✅ Take-profit: <strong>${params.take_profit_pct}%</strong></span>
-                <span class="bt-meta-item">⏱ Maks süre: <strong>${params.max_sure_gun} gün</strong></span>
-                ${params.rejim_filtresi ? `<span class="bt-meta-item">📈 Rejim filtresi: <strong>${escapeHtml(params.rejim_filtresi)}</strong></span>` : ''}
+                ${data.strateji ? `<span class="bt-meta-item">🧭 ${escapeHtml(data.strateji)}</span>` : ''}
+                <span class="bt-meta-item">🎯 Min skor: <strong>${params.giris_skoru ?? params.min_skor ?? '-'}</strong> (${params.ardisik_gun ?? 1} gün ardışık)</span>
+                <span class="bt-meta-item">📊 Trend alt-skoru: <strong>≥${params.min_trend_alt ?? '-'}</strong></span>
+                <span class="bt-meta-item">🛑 ATR stop: <strong>×${params.atr_initial_mult ?? '-'}</strong></span>
+                <span class="bt-meta-item">🎢 Trail: <strong>×${params.atr_trail_mult ?? '-'}</strong></span>
+                <span class="bt-meta-item">✅ Kısmi TP: <strong>${params.kismi_tp_pct ?? '-'}%</strong></span>
+                <span class="bt-meta-item">⏱ Maks süre: <strong>${params.max_sure_gun ?? '-'} gün${params.uzatma_gun ? ' (+' + params.uzatma_gun + ')' : ''}</strong></span>
+                <span class="bt-meta-item">👥 Max poz: <strong>${params.max_pozisyon ?? '-'}</strong> (sektör ${params.max_sektor ?? '-'})</span>
+                <span class="bt-meta-item">⚠ DD halt: <strong>${params.dd_halt_pct ?? '-'}%</strong></span>
+                ${params.rejim_filtresi ? `<span class="bt-meta-item">📈 Rejim: <strong>${escapeHtml(params.rejim_filtresi)}${params.dual_rejim ? ' (dual)' : ''}</strong></span>` : ''}
             </div>
 
             ${exitHtml ? `<div class="bt-exits glass"><span class="bt-exits-title">Çıkış Dağılımı</span>${exitHtml}</div>` : ''}
@@ -1317,7 +1358,20 @@
     }
 
     function buildTradeDetailHtml(trades) {
-        const exitLabels = { take_profit: '✅ TP', stop_loss: '🛑 SL', skor_dustu: '📉 Skor', sure_doldu: '⏱ Süre', acik_pozisyon: '📂 Açık' };
+        const exitLabels = {
+            trailing_stop: '🛑 Trail',
+            kismi_tp: '✅ Kısmi TP',
+            score_3bar: '📉 Skor 3g',
+            score_crash: '📉 Skor↓',
+            dead_money: '💤 Dead',
+            time_exit: '⏱ Süre',
+            time_extended: '⏱ Süre+',
+            dd_halt: '🚨 DD Halt',
+            acik_pozisyon: '📂 Açık',
+            // eski stratejilerin geriye uyumluluğu
+            take_profit: '✅ TP', stop_loss: '🛑 SL',
+            skor_dustu: '📉 Skor', sure_doldu: '⏱ Süre', kismi_cikis: '📉 Kısmi'
+        };
         const rows = trades.map(t => {
             const retColor = t.getiri_pct >= 0 ? 'var(--neon)' : 'var(--danger)';
             return `<tr>
