@@ -9,6 +9,10 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="legal/legal.css" />
 <style>
+  html, body { background: #0d1117 !important; color: #c9d1d9 !important; }
+  h1, h2, h3 { color: #e6edf3 !important; }
+  p { color: #c9d1d9; }
+
   .hero { margin-bottom: 48px; }
   .hero-tag {
     display: inline-block;
@@ -123,15 +127,25 @@
   .ind-card ul li { margin-bottom: 4px; }
 
   /* Steps */
-  .steps { list-style: none; padding: 0; margin: 20px 0 40px; counter-reset: step; }
+  .steps {
+    list-style: none;
+    padding: 8px 0;
+    margin: 20px 0 40px;
+    counter-reset: step;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 12px;
+  }
   .step-item {
     counter-increment: step;
     display: grid;
     grid-template-columns: 36px 1fr;
     gap: 0 16px;
-    margin-bottom: 24px;
+    padding: 16px 20px;
+    border-bottom: 1px solid #21262d;
     align-items: start;
   }
+  .step-item:last-child { border-bottom: none; }
   .step-num {
     width: 36px;
     height: 36px;
