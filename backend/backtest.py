@@ -176,7 +176,6 @@ def _simulate(symbol: str, df: pd.DataFrame, regime: Optional[pd.Series]) -> Lis
 
             if   price <= entry_price * (1 - SL_PCT):  exit_reason = "stop_loss"
             elif price >= entry_price * (1 + TP_PCT):  exit_reason = "take_profit"
-            elif score <= 4:                            exit_reason = "skor_dustu"
             elif hold_days >= MAX_HOLD_DAYS:            exit_reason = "sure_doldu"
 
             if exit_reason:
