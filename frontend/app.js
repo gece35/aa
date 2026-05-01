@@ -2459,17 +2459,23 @@
         openAuthModal('reset');
     }
 
-    // GA4 — dinamik yükleme (Railway'de GA_MEASUREMENT_ID set edilince otomatik aktif)
+    // GA4 — yalnızca kullanıcı onayı sonrası yüklenir
+    function _loadGA4(id) {
+        const s = document.createElement('script');
+        s.async = true;
+        s.src = `https://www.googletagmanager.com/gtag/js?id=${id}`;
+        document.head.appendChild(s);
+        window.dataLayer = window.dataLayer || [];
+        window.gtag = function(){ window.dataLayer.push(arguments); };
+        window.gtag('js', new Date());
+        window.gtag('config', id);
+    }
+
     fetch('/api/config').then(r => r.json()).then(cfg => {
-        if (cfg.ga_measurement_id) {
-            const s = document.createElement('script');
-            s.async = true;
-            s.src = `https://www.googletagmanager.com/gtag/js?id=${cfg.ga_measurement_id}`;
-            document.head.appendChild(s);
-            window.dataLayer = window.dataLayer || [];
-            window.gtag = function(){ window.dataLayer.push(arguments); };
-            window.gtag('js', new Date());
-            window.gtag('config', cfg.ga_measurement_id);
+        if (!cfg.ga_measurement_id) return;
+        window._gaMeasurementId = cfg.ga_measurement_id;
+        if (localStorage.getItem('nebula.cookieConsent') === 'accepted') {
+            _loadGA4(cfg.ga_measurement_id);
         }
     }).catch(() => {});
 
@@ -2478,7 +2484,12 @@
         const banner = document.getElementById('cookieBanner');
         if (banner) banner.classList.remove('hidden');
         document.getElementById('cookieAccept')?.addEventListener('click', () => {
-            localStorage.setItem('nebula.cookieConsent', '1');
+            localStorage.setItem('nebula.cookieConsent', 'accepted');
+            if (window._gaMeasurementId) _loadGA4(window._gaMeasurementId);
+            banner.classList.add('hidden');
+        });
+        document.getElementById('cookieReject')?.addEventListener('click', () => {
+            localStorage.setItem('nebula.cookieConsent', 'rejected');
             banner.classList.add('hidden');
         });
     }

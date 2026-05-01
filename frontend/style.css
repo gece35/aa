@@ -1411,7 +1411,9 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
     display: flex; align-items: center; justify-content: center; gap: 16px;
     font-size: 13px; color: var(--text-2);
 }
-@media (max-width: 600px) { .cookie-banner { flex-direction: column; text-align: center; } }
+.cookie-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.cookie-btn-sm { padding: 6px 16px; font-size: 13px; }
+@media (max-width: 600px) { .cookie-banner { flex-direction: column; text-align: center; } .cookie-actions { justify-content: center; } }
 
 /* ── Footer (enhanced) ───────────────────────────────────────────────── */
 .footer {

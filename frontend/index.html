@@ -315,9 +315,12 @@
     <!-- Premium pricing modalı -->
     <!-- Çerez Banner -->
     <div id="cookieBanner" class="cookie-banner hidden">
-        <span>Bu site yalnızca zorunlu oturum çerezleri kullanır.
+        <span>Ziyaret istatistikleri için Google Analytics kullanıyoruz.
         <a href="/legal/cerez" style="color:var(--accent);">Çerez Politikası</a></span>
-        <button id="cookieAccept" class="btn btn-primary" style="padding:6px 16px;font-size:13px;">Tamam</button>
+        <div class="cookie-actions">
+            <button id="cookieReject" class="btn cookie-btn-sm" style="background:transparent;border:1px solid var(--glass-brd);color:var(--text-2);">Reddet</button>
+            <button id="cookieAccept" class="btn btn-primary cookie-btn-sm">Kabul Et</button>
+        </div>
     </div>
 
     <!-- Toast bildirimleri -->
