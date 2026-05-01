@@ -37,6 +37,7 @@ from backend.db import db, migrate
 from backend.limits import PLANS, enforce_collection_limit, get_plan, quota, requires_plan
 from backend.models import Portfolio, User, Watchlist
 from backend.news import fetch_news, fetch_stock_news
+from backend.backtest import run_backtest
 from backend.scanner import scan_market, scan_market_chunk
 from backend.scoring import score_symbol_detailed
 from backend.tickers import MARKETS
@@ -474,6 +475,29 @@ def create_app() -> Flask:
         db.session.delete(p)
         db.session.commit()
         return jsonify({"ok": True})
+
+    # ── API: Backtest ──────────────────────────────────────────────────────────
+    _backtest_cache: dict = {}
+
+    @flask_app.route("/api/backtest")
+    @admin_required
+    def api_backtest():
+        market = request.args.get("market", "bist").lower()
+        force  = request.args.get("force", "0") in ("1", "true", "yes")
+        if market not in MARKETS:
+            return jsonify({"hata": f"Bilinmeyen market: {market}"}), 400
+
+        if not force and market in _backtest_cache:
+            return jsonify(_backtest_cache[market])
+
+        try:
+            result = run_backtest(market)
+        except Exception:
+            logger.exception("Backtest hatası market=%s", market)
+            return jsonify({"hata": "Backtest sırasında hata oluştu"}), 500
+
+        _backtest_cache[market] = result
+        return jsonify(result)
 
     return flask_app
 
