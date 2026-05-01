@@ -228,7 +228,6 @@ def create_app() -> Flask:
         return jsonify(fetch_news(market=market, force=force))
 
     @flask_app.route("/api/news/stock/<path:symbol>")
-    @requires_plan("premium")
     def api_stock_news(symbol: str):
         symbol = symbol.upper().strip()
         return jsonify(fetch_stock_news(symbol))
