@@ -19,6 +19,7 @@
         portfolioGet: () => fetch('/api/portfolio').then((r) => r.json()),
         portfolioAdd: (body) => fetch('/api/portfolio', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json()),
         portfolioRemove: (id) => fetch(`/api/portfolio/${id}`, { method: 'DELETE' }).then((r) => r.json()),
+        backtest: (market, force = false) => fetch(`/api/backtest?market=${market}&force=${force ? 1 : 0}`).then((r) => r.json()),
     };
 
     const WATCHLIST_KEY = 'nebula.watchlist.v1';
@@ -1121,6 +1122,225 @@
         return '₺' + tryAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
+    // ── Backtest UI ───────────────────────────────────────────────────────────
+    const _btState = { market: 'bist', data: null, loading: false, expanded: new Set() };
+
+    function renderBacktestTab() {
+        const el = document.getElementById('backtestContent');
+        if (!el) return;
+
+        const marketBtns = ['bist', 'us'].map(m => `
+            <button class="bt-market-btn ${_btState.market === m ? 'active' : ''}" data-market="${m}">
+                ${m === 'bist' ? '🇹🇷 BIST' : '🇺🇸 US'}
+            </button>`).join('');
+
+        el.innerHTML = `
+            <div class="bt-toolbar glass">
+                <div class="bt-market-group">${marketBtns}</div>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <button id="btRunBtn" class="btn btn-primary" ${_btState.loading ? 'disabled' : ''}>
+                        ${_btState.loading ? '<span class="bt-spinner"></span> Hesaplanıyor...' : '▶ Çalıştır'}
+                    </button>
+                    <button id="btForceBtn" class="btn btn-ghost" title="Cache'i temizle ve yeniden çalıştır" ${_btState.loading ? 'disabled' : ''}>
+                        ↺ Yenile
+                    </button>
+                </div>
+            </div>
+            <div id="btResults"></div>`;
+
+        el.querySelectorAll('.bt-market-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                _btState.market = btn.dataset.market;
+                _btState.data = null;
+                _btState.expanded = new Set();
+                renderBacktestTab();
+            });
+        });
+
+        document.getElementById('btRunBtn')?.addEventListener('click', () => runBacktest(false));
+        document.getElementById('btForceBtn')?.addEventListener('click', () => runBacktest(true));
+
+        if (_btState.data) renderBacktestResults(_btState.data);
+        else {
+            document.getElementById('btResults').innerHTML = `
+                <div class="bt-empty glass">
+                    <div style="font-size:36px;margin-bottom:12px;">📊</div>
+                    <div style="font-size:15px;font-weight:600;margin-bottom:6px;">Backtest henüz çalıştırılmadı</div>
+                    <div style="font-size:13px;color:var(--text-3)">Market seçip "Çalıştır" butonuna tıklayın. İlk çalıştırma 1-2 dakika sürebilir.</div>
+                </div>`;
+        }
+    }
+
+    async function runBacktest(force) {
+        if (_btState.loading) return;
+        _btState.loading = true;
+        _btState.data = null;
+        renderBacktestTab();
+        document.getElementById('btResults').innerHTML = `
+            <div class="bt-empty glass">
+                <div class="bt-spinner-lg"></div>
+                <div style="font-size:14px;margin-top:16px;color:var(--text-2)">
+                    Tüm hisseler analiz ediliyor, lütfen bekleyin…
+                </div>
+            </div>`;
+        try {
+            const data = await API.backtest(_btState.market, force);
+            _btState.data = data;
+        } catch (e) {
+            _btState.data = { hata: 'Bağlantı hatası' };
+        }
+        _btState.loading = false;
+        renderBacktestTab();
+    }
+
+    function renderBacktestResults(data) {
+        const el = document.getElementById('btResults');
+        if (!el) return;
+        if (data.hata) {
+            el.innerHTML = `<div class="bt-empty glass" style="color:var(--danger)">⚠ ${escapeHtml(data.hata)}</div>`;
+            return;
+        }
+        const o = data.ozet || {};
+        const params = data.parametreler || {};
+        const stocks = data.hisseler || [];
+
+        const exitDist = o.cikis_dagilimlari || {};
+        const exitLabels = { take_profit: 'Take Profit', stop_loss: 'Stop Loss', skor_dustu: 'Skor Düştü', sure_doldu: 'Süre Doldu', acik_pozisyon: 'Açık' };
+        const exitHtml = Object.entries(exitDist).map(([k, v]) =>
+            `<span class="bt-exit-pill">${exitLabels[k] || k}: <strong>${v}</strong></span>`).join('');
+
+        const winColor = (o.kazanma_orani_pct || 0) >= 50 ? 'var(--neon)' : 'var(--warn)';
+        const retColor = (o.ortalama_getiri_pct || 0) >= 0 ? 'var(--neon)' : 'var(--danger)';
+
+        el.innerHTML = `
+            <div class="bt-summary-grid">
+                <div class="bt-stat glass">
+                    <span class="bt-stat-label">Toplam İşlem</span>
+                    <span class="bt-stat-value">${o.toplam_islem ?? '-'}</span>
+                </div>
+                <div class="bt-stat glass">
+                    <span class="bt-stat-label">Kazanma Oranı</span>
+                    <span class="bt-stat-value" style="color:${winColor}">${o.kazanma_orani_pct != null ? o.kazanma_orani_pct + '%' : '-'}</span>
+                </div>
+                <div class="bt-stat glass">
+                    <span class="bt-stat-label">Ort. Getiri</span>
+                    <span class="bt-stat-value" style="color:${retColor}">${o.ortalama_getiri_pct != null ? (o.ortalama_getiri_pct >= 0 ? '+' : '') + o.ortalama_getiri_pct + '%' : '-'}</span>
+                </div>
+                <div class="bt-stat glass">
+                    <span class="bt-stat-label">Ort. Kazanç</span>
+                    <span class="bt-stat-value" style="color:var(--neon)">${o.ortalama_kazanc_pct != null ? '+' + o.ortalama_kazanc_pct + '%' : '-'}</span>
+                </div>
+                <div class="bt-stat glass">
+                    <span class="bt-stat-label">Ort. Kayıp</span>
+                    <span class="bt-stat-value" style="color:var(--danger)">${o.ortalama_kayip_pct != null ? o.ortalama_kayip_pct + '%' : '-'}</span>
+                </div>
+                <div class="bt-stat glass">
+                    <span class="bt-stat-label">En İyi İşlem</span>
+                    <span class="bt-stat-value" style="color:var(--neon)">${o.en_iyi_islem_pct != null ? '+' + o.en_iyi_islem_pct + '%' : '-'}</span>
+                </div>
+                <div class="bt-stat glass">
+                    <span class="bt-stat-label">En Kötü İşlem</span>
+                    <span class="bt-stat-value" style="color:var(--danger)">${o.en_kotu_islem_pct != null ? o.en_kotu_islem_pct + '%' : '-'}</span>
+                </div>
+                <div class="bt-stat glass">
+                    <span class="bt-stat-label">Sinyal Veren Hisse</span>
+                    <span class="bt-stat-value">${o.sinyal_veren_hisse ?? '-'} / ${o.test_edilen_hisse ?? '-'}</span>
+                </div>
+            </div>
+
+            <div class="bt-meta glass">
+                <span class="bt-meta-item">📅 ${escapeHtml(data.donem || '')}</span>
+                <span class="bt-meta-item">🎯 Min skor: <strong>${params.min_skor}</strong></span>
+                <span class="bt-meta-item">🛑 Stop-loss: <strong>${params.stop_loss_pct}%</strong></span>
+                <span class="bt-meta-item">✅ Take-profit: <strong>${params.take_profit_pct}%</strong></span>
+                <span class="bt-meta-item">⏱ Maks süre: <strong>${params.max_sure_gun} gün</strong></span>
+            </div>
+
+            ${exitHtml ? `<div class="bt-exits glass"><span class="bt-exits-title">Çıkış Dağılımı</span>${exitHtml}</div>` : ''}
+
+            <div class="bt-table-wrap glass">
+                <table class="bt-table">
+                    <thead>
+                        <tr>
+                            <th>Sembol</th>
+                            <th class="num">İşlem</th>
+                            <th class="num">Kazanma %</th>
+                            <th class="num">Toplam Getiri</th>
+                            <th class="num">Ort. Süre</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="btTableBody"></tbody>
+                </table>
+            </div>`;
+
+        const tbody = document.getElementById('btTableBody');
+        stocks.forEach(s => {
+            const isExpanded = _btState.expanded.has(s.sembol);
+            const winRate = s.kazanma_orani_pct;
+            const totalRet = s.toplam_getiri_pct;
+            const winColor2 = winRate >= 50 ? 'var(--neon)' : 'var(--warn)';
+            const retColor2 = totalRet >= 0 ? 'var(--neon)' : 'var(--danger)';
+            const trades = s.islemler || [];
+            const avgDays = trades.length ? Math.round(trades.reduce((a, t) => a + t.sure_gun, 0) / trades.length) : '-';
+
+            const row = document.createElement('tr');
+            row.className = 'bt-stock-row';
+            row.dataset.symbol = s.sembol;
+            row.innerHTML = `
+                <td class="bt-symbol">${escapeHtml(s.sembol)}</td>
+                <td class="num">${s.islem_sayisi}</td>
+                <td class="num" style="color:${winColor2}">${winRate}%</td>
+                <td class="num" style="color:${retColor2}">${totalRet >= 0 ? '+' : ''}${totalRet}%</td>
+                <td class="num">${avgDays} gün</td>
+                <td class="num"><button class="bt-expand-btn">${isExpanded ? '▲ Kapat' : '▼ Detay'}</button></td>`;
+            tbody.appendChild(row);
+
+            if (isExpanded) {
+                const detailRow = document.createElement('tr');
+                detailRow.className = 'bt-detail-row';
+                detailRow.innerHTML = `<td colspan="6">${buildTradeDetailHtml(trades)}</td>`;
+                tbody.appendChild(detailRow);
+            }
+
+            row.querySelector('.bt-expand-btn').addEventListener('click', () => {
+                if (_btState.expanded.has(s.sembol)) _btState.expanded.delete(s.sembol);
+                else _btState.expanded.add(s.sembol);
+                renderBacktestResults(_btState.data);
+            });
+        });
+
+        if (!stocks.length) {
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-3)">Bu market için işlem sinyali bulunamadı.</td></tr>`;
+        }
+    }
+
+    function buildTradeDetailHtml(trades) {
+        const exitLabels = { take_profit: '✅ TP', stop_loss: '🛑 SL', skor_dustu: '📉 Skor', sure_doldu: '⏱ Süre', acik_pozisyon: '📂 Açık' };
+        const rows = trades.map(t => {
+            const retColor = t.getiri_pct >= 0 ? 'var(--neon)' : 'var(--danger)';
+            return `<tr>
+                <td>${escapeHtml(t.giris_tarihi)}</td>
+                <td>${escapeHtml(t.cikis_tarihi)}</td>
+                <td class="num">${t.giris_fiyati}</td>
+                <td class="num">${t.cikis_fiyati}</td>
+                <td class="num" style="color:${retColor}">${t.getiri_pct >= 0 ? '+' : ''}${t.getiri_pct}%</td>
+                <td class="num">${t.sure_gun}g</td>
+                <td>${exitLabels[t.cikis_nedeni] || escapeHtml(t.cikis_nedeni)}</td>
+            </tr>`;
+        }).join('');
+        return `<div class="bt-detail-inner">
+            <table class="bt-trade-table">
+                <thead><tr>
+                    <th>Giriş</th><th>Çıkış</th>
+                    <th class="num">Giriş Fiyatı</th><th class="num">Çıkış Fiyatı</th>
+                    <th class="num">Getiri</th><th class="num">Süre</th><th>Neden</th>
+                </tr></thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </div>`;
+    }
+
     function renderPortfolioTab() {
         const overview = document.getElementById('portOverview');
         const list = document.getElementById('portList');
@@ -1564,15 +1784,18 @@
         const scanSec = document.getElementById('tab-scan');
         const portSec = document.getElementById('tab-portfolio');
         const alertSec = document.getElementById('tab-alerts');
+        const btSec = document.getElementById('tab-backtest');
         if (scanSec) scanSec.classList.toggle('hidden', tab !== 'scan');
         if (portSec) portSec.classList.toggle('hidden', tab !== 'portfolio');
         if (alertSec) alertSec.classList.toggle('hidden', tab !== 'alerts');
+        if (btSec) btSec.classList.toggle('hidden', tab !== 'backtest');
         document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tab));
         if (tab === 'portfolio') {
             const rateP = state.usdRate ? Promise.resolve() : fetchExchangeRate();
             rateP.then(() => fetchPortfolioDetails()).then(() => renderPortfolioTab());
         }
         if (tab === 'alerts') loadAlerts();
+        if (tab === 'backtest') renderBacktestTab();
     }
     document.querySelectorAll('.tab-btn').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
 
@@ -1881,6 +2104,7 @@
         const upgradeBtn = document.getElementById('upgradeBtn');
         const planBadge = document.getElementById('planBadge');
         const userEmailEl = document.getElementById('userEmail');
+        const backtestTab = document.getElementById('backtestTabBtn');
 
         if (user) {
             authArea.classList.add('hidden');
@@ -1888,9 +2112,11 @@
             userEmailEl.textContent = user.email;
             if (planBadge) planBadge.classList.add('hidden');
             if (upgradeBtn) upgradeBtn.classList.add('hidden');
+            if (backtestTab) backtestTab.classList.toggle('hidden', !user.is_admin);
         } else {
             authArea.classList.remove('hidden');
             userArea.classList.add('hidden');
+            if (backtestTab) backtestTab.classList.add('hidden');
         }
     }
 

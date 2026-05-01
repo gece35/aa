@@ -1637,3 +1637,154 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
 .ad-slot-leaderboard {
     width: 100%; max-width: 728px; margin: 0 auto 16px;
 }
+
+/* ── Backtest UI ────────────────────────────────────────────────────────────── */
+.bt-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+.bt-market-group { display: flex; gap: 8px; }
+.bt-market-btn {
+    padding: 7px 18px;
+    border-radius: var(--radius-m);
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-2);
+    font-size: 13px;
+    cursor: pointer;
+    transition: var(--trans);
+}
+.bt-market-btn.active, .bt-market-btn:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+.bt-empty {
+    text-align: center;
+    padding: 60px 20px;
+    margin-top: 8px;
+    color: var(--text-2);
+}
+.bt-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+}
+.bt-stat {
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.bt-stat-label { font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; }
+.bt-stat-value { font-size: 22px; font-weight: 700; color: var(--text-1); }
+.bt-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 20px;
+    padding: 12px 18px;
+    margin-bottom: 12px;
+    font-size: 13px;
+    color: var(--text-2);
+}
+.bt-meta-item { display: flex; align-items: center; gap: 5px; }
+.bt-exits {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 18px;
+    margin-bottom: 16px;
+}
+.bt-exits-title { font-size: 12px; color: var(--text-3); margin-right: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+.bt-exit-pill {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    color: var(--text-2);
+}
+.bt-table-wrap {
+    overflow-x: auto;
+    margin-top: 4px;
+}
+.bt-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+.bt-table th {
+    padding: 10px 14px;
+    text-align: left;
+    color: var(--text-3);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid var(--border);
+}
+.bt-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    color: var(--text-1);
+}
+.bt-table th.num, .bt-table td.num { text-align: right; }
+.bt-stock-row:hover { background: rgba(255,255,255,0.03); }
+.bt-symbol { font-weight: 600; letter-spacing: 0.02em; }
+.bt-expand-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-s);
+    color: var(--text-3);
+    font-size: 11px;
+    padding: 4px 10px;
+    cursor: pointer;
+    transition: var(--trans);
+    white-space: nowrap;
+}
+.bt-expand-btn:hover { border-color: var(--accent-2); color: var(--accent-2); }
+.bt-detail-row > td { padding: 0; background: var(--bg-0); }
+.bt-detail-inner { padding: 12px 20px 16px; }
+.bt-trade-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+.bt-trade-table th {
+    padding: 7px 10px;
+    text-align: left;
+    color: var(--text-3);
+    font-weight: 600;
+    font-size: 11px;
+    border-bottom: 1px solid var(--border);
+}
+.bt-trade-table td { padding: 7px 10px; color: var(--text-2); border-bottom: 1px solid rgba(255,255,255,0.03); }
+.bt-trade-table th.num, .bt-trade-table td.num { text-align: right; }
+
+/* Spinner */
+.bt-spinner {
+    display: inline-block;
+    width: 12px; height: 12px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: bt-spin 0.7s linear infinite;
+    vertical-align: middle;
+}
+.bt-spinner-lg {
+    display: block;
+    width: 36px; height: 36px;
+    border: 3px solid rgba(255,255,255,0.15);
+    border-top-color: var(--accent-2);
+    border-radius: 50%;
+    margin: 0 auto;
+    animation: bt-spin 0.8s linear infinite;
+}
+@keyframes bt-spin { to { transform: rotate(360deg); } }

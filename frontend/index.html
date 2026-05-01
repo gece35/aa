@@ -104,6 +104,7 @@
         <button class="tab-btn active" data-tab="scan">Tarama</button>
         <button class="tab-btn" data-tab="portfolio">Portföy <span id="portBadge" class="port-badge hidden"></span></button>
         <button class="tab-btn" data-tab="alerts">Alarmlar <span id="alertBadge" class="port-badge hidden"></span></button>
+        <button class="tab-btn hidden" id="backtestTabBtn" data-tab="backtest">Backtest</button>
     </div>
 
     <main>
@@ -167,6 +168,10 @@
             </div>
             <div id="triggeredAlerts"></div>
             <div id="activeAlerts"></div>
+        </section>
+
+        <section id="tab-backtest" class="hidden">
+            <div id="backtestContent"></div>
         </section>
     </main>
 
