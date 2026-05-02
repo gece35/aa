@@ -19,7 +19,16 @@ def _csv(name: str) -> Set[str]:
     return {item.strip().lower() for item in raw.split(",") if item.strip()}
 
 
-SECRET_KEY = os.environ.get("SECRET_KEY", "dev-only-secret-do-not-use-in-prod")
+_raw_secret = os.environ.get("SECRET_KEY", "")
+if not _raw_secret:
+    if os.environ.get("DEBUG", "0").lower() not in ("1", "true", "yes", "on"):
+        raise RuntimeError(
+            "SECRET_KEY environment variable is not set. "
+            "Set it in Railway variables before deploying to production."
+        )
+    import secrets as _secrets
+    _raw_secret = _secrets.token_hex(32)
+SECRET_KEY = _raw_secret
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:5000")
 DEBUG = _bool("DEBUG", False)
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
