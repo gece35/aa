@@ -138,7 +138,14 @@
                 API.watchlistRemove(symbol).catch(() => state.watchlist.add(symbol));
             } else {
                 state.watchlist.add(symbol);
-                API.watchlistAdd(symbol).catch(() => state.watchlist.delete(symbol));
+                API.watchlistAdd(symbol).then(d => {
+                    if (d && d.error === 'email_not_verified') {
+                        state.watchlist.delete(symbol);
+                        showToast('İzleme listesini kullanmak için önce e-posta adresinizi doğrulayın.', 'warning');
+                    } else if (d && d.error) {
+                        state.watchlist.delete(symbol);
+                    }
+                }).catch(() => state.watchlist.delete(symbol));
             }
         } else {
             if (state.watchlist.has(symbol)) state.watchlist.delete(symbol);
@@ -2082,7 +2089,10 @@
                 showToast(`Alarm kuruldu: ${symbol} – ${res.alert.label}`, 'success');
                 loadAlerts();
             } else {
-                if (errEl) { errEl.textContent = res.error || 'Hata oluştu.'; errEl.style.display = 'block'; }
+                const msg = res.error === 'email_not_verified'
+                    ? 'Alarm kurmak için önce e-posta adresinizi doğrulayın — gelen kutunuzu kontrol edin.'
+                    : (res.error || 'Hata oluştu.');
+                if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
             }
         } catch (e) {
             if (errEl) { errEl.textContent = 'Sunucu hatası.'; errEl.style.display = 'block'; }
@@ -2161,6 +2171,7 @@
         const userEmailEl = document.getElementById('userEmail');
         const backtestTab = document.getElementById('backtestTabBtn');
 
+        const verifyBanner = document.getElementById('emailVerifyBanner');
         if (user) {
             authArea.classList.add('hidden');
             userArea.classList.remove('hidden');
@@ -2168,10 +2179,12 @@
             if (planBadge) planBadge.classList.add('hidden');
             if (upgradeBtn) upgradeBtn.classList.add('hidden');
             if (backtestTab) backtestTab.classList.toggle('hidden', !user.is_admin);
+            if (verifyBanner) verifyBanner.classList.toggle('hidden', !!user.email_verified);
         } else {
             authArea.classList.remove('hidden');
             userArea.classList.add('hidden');
             if (backtestTab) backtestTab.classList.add('hidden');
+            if (verifyBanner) verifyBanner.classList.add('hidden');
         }
     }
 
@@ -2357,6 +2370,22 @@
         } finally {
             btn.disabled = false;
             btn.textContent = 'Şifremi Güncelle';
+        }
+    });
+
+    // Resend email verification
+    document.getElementById('resendVerifyBtn')?.addEventListener('click', async function() {
+        this.disabled = true;
+        this.textContent = 'Gönderiliyor...';
+        try {
+            const d = await fetch('/api/auth/resend-verify', { method: 'POST', credentials: 'include' }).then(r => r.json());
+            if (d.ok) showToast('Doğrulama e-postası gönderildi — gelen kutunuzu kontrol edin.', 'success');
+            else showToast('E-posta gönderilemedi, lütfen tekrar deneyin.', 'danger');
+        } catch {
+            showToast('Bağlantı hatası.', 'danger');
+        } finally {
+            this.disabled = false;
+            this.textContent = 'Tekrar gönder';
         }
     });
 

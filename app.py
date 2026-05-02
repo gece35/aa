@@ -22,7 +22,7 @@ from backend.alerts import (
     CONDITION_LABELS, check_alerts_for_user, count_active_alerts, create_alert,
     delete_alert, dismiss_alert, get_triggered, list_alerts,
 )
-from backend.auth import admin_required, auth_bp
+from backend.auth import admin_required, auth_bp, email_verified_required
 from backend.billing import billing_bp
 from backend.support import support_bp
 from backend.cache import (
@@ -340,6 +340,7 @@ def create_app() -> Flask:
 
     @flask_app.route("/api/alerts", methods=["POST"])
     @login_required
+    @email_verified_required
     def api_alerts_create():
         body = request.get_json(silent=True) or {}
         symbol = (body.get("symbol") or "").strip().upper()
@@ -365,6 +366,7 @@ def create_app() -> Flask:
 
     @flask_app.route("/api/alerts/<alert_id>", methods=["DELETE"])
     @login_required
+    @email_verified_required
     def api_alerts_delete(alert_id: str):
         if delete_alert(current_user.id, alert_id):
             return jsonify({"ok": True})
@@ -372,6 +374,7 @@ def create_app() -> Flask:
 
     @flask_app.route("/api/alerts/<alert_id>/dismiss", methods=["POST"])
     @login_required
+    @email_verified_required
     def api_alerts_dismiss(alert_id: str):
         if dismiss_alert(current_user.id, alert_id):
             return jsonify({"ok": True})
@@ -412,6 +415,7 @@ def create_app() -> Flask:
 
     @flask_app.route("/api/watchlist", methods=["POST"])
     @login_required
+    @email_verified_required
     def watchlist_add():
         body = request.get_json(silent=True) or {}
         symbol = (body.get("symbol") or "").upper().strip()
@@ -429,6 +433,7 @@ def create_app() -> Flask:
 
     @flask_app.route("/api/watchlist/<symbol>", methods=["DELETE"])
     @login_required
+    @email_verified_required
     def watchlist_remove(symbol):
         symbol = symbol.upper().strip()
         for w in list(current_user.watchlist):
@@ -446,6 +451,7 @@ def create_app() -> Flask:
 
     @flask_app.route("/api/portfolio", methods=["POST"])
     @login_required
+    @email_verified_required
     def portfolio_add():
         body = request.get_json(silent=True) or {}
         symbol = (body.get("symbol") or "").upper().strip()
@@ -470,6 +476,7 @@ def create_app() -> Flask:
 
     @flask_app.route("/api/portfolio/<int:position_id>", methods=["DELETE"])
     @login_required
+    @email_verified_required
     def portfolio_remove(position_id: int):
         p = db.session.get(Portfolio, position_id)
         if p is None or p.user_id != current_user.id:

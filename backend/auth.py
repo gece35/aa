@@ -35,6 +35,17 @@ def admin_required(fn):
     return wrapper
 
 
+def email_verified_required(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return jsonify({"error": "auth_required"}), 401
+        if not current_user.email_verified_at:
+            return jsonify({"error": "email_not_verified", "message": "Bu özelliği kullanmak için e-posta adresinizi doğrulamanız gerekiyor."}), 403
+        return fn(*args, **kwargs)
+    return wrapper
+
+
 def _normalize_email(raw: str) -> str:
     try:
         info = validate_email(raw, check_deliverability=False)
@@ -239,6 +250,25 @@ def verify_get():
     et.used_at = now_utc()
     db.session.commit()
     return redirect(f"{APP_BASE_URL}/?verify=ok")
+
+
+@auth_bp.route("/resend-verify", methods=["POST"])
+@login_required
+def resend_verify():
+    if current_user.email_verified_at:
+        return jsonify({"ok": True})
+    plain, hashed = generate_token()
+    db.session.add(EmailToken(
+        user_id=current_user.id,
+        kind="verify",
+        token_hash=hashed,
+        expires_at=token_expiry(hours=24),
+    ))
+    db.session.commit()
+    sent = send_verify_email(current_user.email, plain)
+    if not sent:
+        return jsonify({"ok": False, "error": "email_send_failed"}), 500
+    return jsonify({"ok": True})
 
 
 # KVKK rights ──────────────────────────────────────────────────────────────
