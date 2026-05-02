@@ -75,6 +75,7 @@ def create_app() -> Flask:
         SESSION_COOKIE_SECURE=not DEBUG and APP_BASE_URL.startswith("https"),
         REMEMBER_COOKIE_HTTPONLY=True,
         REMEMBER_COOKIE_SAMESITE="Lax",
+        REMEMBER_COOKIE_SECURE=not DEBUG and APP_BASE_URL.startswith("https"),
         PERMANENT_SESSION_LIFETIME=60 * 60 * 24 * 30,
     )
 
@@ -89,7 +90,7 @@ def create_app() -> Flask:
 
     CORS(
         flask_app,
-        resources={r"/api/*": {"origins": [APP_BASE_URL] if APP_BASE_URL else "*"}},
+        resources={r"/api/*": {"origins": [APP_BASE_URL] if APP_BASE_URL else ["http://localhost:5000"]}},
         supports_credentials=True,
     )
 
@@ -284,11 +285,9 @@ def create_app() -> Flask:
 
     @flask_app.route("/api/dev/make-premium", methods=["POST"])
     def dev_make_premium():
-        if not DEBUG and not _DEV_SECRET:
-            return jsonify({"error": "not_allowed"}), 403
         body = request.get_json(silent=True) or {}
         secret = body.get("secret", "")
-        if _DEV_SECRET and secret != _DEV_SECRET:
+        if not _DEV_SECRET or secret != _DEV_SECRET:
             return jsonify({"error": "forbidden"}), 403
         email = (body.get("email") or "").strip().lower()
         if not email:
@@ -343,11 +342,14 @@ def create_app() -> Flask:
     @login_required
     def api_alerts_create():
         body = request.get_json(silent=True) or {}
-        symbol = (body.get("symbol") or "").strip()
+        symbol = (body.get("symbol") or "").strip().upper()
         condition_type = (body.get("condition_type") or "").strip()
         condition_value = body.get("condition_value")
 
-        if not symbol or not condition_type:
+        import re as _re
+        if not symbol or not _re.fullmatch(r'[A-Z0-9.\-]{1,32}', symbol):
+            return jsonify({"error": "Geçersiz sembol formatı"}), 400
+        if not condition_type:
             return jsonify({"error": "symbol ve condition_type zorunludur"}), 400
 
         err = enforce_collection_limit(current_user, "alerts", count_active_alerts(current_user.id))

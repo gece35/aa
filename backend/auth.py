@@ -113,8 +113,10 @@ def login():
 
     login_user(user, remember=True)
     user.last_login_at = now_utc()
-    if ADMIN_EMAILS and user.email in ADMIN_EMAILS and not user.is_admin:
-        user.is_admin = True
+    if ADMIN_EMAILS:
+        should_be_admin = user.email in ADMIN_EMAILS
+        if user.is_admin != should_be_admin:
+            user.is_admin = should_be_admin
     db.session.commit()
     return jsonify({"ok": True, "user": user.to_public_dict()})
 

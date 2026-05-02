@@ -173,14 +173,17 @@ def send_password_reset(to: str, token: str) -> bool:
 
 
 def send_alert_triggered(to: str, symbol: str, label: str) -> bool:
+    import html as _html
+    safe_symbol = _html.escape(symbol)
+    safe_label = _html.escape(label)
     subject = f"Alarm: {symbol} — {label}"
-    html = f"""
+    html_body = f"""
     <div style="font-family:Inter,Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#111;">
-      <h2 style="margin-top:0;">{symbol}</h2>
+      <h2 style="margin-top:0;">{safe_symbol}</h2>
       <p>Belirlediğin alarm tetiklendi:</p>
-      <p style="background:#f3f4f6;padding:12px 16px;border-radius:8px;font-weight:600;">{label}</p>
+      <p style="background:#f3f4f6;padding:12px 16px;border-radius:8px;font-weight:600;">{safe_label}</p>
       <p style="text-align:center;margin:32px 0;">
-        <a href="{APP_BASE_URL}/?focus={symbol}" style="background:#2563eb;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;">Hisse detayını aç</a>
+        <a href="{APP_BASE_URL}/?focus={safe_symbol}" style="background:#2563eb;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;">Hisse detayını aç</a>
       </p>
       <p style="color:#999;font-size:12px;margin-top:32px;">
         Bu bilgi yatırım tavsiyesi değildir. Eğitim ve bilgilendirme amaçlıdır.
@@ -188,7 +191,7 @@ def send_alert_triggered(to: str, symbol: str, label: str) -> bool:
     </div>
     """
     text = f"{symbol} için alarm tetiklendi: {label}\n\n{APP_BASE_URL}/?focus={symbol}"
-    return _send(to, subject, html, text)
+    return _send(to, subject, html_body, text)
 
 
 def send_payment_failed(to: str) -> bool:
