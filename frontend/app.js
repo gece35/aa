@@ -2299,8 +2299,29 @@
     // Forgot submit
     document.getElementById('forgotSubmit')?.addEventListener('click', async () => {
         const email = document.getElementById('forgotEmail').value.trim();
-        await Auth.forgot(email);
-        document.getElementById('forgotMsg').style.display = 'block';
+        const msgEl = document.getElementById('forgotMsg');
+        const btn = document.getElementById('forgotSubmit');
+        msgEl.style.display = 'none';
+        btn.disabled = true;
+        btn.textContent = 'Gönderiliyor...';
+        try {
+            const d = await Auth.forgot(email);
+            if (d && d.ok === false && d.error === 'email_send_failed') {
+                msgEl.textContent = 'E-posta gönderilemedi. Lütfen birkaç dakika sonra tekrar deneyin veya destek@nebulascanner.com adresine yazın.';
+                msgEl.style.color = 'var(--danger)';
+            } else {
+                msgEl.textContent = 'Bağlantı gönderildi — gelen kutunuzu kontrol edin.';
+                msgEl.style.color = 'var(--success)';
+            }
+            msgEl.style.display = 'block';
+        } catch {
+            msgEl.textContent = 'Bağlantı hatası. Lütfen tekrar deneyin.';
+            msgEl.style.color = 'var(--danger)';
+            msgEl.style.display = 'block';
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Sıfırlama Bağlantısı Gönder';
+        }
     });
 
     // Reset password submit

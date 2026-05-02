@@ -145,14 +145,19 @@ def forgot():
     user = db.session.execute(select(User).where(User.email == email)).scalar_one_or_none()
     if user:
         plain, hashed = generate_token()
-        db.session.add(EmailToken(
+        token_row = EmailToken(
             user_id=user.id,
             kind="reset",
             token_hash=hashed,
             expires_at=token_expiry(hours=1),
-        ))
+        )
+        db.session.add(token_row)
         db.session.commit()
-        send_password_reset(user.email, plain)
+        sent = send_password_reset(user.email, plain)
+        if not sent:
+            db.session.delete(token_row)
+            db.session.commit()
+            return jsonify({"ok": False, "error": "email_send_failed"}), 500
     return jsonify({"ok": True})
 
 
