@@ -285,7 +285,7 @@
     <div class="hero-tag">Kullanım Rehberi</div>
     <h1>Puan Sistemi Nasıl Çalışır?</h1>
     <p class="meta">Her hisse 0-10 arasında bir trend sağlığı skoru alır. Bu sayfa skorun ne anlama geldiğini, nasıl yorumlanabileceğini ve geçmiş verilere dayalı giriş/çıkış kriterlerini açıklar.</p>
-    <p>Nebula Scanner dört teknik göstergeyi birleştirerek bir hissenin mevcut trend gücünü ölçer. Skor, "şu an giriş sinyali var mı?" değil, <strong>"bu trendin sağlığı ne durumda?"</strong> sorusuna yanıt verir. Bu sayfada anlatılan kriterler — <strong>TDO v2 (Trend Devamlılığı Onayı)</strong> — son 1 yıllık tarihsel veriyle backtest edilmiş çoklu filtre stratejisidir.</p>
+    <p>Nebula Scanner dört teknik göstergeyi birleştirerek bir hissenin mevcut trend gücünü ölçer. Skor, "şu an giriş fırsatı var mı?" değil, <strong>"bu trendin sağlığı ne durumda?"</strong> sorusuna yanıt verir. Bu sayfada anlatılan kriterler — <strong>TDO v2 (Trend Devamlılığı Onayı)</strong> — son 1 yıllık tarihsel veriyle backtest edilmiş çoklu filtre stratejisidir.</p>
   </div>
 
   <div class="warning-box">
@@ -300,14 +300,14 @@
     <div class="band-card band-green">
       <div class="band-score">7–10</div>
       <div class="band-title">Giriş Bölgesi — TDO v2 Eşiği</div>
-      <p class="band-desc">Dört göstergenin büyük çoğunluğu pozitif. Fiyat kısa ve orta vadeli ortalamaların üzerinde, momentum aktif. <strong>TDO v2 stratejisi bu banttan giriş yapar</strong>: 2 gün üst üste skor 7+, trend alt-skoru en az 2 ve hacim ortalamanın üzerinde olmalıdır. Skor 8-10 arasında sinyal kalitesi en yüksek seviyesindedir.</p>
+      <p class="band-desc">Dört göstergenin büyük çoğunluğu pozitif. Fiyat kısa ve orta vadeli ortalamaların üzerinde, momentum aktif. <strong>TDO v2 stratejisi bu banttan giriş yapar</strong>: 2 gün üst üste skor 7+, trend alt-skoru en az 2 ve hacim ortalamanın üzerinde olmalıdır. Skor 8-10 arasında gösterge güvenilirliği en yüksek seviyesindedir.</p>
       <div class="band-profile">Backtest onaylı giriş — çoklu filtre kapısı</div>
     </div>
 
     <div class="band-card band-blue">
       <div class="band-score">5–6</div>
       <div class="band-title">Trend Oluşumu</div>
-      <p class="band-desc">Göstergelerin önemli bir kısmı pozitife dönmüş, ancak giriş eşiğine henüz ulaşılmamıştır. Pozisyondaysanız bu seviye uyarı niteliğindedir; skor 4'e veya altına 3 ardışık gün düşerse TDO v2 stratejisi çıkış sinyali verir.</p>
+      <p class="band-desc">Göstergelerin önemli bir kısmı pozitife dönmüş, ancak giriş eşiğine henüz ulaşılmamıştır. Pozisyondaysanız bu seviye uyarı niteliğindedir; skor 4'e veya altına 3 ardışık gün düşerse TDO v2 stratejisi çıkış belirtisi verir.</p>
       <div class="band-profile">İzleme — giriş eşiğinin hemen altında</div>
     </div>
 
@@ -336,7 +336,7 @@
       <div class="layer-num">1</div>
       <div>
         <div class="layer-title">Giriş — Çoklu Filtre</div>
-        <div class="layer-subtitle">Sahte sinyalleri eler, sadece sağlam başlangıçlara girer</div>
+        <div class="layer-subtitle">Yanıltıcı göstergeleri eler, sadece sağlam başlangıçlara girer</div>
         <div class="layer-pills">
           <span class="layer-pill">Skor ≥ 7</span>
           <span class="layer-pill">2 gün üst üste</span>
@@ -443,12 +443,12 @@
   </div>
 
   <div class="info-box">
-    <strong>Hacim Filtresi:</strong> Herhangi bir gösterge tam puanını almışken son günün işlem hacmi 20 günlük ortalamanın altındaysa, o göstergeden 1 puan düşülür. Yeterli hacimle desteklenmeyen hareketler daha zayıf sinyaller üretir.
+    <strong>Hacim Filtresi:</strong> Herhangi bir gösterge tam puanını almışken son günün işlem hacmi 20 günlük ortalamanın altındaysa, o göstergeden 1 puan düşülür. Yeterli hacimle desteklenmeyen hareketler daha zayıf sonuçlar doğurur.
   </div>
 
   <!-- Backtest criteria -->
   <h2>TDO v2 — Giriş Kriterleri (5 Filtre)</h2>
-  <p>Aşağıdaki beş filtrenin <strong>hepsi aynı anda</strong> sağlanmalıdır. Tek bir filtrenin kaçırılması girişi iptal eder. Bu çoklu filtre yapısı sahte sinyalleri eler:</p>
+  <p>Aşağıdaki beş filtrenin <strong>hepsi aynı anda</strong> sağlanmalıdır. Tek bir filtrenin kaçırılması girişi iptal eder. Bu çoklu filtre yapısı yanıltıcı göstergeleri eler:</p>
 
   <div class="checklist-box">
     <div class="check-item">
@@ -490,7 +490,7 @@
 
   <!-- Position management -->
   <h2>Pozisyondayken: 3-Aşamalı Stop</h2>
-  <p>Sabit %5 stop-loss tüm hisseleri aynı volatilitede sayar — bu yanlıştır. BIST hisseleri arasında 5x ATR farkı vardır. TDO v2 ATR (Average True Range) bazlı dinamik stop kullanır:</p>
+  <p>Sabit %5 koruma seviyesi tüm hisseleri aynı volatilitede sayar — bu yanlıştır. BIST hisseleri arasında 5x ATR farkı vardır. TDO v2 ATR (Average True Range) bazlı dinamik stop kullanır:</p>
 
   <div class="checklist-box">
     <div class="check-item">
@@ -542,7 +542,7 @@
       <span class="check-icon check-yellow">↓</span>
       <div>
         <strong>Tek Günde Skor -3 → Yarı Çıkış</strong>
-        <p>Hızlı bozulma sinyali. Kısmi TP henüz alınmadıysa pozisyonun %50'si satılır.</p>
+        <p>Hızlı bozulma belirtisi. Kısmi TP henüz alınmadıysa pozisyonun %50'si satılır.</p>
       </div>
     </div>
     <div class="check-item">
@@ -556,7 +556,7 @@
       <span class="check-icon check-gray">💤</span>
       <div>
         <strong>20. Gün Dead Money Kontrolü</strong>
-        <p>20 işlem günü sonunda getiri %1'den az ve skor 5'in altındaysa pozisyon kapatılır. Sermaye opportunity cost'u yer; başka sinyale geçmek mantıklı.</p>
+        <p>20 işlem günü sonunda getiri %1'den az ve skor 5'in altındaysa pozisyon kapatılır. Sermaye opportunity cost'u yer; başka fırsata geçmek mantıklı.</p>
       </div>
     </div>
     <div class="check-item">
@@ -600,7 +600,7 @@
       <div class="step-num">1</div>
       <div class="step-body">
         <strong>Piyasa Rejimini Kontrol Et</strong>
-        <p>Önce genel piyasanın durumuna bak. BIST için XU100, ABD için S&P 500 endeksi 200 günlük ortalamasının üzerinde olmalı. Endeks bu ortalamanın altındaysa sinyaller tarihsel olarak çok daha az başarılı olmuştur; bekleme moduna geçmek mantıklı olabilir.</p>
+        <p>Önce genel piyasanın durumuna bak. BIST için XU100, ABD için S&P 500 endeksi 200 günlük ortalamasının üzerinde olmalı. Endeks bu ortalamanın altındaysa göstergeler tarihsel olarak çok daha az başarılı olmuştur; bekleme moduna geçmek mantıklı olabilir.</p>
       </div>
     </li>
     <li class="step-item">
@@ -614,7 +614,7 @@
       <div class="step-num">3</div>
       <div class="step-body">
         <strong>2 Gün Üst Üste Teyit Et</strong>
-        <p>Bir hisse 7+ skor aldığında hemen harekete geçme. Ertesi gün skoru yeniden kontrol et — eğer skor 7'nin üzerinde kalmaya devam ediyorsa sinyal teyitlenmiştir. Bu ikinci gün kontrolü tek günlük sahte spike'ları filtreler.</p>
+        <p>Bir hisse 7+ skor aldığında hemen harekete geçme. Ertesi gün skoru yeniden kontrol et — eğer skor 7'nin üzerinde kalmaya devam ediyorsa gösterge doğrulanmıştır. Bu ikinci gün kontrolü tek günlük sahte spike'ları filtreler.</p>
       </div>
     </li>
     <li class="step-item">
@@ -635,7 +635,7 @@
       <div class="step-num">6</div>
       <div class="step-body">
         <strong>Portföy Uyarılarını Yorumla</strong>
-        <p>Portföy sekmesi rozet sistemiyle pozisyon sağlığını gösterir. "Trend Sağlıklı" → skor 7+, göstergeler pozitif. "Zayıflama Sinyalleri" → skor düşmekte, dikkatli ol. "Yüksek Risk" → stop bölgesine yaklaşıldı veya skor 0-2, çıkışı değerlendir. 3 ardışık gün skor 4 veya altına düşerse pozisyondan çıkmak TDO v2 stratejisinin bir parçasıdır.</p>
+        <p>Portföy sekmesi rozet sistemiyle pozisyon sağlığını gösterir. "Trend Sağlıklı" → skor 7+, göstergeler pozitif. "Zayıflama Belirtileri" → skor düşmekte, dikkatli ol. "Yüksek Risk" → stop bölgesine yaklaşıldı veya skor 0-2, çıkışı değerlendir. 3 ardışık gün skor 4 veya altına düşerse pozisyondan çıkmak TDO v2 stratejisinin bir parçasıdır.</p>
       </div>
     </li>
   </ol>
@@ -650,12 +650,12 @@
   <p>Hayır. Yüksek skor, teknik göstergelerin pozitif hizalandığını gösterir; ancak haber riskleri, makroekonomik değişimler ve şirket bazlı gelişmeler teknik analizin kapsamı dışındadır. Teknik skor, tek başına yeterli bir değerlendirme kriteri değildir.</p>
 
   <h3>Neden 7, 8 değil?</h3>
-  <p>Skor 8 + ardışık gün koşulu yıllık yalnızca 30-50 işlem üretir — istatistiksel anlamlılık için yetersiz bir örneklem. TDO v2 eşiği 7'ye indirdi, ancak 4 ek filtre (trend alt-skoru ≥ 2, hacim onayı, dual rejim, 52w pozisyonu) kaliteyi koruyor. Sonuç: daha fazla işlem, benzer kalite. 6 veya altı ise filtresiz geçen sahte sinyallerle dolduğundan giriş eşiği olarak önerilmez.</p>
+  <p>Skor 8 + ardışık gün koşulu yıllık yalnızca 30-50 işlem üretir — istatistiksel anlamlılık için yetersiz bir örneklem. TDO v2 eşiği 7'ye indirdi, ancak 4 ek filtre (trend alt-skoru ≥ 2, hacim onayı, dual rejim, 52w pozisyonu) kaliteyi koruyor. Sonuç: daha fazla işlem, benzer kalite. 6 veya altı ise filtresiz geçen yanıltıcı göstergelerle dolduğundan giriş eşiği olarak önerilmez.</p>
 
   <h3>Neden "2 gün üst üste" şartı var?</h3>
-  <p>Tek bir günde 7+ alan bazı hisseler ertesi gün hızla geri çekilebilir — bu "sahte sinyal" olarak adlandırılır. Backtest, giriş sinyalinin 2 ardışık gün korunduğu durumlarda kazanma oranının belirgin biçimde arttığını göstermektedir. Bu kısa bekleme, birkaç günlük girişi kaçırma pahasına sahte sinyallere karşı güçlü bir filtre işlevi görür.</p>
+  <p>Tek bir günde 7+ alan bazı hisseler ertesi gün hızla geri çekilebilir — bu "yanıltıcı hareket" olarak adlandırılır. Backtest, giriş göstergesinin 2 ardışık gün korunduğu durumlarda kazanma oranının belirgin biçimde arttığını göstermektedir. Bu kısa bekleme, birkaç günlük girişi kaçırma pahasına yanıltıcı hareketlere karşı güçlü bir filtre işlevi görür.</p>
 
-  <h3>Stop-loss sistemi nasıl çalışır?</h3>
+  <h3>Koruma seviyesi nasıl çalışır?</h3>
   <p>BIST hisseleri arasında günlük volatilite 5 kata kadar farklılaşır; tek tip bir yüzdelik stop bu gerçeği görmezden gelir. Sistem bu yüzden her hissenin kendi gürültü seviyesine göre ölçülen ATR (Average True Range) değerini kullanır.</p>
   <p>Stop noktası <strong>giriş fiyatı − 2.5 × ATR</strong> formülüyle belirlenir. Düşük volatil bir hissede bu mesafe dar tutulur, yüksek volatil bir hissede doğal dalgalanmayı absorbe edecek kadar genişler. Sonuç: gereksiz erken çıkışlar (whipsaw) azalır, aynı zamanda pozisyon her hisse için orantılı büyüklükte tutulur. Pozisyon %4 kâra ulaştığında stop giriş fiyatına çekilir, %6+ kârda ise Chandelier trailing moduna geçer.</p>
 

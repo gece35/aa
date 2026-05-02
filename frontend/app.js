@@ -544,7 +544,7 @@
         if (r.volume_spike) parts.push('hacim ortalamanın üzerinde');
         if (r.near_peak) parts.push('dikkat: zirveye yakın');
 
-        if (!parts.length) return r.score === 0 ? 'Aktif teknik sinyal bulunmuyor.' : '';
+        if (!parts.length) return r.score === 0 ? 'Aktif teknik gösterge bulunmuyor.' : '';
         const sentence = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
         const rest = parts.slice(1);
         if (!rest.length) return sentence + '.';
@@ -717,10 +717,10 @@
 
         const slTpHtml = (sl || tp) ? `
             <div style="margin-top:14px;">
-                <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--text-3);margin-bottom:10px;">Stop Loss / Direnç Hedefi</div>
+                <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--text-3);margin-bottom:10px;">Kritik Destek / Direnç Hedefi</div>
                 <div class="sl-tp-box">
                     ${sl ? `<div class="sl-tp-item stop-loss">
-                        <span class="sl-tp-label">Stop Loss</span>
+                        <span class="sl-tp-label">Kritik Destek</span>
                         <span class="sl-tp-value">${fmtPrice(sl, ccy)}</span>
                         <span class="sl-tp-pct">${slPct}%</span>
                     </div>` : ''}
@@ -1053,7 +1053,7 @@
 
         // ── Yüksek Risk ───────────────────────────────────────────────────
         if (sl && price <= sl) {
-            reasons.push('Stop loss seviyesi kırıldı');
+            reasons.push('Kritik destek kırıldı');
             if (weekPct < -5) reasons.push(`Bu hafta %${Math.abs(weekPct).toFixed(1)} düşüş`);
             return { level: 'sat_hemen', label: 'Yüksek Risk', reasons };
         }
@@ -1082,7 +1082,7 @@
 
         // ── Zayıflama Sinyalleri ──────────────────────────────────────────
         let bearish = 0;
-        if (sl && price < sl * 1.035 && pnlPct < -2) { reasons.push("Stop loss'a %3'ten az mesafe kaldı"); bearish += 2; }
+        if (sl && price < sl * 1.035 && pnlPct < -2) { reasons.push("Kritik desteğe %3'ten az mesafe kaldı"); bearish += 2; }
         if (pnlPct < -10 && trend === 'down') {
             reasons.push(`%${Math.abs(pnlPct).toFixed(1)} zararda ve düşüş trendi`);
             bearish += 2;
@@ -1092,7 +1092,7 @@
         if (wedge === 'rising' && score <= 4) { reasons.push('Yükselen kama kırılım riski'); bearish++; }
         if (trend === 'down' && score <= 2 && pnlPct < 0) { reasons.push('Düşüş trendi + zararda pozisyon'); bearish++; }
         const bearishThreshold = score >= 6 ? 3 : 2;
-        if (bearish >= bearishThreshold) return { level: 'sat_dusun', label: 'Zayıflama Sinyalleri', reasons: reasons.slice(0, 3) };
+        if (bearish >= bearishThreshold) return { level: 'sat_dusun', label: 'Zayıflama Belirtileri', reasons: reasons.slice(0, 3) };
 
         // ── Trend Sağlıklı ────────────────────────────────────────────────
         let bullish = 0;
@@ -1111,7 +1111,7 @@
         if (Math.abs(weekPct) <= 2) watchReasons.push('Yatay seyir, net yön bekleniyor');
         else if (weekPct > 0) watchReasons.push(`Haftalık +%${weekPct.toFixed(1)} pozitif seyir`);
         if (wedge) watchReasons.push(wedge === 'rising' ? 'Yükselen kama: kırılımı izle' : 'Düşen kama: yukarı kırılım beklentisi');
-        if (!watchReasons.length) watchReasons.push('Karma sinyaller, izlemede');
+        if (!watchReasons.length) watchReasons.push('Karma göstergeler, izlemede');
         return { level: 'izle', label: 'İzlemede', reasons: watchReasons.slice(0, 2) };
     }
 
@@ -1223,7 +1223,7 @@
             dd_halt: 'DD Halt',
             acik_pozisyon: 'Açık',
             // eski stratejilerin geriye uyumluluğu
-            take_profit: 'Take Profit', stop_loss: 'Stop Loss',
+            take_profit: 'Take Profit', stop_loss: 'Kritik Destek',
             skor_dustu: 'Skor Düştü', sure_doldu: 'Süre Doldu', kismi_cikis: 'Kısmi'
         };
         const exitHtml = Object.entries(exitDist).map(([k, v]) =>
@@ -1360,7 +1360,7 @@
         });
 
         if (!stocks.length) {
-            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-3)">Bu market için işlem sinyali bulunamadı.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-3)">Bu market için işlem fırsatı bulunamadı.</td></tr>`;
         }
     }
 
@@ -1376,7 +1376,7 @@
             dd_halt: '🚨 DD Halt',
             acik_pozisyon: '📂 Açık',
             // eski stratejilerin geriye uyumluluğu
-            take_profit: '✅ TP', stop_loss: '🛑 SL',
+            take_profit: '✅ TP', stop_loss: '🛑 KD',
             skor_dustu: '📉 Skor', sure_doldu: '⏱ Süre', kismi_cikis: '📉 Kısmi'
         };
         const rows = trades.map(t => {
@@ -1759,10 +1759,10 @@
 
         if (pos) {
             candleSeries.createPriceLine({ price: pos.buyPrice, color: 'rgba(167,139,250,.9)', lineWidth: 1, lineStyle: 1, axisLabelVisible: true, title: 'Alış' });
-            if (d.stop_loss)   candleSeries.createPriceLine({ price: d.stop_loss,   color: '#ff5370', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'SL' });
+            if (d.stop_loss)   candleSeries.createPriceLine({ price: d.stop_loss,   color: '#ff5370', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'KD' });
             if (d.take_profit) candleSeries.createPriceLine({ price: d.take_profit, color: '#34f5a8', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TP' });
         } else {
-            if (d.stop_loss)   candleSeries.createPriceLine({ price: d.stop_loss,   color: 'rgba(255,83,112,.7)', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'SL' });
+            if (d.stop_loss)   candleSeries.createPriceLine({ price: d.stop_loss,   color: 'rgba(255,83,112,.7)', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'KD' });
             if (d.take_profit) candleSeries.createPriceLine({ price: d.take_profit, color: 'rgba(52,245,168,.7)', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TP' });
         }
 
