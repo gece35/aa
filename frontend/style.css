@@ -260,14 +260,17 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
 /* cards grid */
 .results-area { display: grid; gap: 14px; }
 .stock-card {
+    cursor: pointer;
+    transition: transform var(--trans), box-shadow var(--trans), border-color var(--trans);
+    position: relative;
+    overflow: hidden;
+}
+.card-content-inner {
     padding: 18px 22px;
     display: grid;
     grid-template-columns: 52px minmax(0, 1.4fr) 120px 1.2fr 1.4fr auto;
     gap: 18px;
     align-items: center;
-    cursor: pointer;
-    transition: transform var(--trans), box-shadow var(--trans), border-color var(--trans);
-    position: relative;
 }
 .star-toggle {
     position: absolute;
@@ -524,15 +527,15 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
 
 @media (max-width: 960px) {
     .summary-grid { grid-template-columns: repeat(2, 1fr); }
-    .stock-card {
+    .card-content-inner {
         grid-template-columns: 44px 1fr auto;
         grid-template-rows: auto auto auto;
         row-gap: 10px;
     }
-    .stock-card .spark-wrap { grid-column: 1 / -1; grid-row: 2; min-width: auto; }
-    .stock-card .price-block { grid-column: 2; grid-row: 1; }
-    .stock-card .indicators { grid-column: 1 / -1; grid-row: 3; }
-    .stock-card .score-chip { grid-column: 3; grid-row: 1; }
+    .card-content-inner .spark-wrap { grid-column: 1 / -1; grid-row: 2; min-width: auto; }
+    .card-content-inner .price-block { grid-column: 2; grid-row: 1; }
+    .card-content-inner .indicators { grid-column: 1 / -1; grid-row: 3; }
+    .card-content-inner .score-chip { grid-column: 3; grid-row: 1; }
     .shortcut-hint { display: none; }
 }
 @media (max-width: 600px) {
@@ -586,6 +589,40 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
 .plan-gate-text span { color: var(--text-2); }
 .plan-gate-text a { color: var(--accent-2); text-decoration: none; font-weight: 600; }
 .plan-gate-text a:hover { text-decoration: underline; }
+
+/* Guest blur lock */
+.stock-card.guest-locked .card-content-inner {
+    filter: blur(5px);
+    pointer-events: none;
+    user-select: none;
+}
+.guest-lock-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: rgba(10, 12, 18, 0.55);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    z-index: 2;
+}
+.guest-lock-overlay .lock-icon { font-size: 20px; }
+.guest-lock-overlay .lock-msg { font-size: 12px; color: var(--text-2); text-align: center; }
+.guest-lock-overlay .lock-cta {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--bg-0);
+    background: var(--accent-2);
+    border: none;
+    border-radius: 20px;
+    padding: 5px 14px;
+    cursor: pointer;
+    transition: opacity .15s;
+}
+.guest-lock-overlay .lock-cta:hover { opacity: .85; }
 
 /* volume spike badge */
 .badge.volume-spike {
@@ -1588,7 +1625,7 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
     .header-meta { gap: 8px; }
     .btn-ghost, .btn-primary { padding: 7px 12px; font-size: 13px; }
     .user-email { max-width: 110px; }
-    .rehber-nav-btn .rehber-text { display: none; }
+    .rehber-nav-btn .rehber-text { display: inline; font-size: 12px; }
 
     /* Market switcher: daha kompakt */
     .market-switcher { padding: 12px 16px; gap: 10px; margin-bottom: 16px; }

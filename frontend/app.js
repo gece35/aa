@@ -427,8 +427,9 @@
     function cssSafe(s) { return String(s).replace(/[^a-zA-Z0-9_-]/g, '_'); }
 
     function buildStockCard(r, idx) {
+        const isGuestLocked = !_currentUser && idx >= 5;
         const card = document.createElement('div');
-        card.className = 'stock-card glass';
+        card.className = 'stock-card glass' + (isGuestLocked ? ' guest-locked' : '');
         const change = Number(r.change_pct || 0);
         const changeClass = change >= 0 ? 'up' : 'down';
         const displaySymbol = r.symbol.replace('.IS', '');
@@ -450,6 +451,7 @@
             : '';
 
         card.innerHTML = `
+            <div class="card-content-inner">
             <button class="star-toggle ${isWatched ? 'active' : ''}" data-sym="${r.symbol}" title="Favorilere ekle">&#9733;</button>
             <div class="stock-rank">${idx + 1}</div>
             <div>
@@ -479,7 +481,21 @@
             </div>
             ${reason ? `<div class="score-reason">${escapeHtml(reason)}</div>` : ''}
             ${chartBtnHtml}
+            </div>
         `;
+
+        if (isGuestLocked) {
+            const overlay = document.createElement('div');
+            overlay.className = 'guest-lock-overlay';
+            overlay.innerHTML = `
+                <span class="lock-icon">🔒</span>
+                <span class="lock-msg">Tüm sonuçları görmek için<br>ücretsiz üye olun</span>
+                <button class="lock-cta">Üye Ol →</button>
+            `;
+            overlay.querySelector('.lock-cta').addEventListener('click', () => openAuthModal('signup'));
+            card.appendChild(overlay);
+            return card;
+        }
 
         card.addEventListener('click', (e) => {
             if (e.target.closest('.star-toggle') || e.target.closest('.scan-chart-btn')) return;
