@@ -590,6 +590,36 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
 .plan-gate-text a { color: var(--accent-2); text-decoration: none; font-weight: 600; }
 .plan-gate-text a:hover { text-decoration: underline; }
 
+/* Guest teaser banner (5. kartın altı) */
+.guest-teaser-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 13px 20px;
+    margin: 4px 0;
+    background: linear-gradient(90deg, rgba(139,92,246,.12) 0%, rgba(99,179,237,.08) 100%);
+    border: 1px solid rgba(139,92,246,.35);
+    border-radius: var(--radius-m);
+    font-size: 13px;
+    flex-wrap: wrap;
+}
+.guest-teaser-banner .teaser-lock { font-size: 16px; flex-shrink: 0; }
+.guest-teaser-banner .teaser-msg { color: var(--text-2); flex: 1; min-width: 160px; }
+.guest-teaser-banner .teaser-msg strong { color: var(--text-1); }
+.guest-teaser-banner .teaser-cta {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--bg-0);
+    background: var(--accent-2);
+    border: none;
+    border-radius: 20px;
+    padding: 6px 16px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: opacity .15s;
+}
+.guest-teaser-banner .teaser-cta:hover { opacity: .85; }
+
 /* Guest blur lock */
 .stock-card.guest-locked .card-content-inner {
     filter: blur(5px);

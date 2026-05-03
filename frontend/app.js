@@ -214,7 +214,7 @@
         }
 
         renderSkeletons(8);
-        els.resultsArea.querySelectorAll('.stock-card, .empty, .loader-sentinel, .plan-gate-banner').forEach((x) => x.remove());
+        els.resultsArea.querySelectorAll('.stock-card, .empty, .loader-sentinel, .plan-gate-banner, .guest-teaser-banner').forEach((x) => x.remove());
 
         try {
             await loadNextChunk(force);
@@ -358,7 +358,7 @@
 
         filtered = sortResults(filtered);
 
-        els.resultsArea.querySelectorAll('.stock-card, .empty, .loader-sentinel, .plan-gate-banner').forEach((x) => x.remove());
+        els.resultsArea.querySelectorAll('.stock-card, .empty, .loader-sentinel, .plan-gate-banner, .guest-teaser-banner').forEach((x) => x.remove());
 
         if (!filtered.length && !m.loading) {
             const empty = document.createElement('div');
@@ -374,6 +374,16 @@
             filtered.forEach((r, idx) => {
                 const card = buildStockCard(r, idx);
                 frag.appendChild(card);
+                if (!_currentUser && idx === 4 && filtered.length > 5) {
+                    const teaser = document.createElement('div');
+                    teaser.className = 'guest-teaser-banner';
+                    teaser.innerHTML = `
+                        <span class="teaser-lock">🔒</span>
+                        <span class="teaser-msg"><strong>${filtered.length - 5} hisse daha</strong> tarandı — tamamını görmek için</span>
+                        <button class="teaser-cta" onclick="openAuthModal('signup')">Ücretsiz Üye Ol →</button>
+                    `;
+                    frag.appendChild(teaser);
+                }
             });
             els.resultsArea.appendChild(frag);
 
