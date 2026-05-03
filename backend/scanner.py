@@ -136,6 +136,7 @@ def scan_market_chunk(market: str, offset: int, limit: int, force: bool = False,
 
     info = MARKETS[market]
     tickers = get_tickers(market)
+    full_total = len(tickers)
     if max_tickers is not None:
         tickers = tickers[:max_tickers]
     total = len(tickers)
@@ -197,6 +198,7 @@ def scan_market_chunk(market: str, offset: int, limit: int, force: bool = False,
         "label": info["label"],
         "currency": info["currency"],
         "total": total,
+        "full_total": full_total,
         "offset": offset,
         "limit": limit,
         "scored": len(results),

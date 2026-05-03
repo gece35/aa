@@ -250,6 +250,7 @@
                 }
             }
             m.total = data.total || m.total;
+            m.fullTotal = data.full_total || m.fullTotal || m.total;
             m.offset = data.next_offset != null ? data.next_offset : (m.offset + (data.limit || BATCH_SIZE));
             m.hasMore = Boolean(data.has_more);
             m.generatedAt = data.generated_at || m.generatedAt || Math.floor(Date.now() / 1000);
@@ -375,7 +376,7 @@
                 const card = buildStockCard(r, idx);
                 frag.appendChild(card);
                 if (!_currentUser && idx === 4 && filtered.length > 5) {
-                    const remaining = (m.total || filtered.length) - 5;
+                    const remaining = (m.fullTotal || m.total || filtered.length) - 5;
                     const teaser = document.createElement('div');
                     teaser.className = 'guest-teaser-banner';
                     teaser.innerHTML = `
