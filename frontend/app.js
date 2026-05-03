@@ -1929,9 +1929,19 @@
 
     document.addEventListener('keydown', (e) => {
         const isTyping = ['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target && e.target.tagName) || '');
-        if (e.key === 'Escape') { closeModal(); closePortChartModal(); return; }
+        if (e.key === 'Escape') {
+            closeModal();
+            closePortChartModal();
+            closeAuthModal();
+            closeAlertModal();
+            closePricingModal();
+            confirmDeleteModal?.classList.add('hidden');
+            accountPanel?.classList.add('hidden');
+            return;
+        }
         if (isTyping) return;
         if (e.key === '/') { e.preventDefault(); els.searchInput.focus(); return; }
+        if (e.key === '?') { window.location.href = '/rehber.html'; return; }
         if (e.key.toLowerCase() === 'r') loadScan(true);
     });
 
@@ -2090,6 +2100,9 @@
     });
     document.getElementById('alertModalClose')?.addEventListener('click', closeAlertModal);
     document.getElementById('alertModalBackdrop')?.addEventListener('click', closeAlertModal);
+    document.getElementById('alertModal')?.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && e.target?.tagName !== 'BUTTON') document.getElementById('af-submit')?.click();
+    });
 
     document.getElementById('af-submit')?.addEventListener('click', async () => {
         const symbol = (document.getElementById('af-symbol')?.value || '').trim().toUpperCase();
@@ -2257,6 +2270,19 @@
     document.getElementById('authModalClose')?.addEventListener('click', closeAuthModal);
     document.getElementById('authModalBackdrop')?.addEventListener('click', closeAuthModal);
     document.getElementById('upgradeBtn')?.addEventListener('click', () => openPricingModal());
+
+    authModal?.addEventListener('keydown', e => {
+        if (e.key !== 'Enter' || e.target?.tagName === 'BUTTON' || e.target?.tagName === 'A') return;
+        if (!document.getElementById('authFormLogin')?.classList.contains('hidden')) {
+            document.getElementById('loginSubmit')?.click();
+        } else if (!document.getElementById('authFormSignup')?.classList.contains('hidden')) {
+            document.getElementById('signupSubmit')?.click();
+        } else if (!document.getElementById('authFormForgot')?.classList.contains('hidden')) {
+            document.getElementById('forgotSubmit')?.click();
+        } else if (!document.getElementById('authFormReset')?.classList.contains('hidden')) {
+            document.getElementById('resetSubmit')?.click();
+        }
+    });
 
     document.querySelectorAll('.auth-tab').forEach(tab => {
         tab.addEventListener('click', () => {
