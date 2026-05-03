@@ -285,7 +285,7 @@
 
     function updateSummary() {
         const m = ms();
-        els.statTotal.textContent = m.total || '-';
+        els.statTotal.textContent = state.marketTickerCount[state.market] || m.total || '-';
         els.statScored.textContent = m.results.length || '-';
         const avg = m.results.length ? (m.results.reduce((s, r) => s + r.score, 0) / m.results.length) : 0;
         els.statAvg.textContent = avg ? avg.toFixed(2) : '-';
