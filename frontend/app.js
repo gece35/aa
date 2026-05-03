@@ -54,6 +54,7 @@
         prefetchTimer: null,
         usdRate: null,
         showUsd: false,
+        marketTickerCount: {},
     };
 
     function ms() { return state.byMarket[state.market]; }
@@ -169,6 +170,7 @@
         const res = await API.markets();
         els.marketButtons.innerHTML = '';
         res.markets.forEach((m) => {
+            state.marketTickerCount[m.code] = m.ticker_count;
             const btn = document.createElement('button');
             btn.className = 'market-btn' + (m.code === state.market ? ' active' : '');
             btn.dataset.market = m.code;
@@ -376,7 +378,7 @@
                 const card = buildStockCard(r, idx);
                 frag.appendChild(card);
                 if (!_currentUser && idx === 4 && filtered.length > 5) {
-                    const remaining = (m.fullTotal || m.total || filtered.length) - 5;
+                    const remaining = (state.marketTickerCount[state.market] || m.fullTotal || m.total || filtered.length) - 5;
                     const teaser = document.createElement('div');
                     teaser.className = 'guest-teaser-banner';
                     teaser.innerHTML = `
