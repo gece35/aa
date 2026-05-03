@@ -64,17 +64,13 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
 .brand { display: flex; align-items: center; gap: 16px; }
 .logo {
     width: 44px; height: 44px;
-    border-radius: 10px;
-    display: grid; place-items: center;
-    background: var(--accent);
-    border: 1px solid var(--accent-dim);
+    border-radius: 12px;
+    overflow: hidden;
+    flex-shrink: 0;
+    border: 1px solid rgba(139, 92, 246, 0.25);
+    box-shadow: 0 0 12px rgba(139, 92, 246, 0.18);
 }
-.logo-dot {
-    width: 16px; height: 16px;
-    border-radius: 50%;
-    background: #fff;
-    opacity: 0.9;
-}
+.logo img { display: block; width: 44px; height: 44px; }
 
 .brand-text h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
 .brand-text .accent { color: var(--accent-2); }
@@ -1652,6 +1648,7 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
     .brand-text p { display: none; }
     .brand-text h1 { font-size: 20px; }
     .logo { width: 36px; height: 36px; }
+    .logo img { width: 36px; height: 36px; }
     .header-meta { gap: 8px; }
     .btn-ghost, .btn-primary { padding: 7px 12px; font-size: 13px; }
     .user-email { max-width: 110px; }
