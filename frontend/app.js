@@ -375,11 +375,12 @@
                 const card = buildStockCard(r, idx);
                 frag.appendChild(card);
                 if (!_currentUser && idx === 4 && filtered.length > 5) {
+                    const remaining = (m.total || filtered.length) - 5;
                     const teaser = document.createElement('div');
                     teaser.className = 'guest-teaser-banner';
                     teaser.innerHTML = `
                         <span class="teaser-lock">🔒</span>
-                        <span class="teaser-msg"><strong>${filtered.length - 5} hisse daha</strong> tarandı — tamamını görmek için</span>
+                        <span class="teaser-msg">Geri kalan <strong>${remaining} hisseyi</strong> görmek için</span>
                         <button class="teaser-cta" onclick="openAuthModal('signup')">Ücretsiz Üye Ol →</button>
                     `;
                     frag.appendChild(teaser);
