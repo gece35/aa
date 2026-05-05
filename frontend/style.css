@@ -1871,6 +1871,23 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
 }
 .email-verify-banner.hidden { display: none; }
 
+/* ── Trust bar ───────────────────────────────────────────────────────── */
+.trust-bar {
+    background: rgba(15,20,35,0.6);
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    padding: 7px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    color: var(--text-3);
+}
+.trust-item strong { color: #a78bfa; }
+.trust-sep { color: rgba(255,255,255,0.15); }
+@media (max-width: 480px) { .trust-sep:nth-child(6), .trust-sep:nth-child(6) ~ * { display: none; } }
+
 /* ── Beta banner ─────────────────────────────────────────────────────── */
 .beta-banner {
     background: linear-gradient(90deg, rgba(139,92,246,.15) 0%, rgba(99,102,241,.1) 100%);
