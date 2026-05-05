@@ -2271,6 +2271,7 @@
         document.getElementById('betaBanner')?.classList.add('hidden');
         sessionStorage.setItem('betaBannerClosed', '1');
     });
+    document.getElementById('betaBannerCta')?.addEventListener('click', () => openAuthModal('signup'));
 
     // Bootstrap: önce auth durumunu öğren, sonra watchlist/portfolio yükle
     Auth.me().then(async d => {
