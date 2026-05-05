@@ -2295,7 +2295,7 @@
         openAuthModal('signup');
     }
 
-    function openAuthModal(tab) {
+    window.openAuthModal = function openAuthModal(tab) {
         authModal.classList.remove('hidden');
         const isReset = tab === 'reset';
         document.querySelector('.auth-tabs').style.display = isReset ? 'none' : '';
