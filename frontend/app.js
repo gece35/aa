@@ -682,6 +682,7 @@
             els.modalContent.innerHTML = renderStockDetail(data, newsData);
             drawDetailChart(data.history || [], data.supports || [], data.resistances || [], data.stop_loss, data.take_profit);
             wireModalWatchToggle(data.symbol);
+            wireModalShare(data.symbol, data.score);
             wireModalPortfolioForm(data);
         } catch (err) {
             els.modalContent.innerHTML = `<div class="empty">Detay yuklenemedi: ${err.message}</div>`;
@@ -695,6 +696,34 @@
             toggleWatch(symbol);
             btn.classList.toggle('active');
             renderResults();
+        });
+    }
+
+    function wireModalShare(symbol, score) {
+        const btn = document.getElementById('modalShare');
+        if (!btn) return;
+        btn.addEventListener('click', () => {
+            const display = symbol.replace('.IS', '');
+            const text = `${display} şu an Nebula Scanner'da ${score}/10 puan aldı 🌌`;
+            const url = `${location.origin}/?s=${encodeURIComponent(symbol)}`;
+            const fullText = `${text}\n${url}`;
+            if (navigator.share) {
+                navigator.share({ title: `${display} — Nebula Scanner`, text, url }).catch(() => {});
+            } else if (navigator.clipboard) {
+                navigator.clipboard.writeText(fullText).then(() => {
+                    btn.textContent = '✓ Kopyalandı';
+                    setTimeout(() => { btn.textContent = '🔗 Paylaş'; }, 2000);
+                });
+            } else {
+                const ta = document.createElement('textarea');
+                ta.value = fullText;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                btn.textContent = '✓ Kopyalandı';
+                setTimeout(() => { btn.textContent = '🔗 Paylaş'; }, 2000);
+            }
         });
     }
 
@@ -789,6 +818,7 @@
                     <div style="color:var(--text-3);font-size:12px;letter-spacing:1px;text-transform:uppercase;">${escapeHtml(d.symbol)}</div>
                 </div>
                 <button id="modalStar" class="star-toggle ${isWatched ? 'active' : ''}" style="position:static;font-size:22px;" title="Favorilere ekle">&#9733;</button>
+                <button id="modalShare" class="btn btn-ghost" style="font-size:13px;padding:6px 12px;" title="Paylaş">🔗 Paylaş</button>
                 <div style="margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                     ${spikeHtml}${nearPeakHtml}
                     <div class="score-chip" data-score="${d.score}"><span class="star">&#9733;</span> ${d.score}/10</div>
@@ -2215,6 +2245,7 @@
         const backtestTab = document.getElementById('backtestTabBtn');
 
         const verifyBanner = document.getElementById('emailVerifyBanner');
+        const betaBanner = document.getElementById('betaBanner');
         if (user) {
             authArea.classList.add('hidden');
             userArea.classList.remove('hidden');
@@ -2223,13 +2254,23 @@
             if (upgradeBtn) upgradeBtn.classList.add('hidden');
             if (backtestTab) backtestTab.classList.toggle('hidden', !user.is_admin);
             if (verifyBanner) verifyBanner.classList.toggle('hidden', !!user.email_verified);
+            if (betaBanner) betaBanner.classList.add('hidden');
         } else {
             authArea.classList.remove('hidden');
             userArea.classList.add('hidden');
             if (backtestTab) backtestTab.classList.add('hidden');
             if (verifyBanner) verifyBanner.classList.add('hidden');
+            // Kapatılmamışsa beta banner'ı göster
+            if (betaBanner && !sessionStorage.getItem('betaBannerClosed')) {
+                betaBanner.classList.remove('hidden');
+            }
         }
     }
+
+    document.getElementById('betaBannerClose')?.addEventListener('click', () => {
+        document.getElementById('betaBanner')?.classList.add('hidden');
+        sessionStorage.setItem('betaBannerClosed', '1');
+    });
 
     // Bootstrap: önce auth durumunu öğren, sonra watchlist/portfolio yükle
     Auth.me().then(async d => {
@@ -2242,6 +2283,9 @@
         await loadMarkets();
         fetchExchangeRate();
         loadScan();
+        // ?s=SYMBOL deeplink — paylaş butonu linklerini destekler
+        const deepSym = new URLSearchParams(location.search).get('s');
+        if (deepSym) openStockModal(deepSym.toUpperCase());
     });
 
     // Auth modal
@@ -2682,6 +2726,46 @@
         closeBtn.addEventListener('click', toggleChat);
         sendBtn.addEventListener('click', sendMessage);
         input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
+    })();
+
+    // ── Newsletter formu ──────────────────────────────────────────────────
+    (function() {
+        const form = document.getElementById('newsletterForm');
+        if (!form) return;
+        const msgEl = document.getElementById('newsletterMsg');
+
+        form.addEventListener('submit', async e => {
+            e.preventDefault();
+            const email = document.getElementById('newsletterEmail')?.value.trim();
+            if (!email) return;
+
+            const btn = form.querySelector('.newsletter-btn');
+            btn.disabled = true;
+            btn.textContent = 'Gönderiliyor...';
+
+            try {
+                const res = await fetch('/api/newsletter', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, kvkk_consent: true, source: 'footer' }),
+                }).then(r => r.json());
+
+                msgEl.textContent = res.message || (res.ok ? 'Abone oldunuz!' : res.error);
+                msgEl.className = 'newsletter-msg ' + (res.ok ? 'success' : 'error');
+                msgEl.classList.remove('hidden');
+                if (res.ok) {
+                    document.getElementById('newsletterEmail').value = '';
+                    form.style.display = 'none';
+                }
+            } catch {
+                msgEl.textContent = 'Bağlantı hatası. Lütfen tekrar deneyin.';
+                msgEl.className = 'newsletter-msg error';
+                msgEl.classList.remove('hidden');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Abone Ol';
+            }
+        });
     })();
 
 })();

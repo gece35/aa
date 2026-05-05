@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MACD Göstergesi Nedir? BIST Hisselerinde Pratik Kullanım — Nebula Scanner</title>
+<meta name="description" content="MACD göstergesi nasıl hesaplanır, sinyal çizgisi ne anlama gelir ve BIST hisselerinde nasıl yorumlanır? THYAO, ASELS örnekleriyle adım adım MACD rehberi." />
+<meta property="og:type" content="article" />
+<meta property="og:title" content="MACD Göstergesi Nedir? BIST Hisselerinde Pratik Kullanım" />
+<meta property="og:description" content="MACD nasıl hesaplanır, sinyal çizgisi ne anlama gelir ve BIST hisselerinde nasıl yorumlanır? Örnek hisselerle adım adım." />
+<meta property="og:url" content="https://nebulascanner.com/blog/macd-gostergesi-nedir" />
+<meta property="og:image" content="https://nebulascanner.com/logo.svg" />
+<meta name="twitter:card" content="summary" />
+<link rel="canonical" href="https://nebulascanner.com/blog/macd-gostergesi-nedir" />
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../legal/legal.css" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "MACD Göstergesi Nedir? BIST Hisselerinde Pratik Kullanım",
+  "description": "MACD nasıl hesaplanır, sinyal çizgisi ne anlama gelir ve BIST hisselerinde nasıl yorumlanır?",
+  "datePublished": "2026-05-05",
+  "publisher": { "@type": "Organization", "name": "Nebula Scanner", "url": "https://nebulascanner.com" },
+  "mainEntityOfPage": { "@type": "WebPage", "@id": "https://nebulascanner.com/blog/macd-gostergesi-nedir" }
+}
+</script>
+<style>
+  html, body { background: #0d1117 !important; color: #c9d1d9 !important; }
+  h1, h2, h3 { color: #e6edf3 !important; }
+  .blog-article { max-width: 720px; margin: 0 auto; }
+  .blog-article h2 { font-size: 20px !important; margin-top: 36px !important; }
+  .blog-article h3 { font-size: 16px !important; color: #a5b4fc !important; }
+  .blog-article p { line-height: 1.8; margin-bottom: 16px; }
+  .blog-article ul, .blog-article ol { padding-left: 24px; line-height: 1.8; }
+  .blog-article li { margin-bottom: 6px; }
+  .blog-article strong { color: #e6edf3; }
+  .callout { background: rgba(139,92,246,.1); border-left: 3px solid #8b5cf6; padding: 14px 18px; border-radius: 0 8px 8px 0; margin: 24px 0; font-size: 14px; }
+  .formula-box { background: rgba(10,12,20,.6); border: 1px solid rgba(255,255,255,.1); border-radius: 8px; padding: 16px 20px; font-family: monospace; font-size: 14px; color: #a78bfa; margin: 16px 0; }
+  .cta-box { background: linear-gradient(135deg, rgba(139,92,246,.15), rgba(99,102,241,.1)); border: 1px solid rgba(139,92,246,.3); border-radius: 12px; padding: 24px; text-align: center; margin: 36px 0; }
+  .cta-box h3 { margin: 0 0 8px !important; }
+  .cta-box p { margin: 0 0 16px; font-size: 14px; color: #9ca3af; }
+  .btn-cta { display: inline-block; background: linear-gradient(135deg, #8b5cf6, #6366f1); color: white; text-decoration: none; padding: 11px 28px; border-radius: 8px; font-weight: 600; font-size: 14px; }
+  .breadcrumb { font-size: 13px; color: #4b5563; margin-bottom: 24px; }
+  .breadcrumb a { color: #6b7280; text-decoration: none; }
+  .article-meta { font-size: 13px; color: #6b7280; margin-bottom: 28px; }
+  table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px; }
+  th { text-align: left; color: #6b7280; font-weight: 500; padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,.07); }
+  td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,.05); }
+  tr:last-child td { border-bottom: none; }
+</style>
+</head>
+<body>
+<div class="page blog-article">
+  <div class="breadcrumb"><a href="/">Ana Sayfa</a> › <a href="/blog/">Blog</a> › MACD Göstergesi</div>
+
+  <h1>MACD Göstergesi Nedir?<br>BIST Hisselerinde Pratik Kullanım</h1>
+  <div class="article-meta">7 dk okuma &bull; Mayıs 2026 &bull; Nebula Scanner Editörü</div>
+
+  <p>MACD (Moving Average Convergence Divergence — Hareketli Ortalama Yakınsama/Iraksama), teknik analizin en yaygın kullanılan momentum göstergelerinden biridir. Gerald Appel tarafından 1970'lerde geliştirilen MACD, trend yönünü, momentumu ve olası dönüş noktalarını tek bir göstergede birleştirir.</p>
+
+  <p>BIST'te faaliyet gösteren bireysel yatırımcıların büyük çoğunluğu MACD adını duymuştur; ama çoğunun onu yanlış yorumladığı ya da eksik kullandığı da bir gerçektir. Bu rehberde MACD'yi sıfırdan, BIST gerçekliğine uygun biçimde açıklıyoruz.</p>
+
+  <h2>MACD Nasıl Hesaplanır?</h2>
+  <p>MACD üç bileşenden oluşur:</p>
+
+  <div class="formula-box">
+MACD Çizgisi = EMA(12) − EMA(26)<br>
+Sinyal Çizgisi = EMA(9) [MACD Çizgisinin 9-günlük EMA'sı]<br>
+Histogram = MACD Çizgisi − Sinyal Çizgisi
+  </div>
+
+  <ul>
+    <li><strong>EMA(12):</strong> Son 12 günün üstel hareketli ortalaması — kısa vadeli fiyat trendi</li>
+    <li><strong>EMA(26):</strong> Son 26 günün üstel hareketli ortalaması — orta vadeli fiyat trendi</li>
+    <li><strong>MACD Çizgisi:</strong> İki EMA arasındaki fark — pozitifse kısa vade orta vadenin üzerinde, negatifse altında</li>
+    <li><strong>Sinyal Çizgisi:</strong> MACD'nin 9-günlük ortalaması — tetikleyici çizgi olarak kullanılır</li>
+    <li><strong>Histogram:</strong> MACD ile Sinyal arasındaki fark — momentumun anlık fotoğrafı</li>
+  </ul>
+
+  <h2>MACD'yi Nasıl Yorumlarsın?</h2>
+
+  <h3>1. Sinyal Çizgisi Kesişimi (En Yaygın Kullanım)</h3>
+  <p>MACD çizgisi, sinyal çizgisini <strong>aşağıdan yukarıya</strong> keserse → yükseliş sinyali (bullish crossover). MACD çizgisi, sinyal çizgisini <strong>yukarıdan aşağıya</strong> keserse → düşüş sinyali (bearish crossover).</p>
+
+  <div class="callout">
+    <strong>BIST'te pratik not:</strong> Kesişim sinyalleri tek başına kullanıldığında sık yanlış sinyal üretir. THYAO gibi yüksek volatiliteli hisselerde özellikle. Hacim ve EMA trend filtresiyle birlikte kullanmak başarı oranını artırır.
+  </div>
+
+  <h3>2. Sıfır Çizgisi Geçişi</h3>
+  <p>MACD çizgisinin sıfırın üzerine çıkması, EMA(12)'nin EMA(26)'yı geçtiği anlamına gelir — orta vadeli yükseliş trendi başladı. Sıfırın altına inmesi tersini gösterir. Bu sinyal, sinyal kesişimine göre daha geç ama daha güvenilirdir.</p>
+
+  <h3>3. Histogram Yönü</h3>
+  <p>Histogram, anın momentum değişimini gösterir. Histogram sıfırın üzerinde ve <strong>büyüyorsa</strong> → yükseliş hız kazanıyor. Sıfırın üzerinde ama <strong>küçülüyorsa</strong> → yükseliş yavaşlıyor, dikkat. Bu nüans, pek çok yatırımcının gözden kaçırdığı altın bilgidir.</p>
+
+  <h3>4. Uyumsuzluk (Divergence)</h3>
+  <p>Fiyat yeni yüksek yapıyor ama MACD histogram yeni yüksek yapmıyorsa → <strong>negatif uyumsuzluk</strong>. Bu, yükselişin arkasındaki momentumun zayıfladığına işaret eder ve yakın vadede düzeltme ihtimalini artırır. Tersine, fiyat yeni düşük yaparken MACD histogram yapmıyorsa → <strong>pozitif uyumsuzluk</strong>, toparlanma işareti.</p>
+
+  <h2>BIST'te MACD: Nelere Dikkat Etmeli?</h2>
+
+  <table>
+    <thead><tr><th>Durum</th><th>MACD'de Ne Görürsün?</th><th>Ne Yapmalısın?</th></tr></thead>
+    <tbody>
+      <tr><td>Güçlü yükseliş trendi</td><td>Histogram sıfırın üzerinde ve artıyor</td><td>Trende katıl, stop belirle</td></tr>
+      <tr><td>Momentum zayıflıyor</td><td>Histogram sıfırın üzerinde ama küçülüyor</td><td>Stop'u sıkılaştır</td></tr>
+      <tr><td>Yükseliş sinyali</td><td>MACD sinyal çizgisini aşağıdan kesiyor</td><td>Hacim onayı ara</td></tr>
+      <tr><td>Negatif uyumsuzluk</td><td>Fiyat yüksek, histogram düşük</td><td>Pozisyonu azalt / koru</td></tr>
+      <tr><td>Sıfır altında, iyileşiyor</td><td>Histogram negatif ama yukarı çıkıyor</td><td>Henüz giriş değil — bekle</td></tr>
+    </tbody>
+  </table>
+
+  <h2>MACD Nebula Scanner'da Nasıl Kullanılıyor?</h2>
+  <p>Nebula Scanner'ın puanlama sisteminde MACD, <strong>Momentum bileşenine</strong> (max 3 puan) katkı sağlar. Histogram yönü ve sinyal çizgisi ilişkisi değerlendirilerek her hisseye 0-3 arası bir momentum puanı atanır. Bu puan, EMA trend, RSI ve Bollinger puanlarıyla birleştirilerek toplam 0-10 skoru oluşturur.</p>
+
+  <p>Bir hissenin MACD katkısını görmek için hisse detay sayfasını aç — gösterge bazlı alt-puan dağılımı orada görünür.</p>
+
+  <div class="cta-box">
+    <h3>MACD'yi Canlı Gör</h3>
+    <p>Nebula Scanner'da 175+ BIST hissesinin MACD durumunu gerçek zamanlı izle.</p>
+    <a href="/" class="btn-cta">Ücretsiz Dene →</a>
+  </div>
+
+  <h2>Sık Sorulan Sorular</h2>
+
+  <h3>MACD parametreleri değiştirilebilir mi?</h3>
+  <p>Evet. 12-26-9 standart parametredir ama bazı yatırımcılar daha hızlı sinyal için 8-17-9 kullanır. BIST'te oynaklık yüksek olduğundan, daha yavaş parametreler (21-55-9 gibi) daha az sahte sinyal üretir.</p>
+
+  <h3>MACD lagging bir gösterge midir?</h3>
+  <p>Evet, MACD geçmiş fiyatlara dayanır — yani öncü değil gecikmeli (lagging) bir göstergedir. Bu bir eksiklik değil; gerçekleşmiş trendi onaylar, spekülasyon yapmaz. Bu nedenle RSI gibi daha hızlı göstergelerle birlikte kullanmak mantıklıdır.</p>
+
+  <hr style="border-color:rgba(255,255,255,.07);margin:40px 0;" />
+  <p style="font-size:13px;color:#4b5563;">⚠ Bu makale yalnızca eğitim amaçlıdır. Yatırım tavsiyesi değildir.</p>
+
+  <nav style="margin-top:32px;display:flex;gap:16px;flex-wrap:wrap;font-size:14px;">
+    <a href="/blog/rsi-gostergesi-nedir" style="color:#a78bfa;">Sonraki: RSI Göstergesi Nedir? →</a>
+    <a href="/blog/hisse-tarama-nasil-yapilir" style="color:#6b7280;">← Önceki: Hisse Tarama</a>
+  </nav>
+
+  <footer class="legal-footer" style="margin-top:40px;">
+    <p>&copy; 2026 Nebula Scanner &bull; <a href="/blog/">Blog</a> &bull; <a href="/rehber">Rehber</a> &bull; <a href="/">Ana Sayfa</a></p>
+  </footer>
+</div>
+</body>
+</html>

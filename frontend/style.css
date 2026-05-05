@@ -1497,6 +1497,64 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
 .footer-legal a:hover { color: var(--text-2); }
 .footer-copy { color: var(--text-3); opacity: .6; }
 
+/* ── Newsletter section ──────────────────────────────────────────────── */
+.newsletter-section {
+    border-top: 1px solid var(--glass-brd-soft);
+    padding: 28px 24px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    background: linear-gradient(180deg, rgba(139,92,246,.04) 0%, transparent 100%);
+}
+.newsletter-inner {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+.newsletter-text {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--text-2);
+    font-size: 14px;
+}
+.newsletter-text .newsletter-icon { font-size: 22px; }
+.newsletter-text strong { color: var(--text-1); display: block; font-size: 15px; }
+.newsletter-form {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+.newsletter-input {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-brd);
+    border-radius: var(--radius-m);
+    color: var(--text-1);
+    font-family: inherit;
+    font-size: 14px;
+    padding: 9px 14px;
+    width: 240px;
+    outline: none;
+    transition: border-color var(--trans);
+}
+.newsletter-input:focus { border-color: rgba(139,92,246,.5); }
+.newsletter-input::placeholder { color: var(--text-3); }
+.newsletter-btn { padding: 9px 18px; font-size: 14px; }
+.newsletter-kvkk { font-size: 11px; color: var(--text-3); text-align: center; }
+.newsletter-kvkk a { color: var(--text-3); }
+.newsletter-msg {
+    font-size: 13px;
+    padding: 8px 16px;
+    border-radius: var(--radius-s);
+    text-align: center;
+}
+.newsletter-msg.success { background: rgba(34,197,94,.1); color: #4ade80; }
+.newsletter-msg.error { background: rgba(239,68,68,.1); color: #f87171; }
+
 /* ── Premium gated overlay ───────────────────────────────────────────── */
 .gated-overlay {
     position: absolute; inset: 0; z-index: 10;
@@ -1869,6 +1927,36 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
     flex-wrap: wrap;
 }
 .email-verify-banner.hidden { display: none; }
+
+/* ── Beta banner ─────────────────────────────────────────────────────── */
+.beta-banner {
+    background: linear-gradient(90deg, rgba(139,92,246,.15) 0%, rgba(99,102,241,.1) 100%);
+    border-bottom: 1px solid rgba(139,92,246,.3);
+    color: var(--text-1);
+    font-size: 13px;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+    position: relative;
+}
+.beta-banner.hidden { display: none; }
+.beta-banner-cta { padding: 5px 14px; font-size: 12px; }
+.beta-banner-close {
+    background: none;
+    border: none;
+    color: var(--text-3);
+    font-size: 18px;
+    cursor: pointer;
+    padding: 0 4px;
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    line-height: 1;
+}
 .evb-resend {
     background: none;
     border: 1px solid #92400e;

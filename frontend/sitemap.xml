@@ -6,6 +6,51 @@
     <priority>1.0</priority>
   </url>
   <url>
+    <loc>https://nebulascanner.com/rehber</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://nebulascanner.com/about</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://nebulascanner.com/faq</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://nebulascanner.com/blog/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://nebulascanner.com/blog/hisse-tarama-nasil-yapilir</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://nebulascanner.com/blog/macd-gostergesi-nedir</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://nebulascanner.com/blog/rsi-gostergesi-nedir</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://nebulascanner.com/blog/bollinger-bantlari-nedir</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://nebulascanner.com/blog/teknik-analiz-vs-temel-analiz</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://nebulascanner.com/legal/kosullar</loc>
     <changefreq>monthly</changefreq>
     <priority>0.3</priority>
@@ -34,10 +79,5 @@
     <loc>https://nebulascanner.com/legal/mesafeli-satis</loc>
     <changefreq>monthly</changefreq>
     <priority>0.2</priority>
-  </url>
-  <url>
-    <loc>https://nebulascanner.com/rehber</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.5</priority>
   </url>
 </urlset>

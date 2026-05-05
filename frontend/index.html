@@ -17,6 +17,55 @@
     <!-- <script async src="https://www.googletagmanager.com/gtag/js?id=GA_MEASUREMENT_ID"></script>
     <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','GA_MEASUREMENT_ID');</script> -->
     <link rel="icon" href="/logo.svg" type="image/svg+xml">
+    <!-- Schema.org Structured Data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://nebulascanner.com/#organization",
+          "name": "Nebula Scanner",
+          "url": "https://nebulascanner.com",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://nebulascanner.com/logo.svg"
+          },
+          "contactPoint": {
+            "@type": "ContactPoint",
+            "email": "destek@nebulascanner.com",
+            "contactType": "customer support",
+            "availableLanguage": "Turkish"
+          },
+          "sameAs": [
+            "https://twitter.com/NebulaScanner",
+            "https://www.instagram.com/nebulascanner",
+            "https://www.youtube.com/@NebulaScanner",
+            "https://www.linkedin.com/company/nebulascanner",
+            "https://www.tiktok.com/@nebulascanner"
+          ]
+        },
+        {
+          "@type": "WebApplication",
+          "@id": "https://nebulascanner.com/#webapp",
+          "name": "Nebula Scanner",
+          "url": "https://nebulascanner.com",
+          "description": "BIST ve ABD hisse senetleri için teknik analiz tabanlı tarama, 0-10 puanlama, alarm ve portföy takip sistemi.",
+          "applicationCategory": "FinanceApplication",
+          "operatingSystem": "Web",
+          "inLanguage": "tr",
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "TRY"
+          },
+          "publisher": {
+            "@id": "https://nebulascanner.com/#organization"
+          }
+        }
+      ]
+    }
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -92,6 +141,13 @@
     <div id="emailVerifyBanner" class="email-verify-banner hidden">
         &#9993; E-posta adresinizi henüz doğrulamadınız. Alarm ve izleme listesi özelliklerini kullanmak için gelen kutunuzu kontrol edin.
         <button id="resendVerifyBtn" class="evb-resend">Tekrar gönder</button>
+    </div>
+
+    <!-- Beta banner — sadece misafir kullanıcılara gösterilir, app.js tarafından yönetilir -->
+    <div id="betaBanner" class="beta-banner hidden">
+        🚀 <strong>Beta'dasınız!</strong> Şu an kayıt olan ilk kullanıcılar, ileride gelecek premium özelliklere <strong>ömür boyu ücretsiz</strong> erişim kazanır.
+        <button class="beta-banner-cta btn btn-primary" onclick="openAuthModal('signup')">Ücretsiz Kayıt Ol →</button>
+        <button class="beta-banner-close" id="betaBannerClose" aria-label="Kapat">×</button>
     </div>
 
     <section class="market-switcher glass">
@@ -329,6 +385,25 @@
     <!-- Toast bildirimleri -->
     <div id="toastContainer" aria-live="polite"></div>
 
+    <!-- Newsletter -->
+    <div class="newsletter-section" id="newsletterSection">
+        <div class="newsletter-inner">
+            <div class="newsletter-text">
+                <span class="newsletter-icon">📬</span>
+                <div>
+                    <strong>Haftalık Piyasa Özeti</strong>
+                    <span>En yüksek puanlı hisseler ve TDO v2 sinyalleri her Pazar e-postanda</span>
+                </div>
+            </div>
+            <form class="newsletter-form" id="newsletterForm" novalidate>
+                <input type="email" id="newsletterEmail" class="newsletter-input" placeholder="e-posta adresiniz" autocomplete="email" />
+                <button type="submit" class="btn btn-primary newsletter-btn">Abone Ol</button>
+            </form>
+        </div>
+        <div id="newsletterMsg" class="newsletter-msg hidden"></div>
+        <p class="newsletter-kvkk">Abone olarak <a href="/legal/gizlilik">Gizlilik Politikası</a>'nı kabul etmiş sayılırsınız. İstediğiniz zaman abonelikten çıkabilirsiniz.</p>
+    </div>
+
     <footer class="footer">
         <div class="footer-disclaimer">
             ⚠ Bu uygulama eğitim amaçlıdır. Sunulan analiz, skor ve göstergeler yatırım tavsiyesi değildir.
@@ -337,6 +412,9 @@
         </div>
         <div class="footer-legal">
             <span id="footerEntity">Nebula Scanner</span> &bull;
+            <a href="/about">Hakkımızda</a> &bull;
+            <a href="/faq">SSS</a> &bull;
+            <a href="/blog/">Blog</a> &bull;
             <a href="mailto:destek@nebulascanner.com">destek@nebulascanner.com</a> &bull;
             <a href="/legal/kosullar">Kullanım Koşulları</a> &bull;
             <a href="/legal/gizlilik">Gizlilik / KVKK</a> &bull;

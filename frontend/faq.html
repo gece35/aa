@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sık Sorulan Sorular — Nebula Scanner</title>
+<meta name="description" content="Nebula Scanner hakkında en çok merak edilen sorular: puan sistemi, veri güncelleme sıklığı, premium plan, güvenlik ve daha fazlası." />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Sık Sorulan Sorular — Nebula Scanner" />
+<meta property="og:description" content="Nebula Scanner hakkında en çok merak edilen sorular ve cevapları." />
+<meta property="og:url" content="https://nebulascanner.com/faq.html" />
+<meta property="og:image" content="https://nebulascanner.com/logo.svg" />
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:title" content="SSS — Nebula Scanner" />
+<meta name="twitter:description" content="Nebula Scanner hakkında en çok merak edilen sorular ve cevapları." />
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="legal/legal.css" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Nebula Scanner ücretsiz mi?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Evet, şu an tüm özellikler tamamen ücretsizdir. İlerleyen dönemde opsiyonel bir premium plan gelecek; ancak şu an kayıt olan kullanıcılar premium özelliklere ömür boyu ücretsiz erişim kazanacak."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Hisse skorları ne sıklıkla güncellenir?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Skorlar günlük kapanış verilerine dayanır ve piyasa kapandıktan sonra güncellenir. BIST için 18:00 sonrası, ABD için NYSE/NASDAQ kapanışı sonrası (Türkiye saatiyle ~23:00) yenilenir. Gün içi fiyat hareketleri skora yansımaz."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "8-10 puan alan her hisse alınmalı mıdır?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Hayır. Yüksek skor teknik göstergelerin pozitif hizalandığını gösterir; ancak haber riskleri, şirket bazlı gelişmeler ve makroekonomik faktörler teknik analizin kapsamı dışındadır. Skor bir filtre aracıdır, yatırım tavsiyesi değildir."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "TDO v2 stratejisi nedir?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "TDO v2 (Trend Devamlılığı Onayı), skor sistemi üzerine kurulu bir alım/satım çerçevesidir. Giriş için skor ≥7, 2 ardışık gün, trend alt-skoru ≥2, hacim onayı ve dual rejim filtresi şartlarını arar. Çıkış için ATR-bazlı 3 aşamalı stop ve kısmi kâr realizasyonu kullanır. Detaylar için Kullanım Rehberi'ni inceleyin."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Verilerim güvende mi?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Evet. Şifreler bcrypt ile hashlenir, asla düz metin olarak saklanmaz. Oturum cookie'leri HttpOnly ve Secure olarak ayarlanır. IP adresleri güvenlik amacıyla en fazla 90 gün saklanır. KVKK kapsamındaki haklarınız için Gizlilik Politikası sayfasını inceleyebilirsiniz."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "BIST dışında başka borsalar eklenecek mi?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Evet, yol haritamızda daha fazla ABD hissesi ve ilerleyen dönemde Avrupa borsaları yer alıyor. Şu an BIST 175+ ve ABD 200+ hisse desteklenmektedir."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Premium plan ne zaman gelecek?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Kesin bir tarih yok. Şu an erken kayıt olan tüm kullanıcılara premium özellikler ömür boyu ücretsiz sunulacak. Yani şimdi kayıt olmak avantajlıdır."
+      }
+    }
+  ]
+}
+</script>
+<style>
+  html, body { background: #0d1117 !important; color: #c9d1d9 !important; }
+  h1, h2, h3 { color: #e6edf3 !important; }
+  .faq-section { margin: 36px 0; }
+  .faq-section h2 { font-size: 16px !important; color: #a78bfa !important; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 20px !important; }
+  .faq-item {
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 10px;
+    margin-bottom: 10px;
+    overflow: hidden;
+  }
+  .faq-q {
+    width: 100%;
+    background: rgba(20,24,36,0.7);
+    border: none;
+    color: #e6edf3;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 500;
+    text-align: left;
+    padding: 16px 20px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+  .faq-q:hover { background: rgba(30,35,52,0.9); }
+  .faq-q .arrow { color: #a78bfa; font-size: 18px; flex-shrink: 0; transition: transform 0.2s; }
+  .faq-item.open .faq-q .arrow { transform: rotate(180deg); }
+  .faq-a {
+    display: none;
+    padding: 0 20px 18px;
+    font-size: 14px;
+    line-height: 1.75;
+    color: #9ca3af;
+    background: rgba(20,24,36,0.7);
+  }
+  .faq-item.open .faq-a { display: block; }
+  .faq-a a { color: #a78bfa; text-decoration: none; }
+  .faq-a a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="page">
+  <a href="/" class="back-link">← Ana Sayfa</a>
+
+  <h1>Sık Sorulan Sorular</h1>
+  <p class="meta">Nebula Scanner hakkında en çok merak edilenler</p>
+
+  <!-- Genel -->
+  <div class="faq-section">
+    <h2>Genel</h2>
+
+    <div class="faq-item open">
+      <button class="faq-q">Nebula Scanner ücretsiz mi? <span class="arrow">▾</span></button>
+      <div class="faq-a">
+        Evet, şu an tüm özellikler <strong>tamamen ücretsiz</strong>. Kayıt ol ve hemen kullanmaya başla. İlerleyen dönemde opsiyonel bir premium plan gelecek; ancak şu an kayıt olan kullanıcılar premium özelliklere <strong>ömür boyu ücretsiz</strong> erişim kazanacak.
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-q">Hangi borsaları kapsıyor? <span class="arrow">▾</span></button>
+      <div class="faq-a">
+        Şu an <strong>BIST (175+ hisse)</strong> ve <strong>ABD borsaları (200+ hisse)</strong> desteklenmektedir. ABD taraması kayıt gerektirmektedir. Yol haritamızda daha fazla hisse ve ilerleyen dönemde ek borsalar yer alıyor.
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-q">Mobil uygulamanız var mı? <span class="arrow">▾</span></button>
+      <div class="faq-a">
+        Henüz ayrı bir mobil uygulama yok; ancak site mobil tarayıcılarda sorunsuz çalışacak şekilde tasarlanmıştır. iOS/Android uygulama yol haritamızda mevcut.
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-q">Premium plan ne zaman gelecek? <span class="arrow">▾</span></button>
+      <div class="faq-a">
+        Kesin bir tarih belirtmiyoruz. Önemli olan: şu an kayıt olan tüm kullanıcılar, premium özellikler geldiğinde bunlara <strong>ömür boyu ücretsiz</strong> erişim hakkı kazanacak. Erken kaydolmak avantajlı.
+      </div>
+    </div>
+  </div>
+
+  <!-- Puan Sistemi -->
+  <div class="faq-section">
+    <h2>Puan Sistemi</h2>
+
+    <div class="faq-item">
+      <button class="faq-q">0-10 puan nasıl hesaplanıyor? <span class="arrow">▾</span></button>
+      <div class="faq-a">
+        4 teknik göstergenin bileşiminden oluşuyor: <strong>Trend (EMA, max 3 puan)</strong>, <strong>Momentum (MACD, max 3 puan)</strong>, <strong>RSI (max 2, min -1 puan)</strong> ve <strong>Bollinger Bandları (max 2 puan)</strong>. Her gösterge kendi alt-kriterlerine göre puanlanır ve toplam 0-10 aralığına normalleştirilir. Detaylar için <a href="/rehber.html">Kullanım Rehberi</a>'ni incele.
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-q">8-10 puan alan her hisse alınmalı mıdır? <span class="arrow">▾</span></button>
+      <div class="faq-a">
+        <strong>Hayır.</strong> Yüksek skor, teknik göstergelerin pozitif hizalandığını gösterir. Ancak haber riskleri, şirket bazlı gelişmeler, makroekonomik faktörler ve likidite sorunları teknik analizin kapsamı dışındadır. Skor bir <em>filtre aracı</em>dır, yatırım tavsiyesi değildir. Kendi araştırmanı yapmayı ihmal etme.
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-q">Skor neden hızlı değişiyor? <span class="arrow">▾</span></button>
+      <div class="faq-a">
+        Skor günlük kapanış fiyatlarına göre yeniden hesaplanır. Özellikle MACD ve Bollinger göstergeleri kısa vadeli fiyat hareketlerine duyarlıdır. Bu yüzden tek bir günün skoruna göre hareket etmek yerine <strong>birkaç günlük trendi</strong> takip etmek daha sağlıklıdır. TDO v2 bu nedenle "2 ardışık gün skor ≥7" şartını koyuyor.
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-q">Neden giriş eşiği 8 değil 7? <span class="arrow">▾</span></button>
+      <div class="faq-a">
+        Skor 8 + ardışık gün şartı yıllık yalnızca 30-50 işlem üretir — istatistiksel olarak yetersiz bir örneklem. TDO v2, eşiği 7'ye indirerek ek 4 filtre ekledi: trend alt-skoru ≥2, hacim onayı, çift katmanlı endeks rejimi ve 52 haftalık yüksek pozisyonu. Sonuç: daha fazla işlem fırsatı, benzer sinyal kalitesi.
+      </div>
+    </div>
+  </div>
+
+  <!-- Strateji ve Backtest -->
+  <div class="faq-section">
+    <h2>Strateji ve Backtest</h2>
+
+    <div class="faq-item">
+      <button class="faq-q">TDO v2 stratejisi nedir? <span class="arrow">▾</span></button>
+      <div class="faq-a">
+        TDO v2 (Trend Devamlılığı Onayı), Nebula Scanner'ın skor sistemi üzerine inşa edilmiş bir alım/satım çerçevesidir. Giriş için 5 filtre, çıkış için ATR-bazlı 3 aşamalı stop ve kısmi kâr realizasyonu kullanır. Kapsamlı anlatım için <a href="/rehber.html">Kullanım Rehberi</a>'ni oku.
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-q">Backtest sonuçları gerçek mi? <span class="arrow">▾</span></button>
+      <div class="faq-a">
+        Backtest sonuçları <em>geçmiş verilere</em> dayalı simülasyondur. Gelecekteki performansı garanti etmez. Komisyon ve slippage dahil edilmiştir; ancak gerçek piyasa koşulları (likidite, haberler, duygusal kararlar) simülasyonda tam olarak yansıtılamaz. Sonuçları <strong>rehber olarak</strong> kullan, kesin çıktı olarak değil.
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-q">"2 gün üst üste" şartı neden var? <span class="arrow">▾</span></button>
+      <div class="faq-a">
+        Tek günde 7+ puan alan bazı hisseler ertesi gün hızla geri çekilebilir — buna "sahte spike" denir. Backtest sonuçları, sinyalin 2 ardışık gün korunduğu durumlarda kazanma oranının belirgin biçimde arttığını gösteriyor. Bu kısa bekleme maliyeti (birkaç günlük geç giriş) riskten çok daha azdır.
+      </div>
+    </div>
+  </div>
+
+  <!-- Teknik ve Güvenlik -->
+  <div class="faq-section">
+    <h2>Teknik ve Güvenlik</h2>
+
+    <div class="faq-item">
+      <button class="faq-q">Verilerim güvende mi? <span class="arrow">▾</span></button>
+      <div class="faq-a">
+        Evet. Şifreler <strong>bcrypt</strong> ile hashlenerek saklanır, düz metin olarak hiçbir zaman tutulmaz. Oturum cookie'leri <code>HttpOnly</code> ve <code>Secure</code> olarak ayarlanmıştır. IP adresleri güvenlik amacıyla en fazla 90 gün saklanır ve ardından silinir. Detaylar için <a href="/legal/gizlilik.html">Gizlilik Politikası</a>'nı incele.
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-q">Hisse verileri nereden geliyor? <span class="arrow">▾</span></button>
+      <div class="faq-a">
+        Fiyat verileri kamuya açık finans veri kaynaklarından çekilmektedir. Veriler yatırım kararları için tek kaynak olarak kullanılmamalıdır; resmi borsalar ve SPK lisanslı platformları her zaman birincil kaynak olarak kabul edin.
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-q">Alarm e-postaları neden gelmiyor? <span class="arrow">▾</span></button>
+      <div class="faq-a">
+        Önce e-posta adresini doğruladığından emin ol (kayıt sonrası gönderilen doğrulama maili). Spam/junk klasörünü kontrol et. Sorun devam ederse <a href="mailto:destek@nebulascanner.com">destek@nebulascanner.com</a> adresine yaz.
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-q">Hesabımı nasıl silebilirim? <span class="arrow">▾</span></button>
+      <div class="faq-a">
+        Sağ üstteki kullanıcı simgesine tıkla → "Hesabı Sil" seçeneğini kullan. Tüm verilerini (portföy, alarmlar, favori listesi) anında silebilirsin. İşlem geri alınamaz.
+      </div>
+    </div>
+  </div>
+
+  <!-- Ödeme -->
+  <div class="faq-section">
+    <h2>Ödeme ve Abonelik</h2>
+
+    <div class="faq-item">
+      <button class="faq-q">Ödeme bilgilerimi saklıyor musunuz? <span class="arrow">▾</span></button>
+      <div class="faq-a">
+        Hayır. Tüm ödemeler <strong>LemonSqueezy</strong> (Merchant of Record) üzerinden işlenir. Kredi kartı bilgilerin Nebula Scanner sunucularına hiç ulaşmaz; doğrudan LemonSqueezy'nin PCI DSS uyumlu altyapısında işlenir.
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-q">İade politikanız nedir? <span class="arrow">▾</span></button>
+      <div class="faq-a">
+        Detaylar için <a href="/legal/iade.html">İade Koşulları</a> sayfasını incele. Kısaca: ödeme tarihinden itibaren 14 gün içinde iade talep edebilirsin.
+      </div>
+    </div>
+  </div>
+
+  <p style="margin-top:40px; font-size:14px; color:#6b7280;">
+    Aradığını bulamadın mı? →
+    <a href="mailto:destek@nebulascanner.com" style="color:#a78bfa;">destek@nebulascanner.com</a> adresine yaz.
+  </p>
+
+  <footer class="legal-footer" style="margin-top:40px;">
+    <p>&copy; 2026 Nebula Scanner &bull; <a href="/about.html">Hakkımızda</a> &bull; <a href="/rehber.html">Rehber</a> &bull; <a href="/legal/gizlilik.html">Gizlilik</a> &bull; <a href="/">Ana Sayfa</a></p>
+  </footer>
+</div>
+<script>
+  document.querySelectorAll('.faq-q').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const item = btn.closest('.faq-item');
+      const wasOpen = item.classList.contains('open');
+      document.querySelectorAll('.faq-item').forEach(i => i.classList.remove('open'));
+      if (!wasOpen) item.classList.add('open');
+    });
+  });
+</script>
+</body>
+</html>

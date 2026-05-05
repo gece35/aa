@@ -24,6 +24,7 @@ from backend.alerts import (
 )
 from backend.auth import admin_required, auth_bp, email_verified_required
 from backend.billing import billing_bp
+from backend.newsletter import newsletter_bp
 from backend.support import support_bp
 from backend.cache import (
     exchange_cache, scan_cache, stock_cache, stock_news_cache, symbol_cache,
@@ -107,6 +108,7 @@ def create_app() -> Flask:
 
     flask_app.register_blueprint(auth_bp)
     flask_app.register_blueprint(billing_bp)
+    flask_app.register_blueprint(newsletter_bp)
     flask_app.register_blueprint(support_bp)
 
     @flask_app.errorhandler(Exception)
@@ -132,6 +134,24 @@ def create_app() -> Flask:
     @flask_app.route("/rehber")
     def rehber_page():
         return send_from_directory(FRONTEND_DIR, "rehber.html")
+
+    @flask_app.route("/about")
+    def about_page():
+        return send_from_directory(FRONTEND_DIR, "about.html")
+
+    @flask_app.route("/faq")
+    def faq_page():
+        return send_from_directory(FRONTEND_DIR, "faq.html")
+
+    @flask_app.route("/blog/")
+    @flask_app.route("/blog/<path:slug>")
+    def blog_page(slug="index.html"):
+        blog_dir = os.path.join(FRONTEND_DIR, "blog")
+        fname = slug if slug.endswith(".html") else f"{slug}.html"
+        fpath = os.path.join(blog_dir, fname)
+        if not os.path.isfile(fpath):
+            return "Sayfa bulunamadı", 404
+        return send_from_directory(blog_dir, fname)
 
     @flask_app.route("/legal/<path:slug>")
     def legal_page(slug):

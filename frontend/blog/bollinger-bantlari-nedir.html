@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Bollinger Bantları Nedir? Volatilite ve Kırılım Analizi — Nebula Scanner</title>
+<meta name="description" content="Bollinger Bantları nasıl çalışır? Sıkışma, genişleme, bant kırılımları ve BIST hisselerinde pratik Bollinger kullanımı için kapsamlı rehber." />
+<meta property="og:type" content="article" />
+<meta property="og:title" content="Bollinger Bantları ile Volatilite ve Kırılım Analizi" />
+<meta property="og:description" content="Bollinger Bantları nasıl çalışır, sıkışma ve genişleme dönemleri ne ifade eder, BIST'te nasıl kullanılır?" />
+<meta property="og:url" content="https://nebulascanner.com/blog/bollinger-bantlari-nedir" />
+<meta property="og:image" content="https://nebulascanner.com/logo.svg" />
+<meta name="twitter:card" content="summary" />
+<link rel="canonical" href="https://nebulascanner.com/blog/bollinger-bantlari-nedir" />
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../legal/legal.css" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Article","headline":"Bollinger Bantları ile Volatilite ve Kırılım Analizi","datePublished":"2026-05-05","publisher":{"@type":"Organization","name":"Nebula Scanner","url":"https://nebulascanner.com"}}</script>
+<style>
+  html,body{background:#0d1117!important;color:#c9d1d9!important}
+  h1,h2,h3{color:#e6edf3!important}
+  .blog-article{max-width:720px;margin:0 auto}
+  .blog-article h2{font-size:20px!important;margin-top:36px!important}
+  .blog-article h3{font-size:16px!important;color:#a5b4fc!important}
+  .blog-article p{line-height:1.8;margin-bottom:16px}
+  .blog-article ul,.blog-article ol{padding-left:24px;line-height:1.8}
+  .blog-article li{margin-bottom:6px}
+  .blog-article strong{color:#e6edf3}
+  .callout{background:rgba(139,92,246,.1);border-left:3px solid #8b5cf6;padding:14px 18px;border-radius:0 8px 8px 0;margin:24px 0;font-size:14px}
+  .formula-box{background:rgba(10,12,20,.6);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:16px 20px;font-family:monospace;font-size:14px;color:#a78bfa;margin:16px 0}
+  .cta-box{background:linear-gradient(135deg,rgba(139,92,246,.15),rgba(99,102,241,.1));border:1px solid rgba(139,92,246,.3);border-radius:12px;padding:24px;text-align:center;margin:36px 0}
+  .cta-box h3{margin:0 0 8px!important}
+  .cta-box p{margin:0 0 16px;font-size:14px;color:#9ca3af}
+  .btn-cta{display:inline-block;background:linear-gradient(135deg,#8b5cf6,#6366f1);color:white;text-decoration:none;padding:11px 28px;border-radius:8px;font-weight:600;font-size:14px}
+  .breadcrumb{font-size:13px;color:#4b5563;margin-bottom:24px}
+  .breadcrumb a{color:#6b7280;text-decoration:none}
+  .article-meta{font-size:13px;color:#6b7280;margin-bottom:28px}
+</style>
+</head>
+<body>
+<div class="page blog-article">
+  <div class="breadcrumb"><a href="/">Ana Sayfa</a> › <a href="/blog/">Blog</a> › Bollinger Bantları</div>
+  <h1>Bollinger Bantları ile<br>Volatilite ve Kırılım Analizi</h1>
+  <div class="article-meta">6 dk okuma &bull; Mayıs 2026 &bull; Nebula Scanner Editörü</div>
+
+  <p>Bollinger Bantları, John Bollinger tarafından 1980'lerde geliştirilen ve fiyat volatilitesini görselleştiren bir teknik analiz aracıdır. Fiyatın "normal" hareket aralığını dinamik olarak çizer — bu bantların dışına çıkan hareketler, normalin dışında demektir.</p>
+
+  <h2>Bollinger Bantları Nasıl Hesaplanır?</h2>
+  <div class="formula-box">
+Orta Bant = 20-günlük SMA<br>
+Üst Bant  = SMA(20) + 2 × Standart Sapma<br>
+Alt Bant  = SMA(20) − 2 × Standart Sapma
+  </div>
+  <p>Standart 2 sapmalık bantlar, istatistiksel olarak fiyatın yaklaşık %95'ini içinde tutar. Bantlar genişlediğinde volatilite yüksek; daraldığında (sıkışma) volatilite düşük demektir.</p>
+
+  <h2>Temel Kullanım Şekilleri</h2>
+
+  <h3>1. Bant Sıkışması (Squeeze) → Kırılım Öncesi</h3>
+  <p>Bantlar son derece daraldığında bu bir <strong>sıkışma</strong> dönemine işaret eder. Volatilite düşük, fiyat bir aralıkta hapsolmuş. Sıkışma dönemlerinin ardından genellikle güçlü bir kırılım gelir — yukarı ya da aşağı. Kırılımın yönü için MACD ve hacim onayı alınır.</p>
+
+  <div class="callout">
+    <strong>BIST pratiği:</strong> Sıkışma sinyali kırılım yönünü göstermez. Yön tahmini için ayrı bir gösterge gerekir. Yanlış yöne pozisyon almak, sıkışma kırılımlarında sık görülen bir hatadır.
+  </div>
+
+  <h3>2. Bant Dokunuşu → Ortalamaya Dönüş</h3>
+  <p>Fiyat alt banda dokunduğunda bazı yatırımcılar bunu "ucuz" olarak yorumlar ve alım yapar. Üst banda dokunuş ise "pahalı" sayılır. Bu yaklaşım <em>sadece yatay piyasalarda</em> işe yarar. Güçlü trend dönemlerinde fiyat üst bantı haftalarca takip edebilir.</p>
+
+  <h3>3. Üst Bant Kırılımı → Güçlü Yükseliş</h3>
+  <p>Fiyat üst bandı kırarsa bu zayıflık değil, <strong>güç işareti</strong> olabilir. Trend yükselişse ve hacim artıyorsa, üst bant kırılımı trendin devamına işaret eder. Nebula Scanner bu durumu "Üst Bant" sinyali olarak puanlamaya katar.</p>
+
+  <h2>Bollinger Nebula Scanner'da Nasıl Puanlanıyor?</h2>
+  <p>Puanlama sisteminde Bollinger bileşeni max 2 puan sağlar. Fiyatın bant içindeki konumu (alt/orta/üst) ve bant genişliği birlikte değerlendirilerek 0-2 arası puan üretilir. Üst bandın üzerinde kapanış + hacim artışı en yüksek katkıyı sağlar.</p>
+
+  <div class="cta-box">
+    <h3>Bollinger Sinyallerini Otomatik Tara</h3>
+    <p>BIST'te hangi hisseler üst bantta? Nebula Scanner'da saniyeler içinde gör.</p>
+    <a href="/" class="btn-cta">Ücretsiz Dene →</a>
+  </div>
+
+  <hr style="border-color:rgba(255,255,255,.07);margin:40px 0;" />
+  <p style="font-size:13px;color:#4b5563;">⚠ Bu makale yalnızca eğitim amaçlıdır. Yatırım tavsiyesi değildir.</p>
+  <nav style="margin-top:32px;display:flex;gap:16px;flex-wrap:wrap;font-size:14px;">
+    <a href="/blog/teknik-analiz-vs-temel-analiz" style="color:#a78bfa;">Sonraki: Teknik mi Temel mi? →</a>
+    <a href="/blog/rsi-gostergesi-nedir" style="color:#6b7280;">← Önceki: RSI</a>
+  </nav>
+  <footer class="legal-footer" style="margin-top:40px;">
+    <p>&copy; 2026 Nebula Scanner &bull; <a href="/blog/">Blog</a> &bull; <a href="/">Ana Sayfa</a></p>
+  </footer>
+</div>
+</body>
+</html>
