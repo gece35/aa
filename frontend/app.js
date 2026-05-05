@@ -2729,44 +2729,5 @@
         input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
     })();
 
-    // ── Newsletter formu ──────────────────────────────────────────────────
-    (function() {
-        const form = document.getElementById('newsletterForm');
-        if (!form) return;
-        const msgEl = document.getElementById('newsletterMsg');
-
-        form.addEventListener('submit', async e => {
-            e.preventDefault();
-            const email = document.getElementById('newsletterEmail')?.value.trim();
-            if (!email) return;
-
-            const btn = form.querySelector('.newsletter-btn');
-            btn.disabled = true;
-            btn.textContent = 'Gönderiliyor...';
-
-            try {
-                const res = await fetch('/api/newsletter', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, kvkk_consent: true, source: 'footer' }),
-                }).then(r => r.json());
-
-                msgEl.textContent = res.message || (res.ok ? 'Abone oldunuz!' : res.error);
-                msgEl.className = 'newsletter-msg ' + (res.ok ? 'success' : 'error');
-                msgEl.classList.remove('hidden');
-                if (res.ok) {
-                    document.getElementById('newsletterEmail').value = '';
-                    form.style.display = 'none';
-                }
-            } catch {
-                msgEl.textContent = 'Bağlantı hatası. Lütfen tekrar deneyin.';
-                msgEl.className = 'newsletter-msg error';
-                msgEl.classList.remove('hidden');
-            } finally {
-                btn.disabled = false;
-                btn.textContent = 'Abone Ol';
-            }
-        });
-    })();
 
 })();
