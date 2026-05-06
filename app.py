@@ -14,7 +14,7 @@ import logging
 import os
 import time
 
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, Response, jsonify, request, send_from_directory
 from flask_cors import CORS
 from flask_login import LoginManager, current_user, login_required
 
@@ -50,6 +50,31 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "frontend")
+
+
+def _asset_version() -> str:
+    """app.js ve style.css mtime'ını birleştirip cache-buster string üretir."""
+    try:
+        a = int(os.path.getmtime(os.path.join(FRONTEND_DIR, "app.js")))
+        c = int(os.path.getmtime(os.path.join(FRONTEND_DIR, "style.css")))
+        return f"{a}-{c}"
+    except OSError:
+        return str(int(time.time()))
+
+
+def _serve_html(directory: str, filename: str) -> Response:
+    """HTML dosyasını okur, app.js ve style.css'e versiyon query'si ekler, no-cache header ile döndürür."""
+    fpath = os.path.join(directory, filename)
+    with open(fpath, "r", encoding="utf-8") as f:
+        html = f.read()
+    v = _asset_version()
+    html = html.replace('src="app.js"', f'src="app.js?v={v}"')
+    html = html.replace('href="style.css"', f'href="style.css?v={v}"')
+    resp = Response(html, mimetype="text/html; charset=utf-8")
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 
 def create_app() -> Flask:
@@ -123,7 +148,7 @@ def create_app() -> Flask:
 
     @flask_app.route("/")
     def index():
-        return send_from_directory(FRONTEND_DIR, "index.html")
+        return _serve_html(FRONTEND_DIR, "index.html")
 
     @flask_app.route("/robots.txt")
     @flask_app.route("/sitemap.xml")
@@ -133,15 +158,15 @@ def create_app() -> Flask:
 
     @flask_app.route("/rehber")
     def rehber_page():
-        return send_from_directory(FRONTEND_DIR, "rehber.html")
+        return _serve_html(FRONTEND_DIR, "rehber.html")
 
     @flask_app.route("/about")
     def about_page():
-        return send_from_directory(FRONTEND_DIR, "about.html")
+        return _serve_html(FRONTEND_DIR, "about.html")
 
     @flask_app.route("/faq")
     def faq_page():
-        return send_from_directory(FRONTEND_DIR, "faq.html")
+        return _serve_html(FRONTEND_DIR, "faq.html")
 
     @flask_app.route("/blog/")
     @flask_app.route("/blog/<path:slug>")
@@ -151,7 +176,7 @@ def create_app() -> Flask:
         fpath = os.path.join(blog_dir, fname)
         if not os.path.isfile(fpath):
             return "Sayfa bulunamadı", 404
-        return send_from_directory(blog_dir, fname)
+        return _serve_html(blog_dir, fname)
 
     @flask_app.route("/legal/<path:slug>")
     def legal_page(slug):
@@ -160,7 +185,7 @@ def create_app() -> Flask:
         fpath = os.path.join(legal_dir, f"{safe}.html")
         if not os.path.isfile(fpath):
             return "Sayfa bulunamadi", 404
-        return send_from_directory(legal_dir, f"{safe}.html")
+        return _serve_html(legal_dir, f"{safe}.html")
 
     # ── API: Config ────────────────────────────────────────────────────────
 
