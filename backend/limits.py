@@ -103,15 +103,20 @@ def quota(scope: str, per: str = "day"):
         @wraps(fn)
         def wrapper(*args, **kwargs):
             plan = get_plan(current_user)
-            if not current_user.is_authenticated:
-                return jsonify({
-                    "error": "auth_required",
-                    "message": "Bu özellik için giriş yapmanız gerekir.",
-                    "upgrade_url": "/",
-                }), 401
             limit_key = f"{scope}_per_{per}"
             limit = plan.get(limit_key)
-            if limit is None:  # premium / unlimited
+
+            # Misafir: limit tanımlı ve 0 ise engelle, 0'dan büyükse geçişe izin ver
+            if not current_user.is_authenticated:
+                if limit is not None and limit == 0:
+                    return jsonify({
+                        "error": "auth_required",
+                        "message": "Bu özellik için giriş yapmanız gerekir.",
+                        "upgrade_url": "/",
+                    }), 401
+                return fn(*args, **kwargs)
+
+            if limit is None:  # unlimited
                 return fn(*args, **kwargs)
             from .quota_store import incr_and_get
             count = incr_and_get(current_user.id, scope, per)
