@@ -460,7 +460,7 @@
             : '';
         const reason = buildScoreReason(r);
 
-        const chartBtnHtml = r.score >= 7
+        const chartBtnHtml = r.score >= 3
             ? `<button class="scan-chart-btn btn btn-sm" data-sym="${r.symbol}" title="Candlestick grafik ve formasyon analizi">&#128202; Grafik</button>`
             : '';
 
