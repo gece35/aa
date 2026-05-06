@@ -466,7 +466,7 @@
 
         card.innerHTML = `
             <div class="card-content-inner">
-            <button class="star-toggle ${isWatched ? 'active' : ''}" data-sym="${r.symbol}" title="Favorilere ekle">&#9733;</button>
+            <button class="star-toggle ${isWatched ? 'active' : ''}" data-sym="${r.symbol}" title="${isWatched ? 'Favorilerden çıkar' : 'Favorilere ekle'}">&#9733;</button>
             <div class="stock-rank">${idx + 1}</div>
             <div>
                 <div class="stock-symbol">${displaySymbol}</div>
@@ -520,7 +520,9 @@
         starBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             toggleWatch(r.symbol);
-            starBtn.classList.toggle('active');
+            const nowWatched = state.watchlist.has(r.symbol);
+            starBtn.classList.toggle('active', nowWatched);
+            starBtn.title = nowWatched ? 'Favorilerden çıkar' : 'Favorilere ekle';
             if (state.onlyWatched) renderResults();
         });
 
@@ -694,7 +696,9 @@
         if (!btn) return;
         btn.addEventListener('click', () => {
             toggleWatch(symbol);
-            btn.classList.toggle('active');
+            const nowWatched = state.watchlist.has(symbol);
+            btn.classList.toggle('active', nowWatched);
+            btn.title = nowWatched ? 'Favorilerden çıkar' : 'Favorilere ekle';
             renderResults();
         });
     }
@@ -817,7 +821,7 @@
                     <h2 style="margin:0;font-family:'Outfit';font-size:28px;">${escapeHtml(display)}</h2>
                     <div style="color:var(--text-3);font-size:12px;letter-spacing:1px;text-transform:uppercase;">${escapeHtml(d.symbol)}</div>
                 </div>
-                <button id="modalStar" class="star-toggle ${isWatched ? 'active' : ''}" style="position:static;font-size:22px;" title="Favorilere ekle">&#9733;</button>
+                <button id="modalStar" class="star-toggle ${isWatched ? 'active' : ''}" style="position:static;font-size:22px;" title="${isWatched ? 'Favorilerden çıkar' : 'Favorilere ekle'}">&#9733;</button>
                 <button id="modalShare" class="btn btn-ghost" style="font-size:13px;padding:6px 12px;" title="Paylaş">🔗 Paylaş</button>
                 <div style="margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                     ${spikeHtml}${nearPeakHtml}
