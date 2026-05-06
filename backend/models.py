@@ -54,12 +54,18 @@ class User(UserMixin, db.Model):
     def is_premium(self) -> bool:
         if self.plan != "premium":
             return False
+        if self.subscription_status == "lifetime":
+            return True
         if self.subscription_status in ("active", "on_trial"):
             return True
         # Cancelled but still in paid period
         if self.subscription_status == "cancelled" and self.subscription_ends_at:
             return self.subscription_ends_at.timestamp() > time.time()
         return False
+
+    @property
+    def is_lifetime(self) -> bool:
+        return self.plan == "premium" and self.subscription_status == "lifetime"
 
     def to_public_dict(self) -> dict:
         return {
@@ -70,6 +76,7 @@ class User(UserMixin, db.Model):
             "subscription_renews_at": self.subscription_renews_at.isoformat() if self.subscription_renews_at else None,
             "subscription_ends_at": self.subscription_ends_at.isoformat() if self.subscription_ends_at else None,
             "is_admin": self.is_admin,
+            "is_lifetime": self.is_lifetime,
             "email_verified": bool(self.email_verified_at),
         }
 

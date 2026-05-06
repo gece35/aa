@@ -2250,6 +2250,7 @@
 
         const verifyBanner = document.getElementById('emailVerifyBanner');
         const betaBanner = document.getElementById('betaBanner');
+        const adminBar = document.getElementById('adminBar');
         if (user) {
             authArea.classList.add('hidden');
             userArea.classList.remove('hidden');
@@ -2259,11 +2260,22 @@
             if (backtestTab) backtestTab.classList.toggle('hidden', !user.is_admin);
             if (verifyBanner) verifyBanner.classList.toggle('hidden', !!user.email_verified);
             if (betaBanner) betaBanner.classList.add('hidden');
+            if (adminBar) {
+                if (user.is_admin) {
+                    adminBar.classList.remove('hidden');
+                    fetch('/api/admin/stats').then(r => r.json()).then(s => {
+                        adminBar.innerHTML = `<span>👤 Kullanıcı: <strong>${s.total_users}</strong></span><span>🎁 Lifetime: <strong>${s.lifetime_users}/100</strong> (${s.lifetime_slots_left} yer kaldı)</span><span>📬 Newsletter: <strong>${s.newsletter_subscribers}</strong></span>`;
+                    }).catch(() => { adminBar.innerHTML = '<span>Admin verileri yüklenemedi.</span>'; });
+                } else {
+                    adminBar.classList.add('hidden');
+                }
+            }
         } else {
             authArea.classList.remove('hidden');
             userArea.classList.add('hidden');
             if (backtestTab) backtestTab.classList.add('hidden');
             if (verifyBanner) verifyBanner.classList.add('hidden');
+            if (adminBar) adminBar.classList.add('hidden');
             // Kapatılmamışsa beta banner'ı göster
             if (betaBanner && !sessionStorage.getItem('betaBannerClosed')) {
                 betaBanner.classList.remove('hidden');
@@ -2772,6 +2784,46 @@
                 counter.textContent = '0';
                 setTimeout(close, 2500);
             } catch {
+                submitBtn.disabled = false;
+            }
+        });
+    })();
+
+    // Newsletter form
+    (function initNewsletter() {
+        const form = document.getElementById('newsletterForm');
+        const emailInput = document.getElementById('newsletterEmail');
+        const kvkkCheck = document.getElementById('newsletterKvkk');
+        const submitBtn = document.getElementById('newsletterSubmit');
+        const msg = document.getElementById('newsletterMsg');
+        if (!form || !submitBtn) return;
+
+        submitBtn.addEventListener('click', async () => {
+            const email = (emailInput.value || '').trim();
+            if (!email) { emailInput.focus(); return; }
+            if (!kvkkCheck.checked) {
+                msg.textContent = 'KVKK onayı zorunludur.';
+                msg.classList.remove('hidden', 'newsletter-success');
+                msg.classList.add('newsletter-error');
+                return;
+            }
+            submitBtn.disabled = true;
+            try {
+                const res = await fetch('/api/newsletter', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, kvkk_consent: true, source: 'footer' }),
+                });
+                const data = await res.json();
+                msg.textContent = data.message || (data.ok ? 'Abone oldunuz!' : (data.error || 'Bir hata oluştu.'));
+                msg.classList.remove('hidden', 'newsletter-error', 'newsletter-success');
+                msg.classList.add(data.ok ? 'newsletter-success' : 'newsletter-error');
+                if (data.ok) { emailInput.value = ''; kvkkCheck.checked = false; }
+            } catch {
+                msg.textContent = 'Bir hata oluştu, lütfen tekrar deneyin.';
+                msg.classList.remove('hidden', 'newsletter-success');
+                msg.classList.add('newsletter-error');
+            } finally {
                 submitBtn.disabled = false;
             }
         });

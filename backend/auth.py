@@ -81,13 +81,16 @@ def signup():
                         "message": "Bu e-posta ile bir hesap zaten var."}), 409
 
     now = now_utc()
+    # İlk 100 kayıtlı kullanıcıya ömür boyu premium
+    existing_count = db.session.query(User).count()
+    grant_lifetime = existing_count < 100
     user = User(
         email=email,
         password_hash=hash_password(password),
         kvkk_consent_at=now,
         marketing_consent_at=now if marketing_consent else None,
-        plan="free",
-        subscription_status="none",
+        plan="premium" if grant_lifetime else "free",
+        subscription_status="lifetime" if grant_lifetime else "none",
     )
     db.session.add(user)
     db.session.flush()

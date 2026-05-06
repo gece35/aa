@@ -154,10 +154,13 @@
 
     <!-- Beta banner — sadece misafir kullanıcılara gösterilir, app.js tarafından yönetilir -->
     <div id="betaBanner" class="beta-banner hidden">
-        🚀 <strong>Beta'dasınız!</strong> Şu an kayıt olan ilk kullanıcılar, ileride gelecek premium özelliklere <strong>ömür boyu ücretsiz</strong> erişim kazanır.
+        🎁 <strong>İlk 100 üye ömür boyu Premium kazanıyor!</strong> Hâlâ boş yer var — şimdi kayıt ol, hiçbir şey ödemeden tüm özellikleri sonsuza kadar kullan.
         <button class="beta-banner-cta btn btn-primary" id="betaBannerCta">Ücretsiz Kayıt Ol →</button>
         <button class="beta-banner-close" id="betaBannerClose" aria-label="Kapat">×</button>
     </div>
+
+    <!-- Admin bar — sadece admin kullanıcıya gösterilir -->
+    <div id="adminBar" class="admin-bar hidden"></div>
 
     <section class="market-switcher glass">
         <div class="ms-title">
@@ -394,6 +397,25 @@
     <!-- Toast bildirimleri -->
     <div id="toastContainer" aria-live="polite"></div>
 
+
+    <!-- Newsletter bölümü -->
+    <section class="newsletter-section" id="newsletterSection">
+        <div class="newsletter-inner">
+            <div class="newsletter-text">
+                <div class="newsletter-title">📬 Haftalık Piyasa Özeti</div>
+                <div class="newsletter-desc">En yüksek puanlı hisseler ve sinyaller her Pazar e-postanda.</div>
+            </div>
+            <div class="newsletter-form" id="newsletterForm">
+                <input type="email" id="newsletterEmail" class="newsletter-input" placeholder="e-posta adresin" autocomplete="email" />
+                <button id="newsletterSubmit" class="btn btn-primary newsletter-btn">Abone Ol</button>
+            </div>
+            <label class="newsletter-kvkk">
+                <input type="checkbox" id="newsletterKvkk" />
+                <span>Kişisel verilerimin <a href="/legal/gizlilik" target="_blank">KVKK</a> kapsamında işlenmesine onay veriyorum.</span>
+            </label>
+            <p id="newsletterMsg" class="newsletter-msg hidden"></p>
+        </div>
+    </section>
 
     <footer class="footer">
         <div class="footer-disclaimer">

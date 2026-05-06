@@ -187,6 +187,22 @@ def create_app() -> Flask:
             return "Sayfa bulunamadi", 404
         return _serve_html(legal_dir, f"{safe}.html")
 
+    # ── API: Admin ─────────────────────────────────────────────────────────
+
+    @flask_app.route("/api/admin/stats")
+    @admin_required
+    def api_admin_stats():
+        from backend.models import User as UserModel
+        from backend.newsletter import _load as load_newsletter
+        total_users = db.session.query(UserModel).count()
+        lifetime_users = db.session.query(UserModel).filter_by(subscription_status="lifetime").count()
+        return jsonify({
+            "total_users": total_users,
+            "lifetime_users": lifetime_users,
+            "lifetime_slots_left": max(0, 100 - total_users),
+            "newsletter_subscribers": len(load_newsletter()),
+        })
+
     # ── API: Config ────────────────────────────────────────────────────────
 
     @flask_app.route("/api/config")
