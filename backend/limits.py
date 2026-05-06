@@ -21,7 +21,7 @@ PLANS = {
         "max_bist_tickers": 30,
         "max_us_tickers": 0,
         "allow_force_refresh": False,
-        "stock_detail_per_day": 0,
+        "stock_detail_per_day": 5,
         "stock_news_per_stock": False,
         "watchlist_max": 0,
         "portfolio_max": 0,
