@@ -114,6 +114,7 @@
                 <span id="cacheState" class="meta-value">-</span>
             </div>
             <a href="/rehber" target="_blank" class="btn btn-ghost rehber-nav-btn" title="Nasıl çalışır?">&#x1F4DA; <span class="rehber-text">Rehber</span></a>
+            <a href="/faq" target="_blank" class="btn btn-ghost rehber-nav-btn" title="Sık sorulan sorular">&#x2753; <span class="rehber-text">SSS</span></a>
             <!-- Auth area -->
             <div id="authArea" class="auth-area">
                 <button id="loginBtn" class="btn btn-ghost">Giriş Yap</button>
@@ -412,7 +413,8 @@
             <a href="/legal/iade">İade</a> &bull;
             <a href="/legal/cerez">Çerezler</a> &bull;
             <a href="/legal/risk">Risk Uyarısı</a> &bull;
-            <a href="/rehber">Kullanım Rehberi</a>
+            <a href="/rehber">Kullanım Rehberi</a> &bull;
+            <button id="feedbackTrigger" class="footer-feedback-btn">Geri Bildirim</button>
         </div>
         <div class="footer-copy">&copy; 2026 Nebula Scanner</div>
     </footer>
@@ -432,6 +434,27 @@
         <div class="support-input-row">
             <input id="supportInput" class="support-input" type="text" placeholder="Sorunuzu yazın..." autocomplete="off" maxlength="500" />
             <button id="supportSend" class="support-send btn btn-primary">Gönder</button>
+        </div>
+    </div>
+
+    <!-- Geri Bildirim Modalı -->
+    <div id="feedbackModal" class="feedback-overlay hidden" role="dialog" aria-label="Geri Bildirim">
+        <div class="feedback-box">
+            <div class="feedback-header">
+                <span class="feedback-title">Geri Bildirim</span>
+                <button id="feedbackClose" class="feedback-close" aria-label="Kapat">&times;</button>
+            </div>
+            <p class="feedback-desc">Bir hata mı buldun, önerim mi var? Birkaç kelimeyle anlat.</p>
+            <select id="feedbackCategory" class="feedback-select">
+                <option value="genel">Genel</option>
+                <option value="hata">Hata bildirimi</option>
+                <option value="oneri">Öneri</option>
+                <option value="diger">Diğer</option>
+            </select>
+            <textarea id="feedbackText" class="feedback-textarea" placeholder="Mesajınızı buraya yazın..." maxlength="2000" rows="5"></textarea>
+            <div class="feedback-char"><span id="feedbackCharCount">0</span>/2000</div>
+            <button id="feedbackSubmit" class="btn btn-primary" style="width:100%;margin-top:8px;">Gönder</button>
+            <p id="feedbackSuccess" class="feedback-success hidden">Teşekkürler! Geri bildiriminiz alındı.</p>
         </div>
     </div>
 

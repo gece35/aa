@@ -1,9 +1,12 @@
-"""AI destekli kullanıcı destek chatbot'u — Groq (Llama 3.3) ile."""
+"""AI destekli kullanıcı destek chatbot'u ve geri bildirim endpoint'i — Groq (Llama 3.3) ile."""
 
 from __future__ import annotations
 
+import json
 import logging
 import os
+from datetime import datetime, timezone
+from pathlib import Path
 
 from flask import Blueprint, jsonify, request
 
@@ -129,3 +132,38 @@ def chat():
     ])
 
     return jsonify({"reply": reply, "needs_escalation": needs_escalation})
+
+
+_FEEDBACK_FILE = Path(os.environ.get("DATA_DIR", "/tmp")) / "feedback.json"
+_VALID_CATEGORIES = {"genel", "hata", "oneri", "diger"}
+
+
+@support_bp.route("/api/feedback", methods=["POST"])
+def submit_feedback():
+    data = request.get_json(silent=True) or {}
+    category = (data.get("category") or "genel").strip().lower()
+    message = (data.get("message") or "").strip()
+    user_email = (data.get("email") or "").strip()[:200]
+
+    if not message:
+        return jsonify({"error": "bad_request", "message": "Mesaj boş olamaz."}), 400
+    if len(message) > 2000:
+        return jsonify({"error": "bad_request", "message": "Mesaj çok uzun (max 2000 karakter)."}), 400
+    if category not in _VALID_CATEGORIES:
+        category = "genel"
+
+    entry = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "category": category,
+        "message": message,
+        "email": user_email,
+    }
+
+    try:
+        existing = json.loads(_FEEDBACK_FILE.read_text()) if _FEEDBACK_FILE.exists() else []
+        existing.append(entry)
+        _FEEDBACK_FILE.write_text(json.dumps(existing, ensure_ascii=False, indent=2))
+    except Exception:
+        logger.exception("Feedback dosyasına yazılamadı")
+
+    return jsonify({"ok": True})

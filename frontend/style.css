@@ -1509,6 +1509,42 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
 .gated-overlay p { color: var(--text-2); font-size: 14px; text-align: center; }
 .success { color: var(--neon); }
 
+/* ── Geri Bildirim Modal ─────────────────────────────────────────────── */
+.footer-feedback-btn {
+    background: none; border: none; padding: 0;
+    color: inherit; font: inherit; cursor: pointer; text-decoration: underline;
+    text-decoration-color: rgba(255,255,255,0.2);
+}
+.footer-feedback-btn:hover { color: #a78bfa; }
+.feedback-overlay {
+    position: fixed; inset: 0; z-index: 1100;
+    background: rgba(0,0,0,.6); backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.feedback-overlay.hidden { display: none; }
+.feedback-box {
+    background: #161b2e; border: 1px solid rgba(255,255,255,.1);
+    border-radius: 14px; padding: 24px; width: 100%; max-width: 440px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.5);
+}
+.feedback-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.feedback-title { font-size: 16px; font-weight: 600; color: #e6edf3; }
+.feedback-close { background: none; border: none; color: #9ca3af; font-size: 22px; cursor: pointer; line-height: 1; padding: 0; }
+.feedback-close:hover { color: #e6edf3; }
+.feedback-desc { font-size: 13px; color: #9ca3af; margin: 0 0 14px; }
+.feedback-select {
+    width: 100%; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1);
+    color: #e6edf3; border-radius: 8px; padding: 8px 12px; font: inherit; font-size: 13px; margin-bottom: 10px;
+}
+.feedback-textarea {
+    width: 100%; box-sizing: border-box; background: rgba(255,255,255,.05);
+    border: 1px solid rgba(255,255,255,.1); color: #e6edf3; border-radius: 8px;
+    padding: 10px 12px; font: inherit; font-size: 13px; resize: vertical; min-height: 100px;
+}
+.feedback-textarea:focus, .feedback-select:focus { outline: none; border-color: #7c3aed; }
+.feedback-char { font-size: 11px; color: #6b7280; text-align: right; margin-top: 4px; }
+.feedback-success { color: #34d399; font-size: 13px; text-align: center; margin-top: 10px; }
+
 /* ── Destek Chatbot ──────────────────────────────────────────────────── */
 .support-fab {
     position: fixed; bottom: 24px; right: 24px; z-index: 900;

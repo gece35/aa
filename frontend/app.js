@@ -2729,5 +2729,49 @@
         input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
     })();
 
+    // ── Geri Bildirim Modal ──────────────────────────────────────────────
+    (function initFeedback() {
+        const overlay  = document.getElementById('feedbackModal');
+        const trigger  = document.getElementById('feedbackTrigger');
+        const closeBtn = document.getElementById('feedbackClose');
+        const textarea = document.getElementById('feedbackText');
+        const counter  = document.getElementById('feedbackCharCount');
+        const submitBtn = document.getElementById('feedbackSubmit');
+        const success  = document.getElementById('feedbackSuccess');
+        const select   = document.getElementById('feedbackCategory');
+        if (!overlay || !trigger) return;
+
+        const open  = () => { overlay.classList.remove('hidden'); textarea.focus(); };
+        const close = () => { overlay.classList.add('hidden'); success.classList.add('hidden'); textarea.value = ''; counter.textContent = '0'; submitBtn.disabled = false; };
+
+        trigger.addEventListener('click', open);
+        closeBtn.addEventListener('click', close);
+        overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+        textarea.addEventListener('input', () => { counter.textContent = textarea.value.length; });
+
+        submitBtn.addEventListener('click', async () => {
+            const message = textarea.value.trim();
+            if (!message) { textarea.focus(); return; }
+            submitBtn.disabled = true;
+            try {
+                await fetch('/api/feedback', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        category: select.value,
+                        message,
+                        email: state.user?.email || '',
+                    }),
+                });
+                success.classList.remove('hidden');
+                textarea.value = '';
+                counter.textContent = '0';
+                setTimeout(close, 2500);
+            } catch {
+                submitBtn.disabled = false;
+            }
+        });
+    })();
+
 
 })();
