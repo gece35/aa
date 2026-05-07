@@ -562,13 +562,13 @@ def score_symbol_detailed(symbol: str, df: pd.DataFrame) -> dict | None:
             "date": str(idx.date()) if hasattr(idx, "date") else str(idx),
             "close": float(val),
         }
-        for idx, val in close.tail(60).items()
+        for idx, val in close.tail(500).items()
         if not pd.isna(val)
     ]
 
-    # Tam OHLCV — grafik icin son 120 bar
+    # Tam OHLCV — grafik icin son 500 bar (~2 yil)
     ohlcv = []
-    for idx, row in df.tail(120).iterrows():
+    for idx, row in df.tail(500).iterrows():
         try:
             date_str = str(idx.date()) if hasattr(idx, "date") else str(idx)[:10]
             vol_val = row.get("Volume", 0)
