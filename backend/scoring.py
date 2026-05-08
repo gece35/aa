@@ -269,15 +269,15 @@ def _score_rsi(close: pd.Series) -> IndicatorResult:
             detail=f"RSI {rsi_now:.0f} — asiri satimdan cikis",
         )
 
-    # -3: RSI > 75 (sert asiri alim, tepeden alma riski yuksek)
-    if rsi_now > 75:
+    # -2: RSI > 80 (sert asiri alim, momentum tükenmesi yakın)
+    if rsi_now > 80:
         return IndicatorResult(
-            name="RSI", key="rsi", score=-3, max_score=2,
+            name="RSI", key="rsi", score=-2, max_score=2,
             value=round(rsi_now, 2),
-            detail=f"RSI {rsi_now:.0f} — sert asiri alim, tepeden alma riski",
+            detail=f"RSI {rsi_now:.0f} — sert asiri alim, momentum tukenmesi",
         )
 
-    # -1: RSI 70-75 arasi (asiri alim cezasi)
+    # -1: RSI 70-80 arasi (asiri alim cezasi)
     if rsi_now > 70:
         return IndicatorResult(
             name="RSI", key="rsi", score=-1, max_score=2,
@@ -323,8 +323,8 @@ def _score_bbands(open_: pd.Series, close: pd.Series) -> IndicatorResult:
             detail="fiyat ust band uzerinde — geri cekilme riski",
         )
 
-    # -1 puan: ust banda %2 yakin (yapışmış, geri cekilme riski yakın)
-    if price >= upper_now * 0.98:
+    # -1 puan: ust banda %1 yakin (yapışmış, geri cekilme riski yakın)
+    if price >= upper_now * 0.99:
         return IndicatorResult(
             name="Bollinger", key="bbands", score=-1, max_score=2,
             value=round(upper_now, 4),
@@ -532,11 +532,11 @@ def score_symbol(symbol: str, df: pd.DataFrame) -> ScoreResult | None:
     indicators = [trend, momentum, rsi_ind, bbands, hacim]
     raw_total = sum(ind.score for ind in indicators)
 
-    # 52-hafta tepe yakini filtresi: tepenin %3 yakininda + RSI > 65 ise -2
-    # ("yillik tepedeyken son hiz" senaryolarini eler)
+    # 52-hafta tepe yakini filtresi: tepenin %3 yakininda + RSI > 72 ise -1
+    # Sadece asiri alim + tepe kombinasyonunu cezalandirir; saglikli trend etkilenmez
     near_peak_check = bool(high_52 and high_52 > 0 and last_close >= high_52 * 0.97)
-    if near_peak_check and rsi_ind.value is not None and rsi_ind.value > 65:
-        raw_total -= 2
+    if near_peak_check and rsi_ind.value is not None and rsi_ind.value > 72:
+        raw_total -= 1
 
     score = max(0, min(10, raw_total))
     sparkline_raw = close.tail(30).dropna().tolist()
