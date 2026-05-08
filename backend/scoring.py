@@ -269,7 +269,15 @@ def _score_rsi(close: pd.Series) -> IndicatorResult:
             detail=f"RSI {rsi_now:.0f} — asiri satimdan cikis",
         )
 
-    # -1: RSI > 70 (asiri alim cezasi)
+    # -3: RSI > 75 (sert asiri alim, tepeden alma riski yuksek)
+    if rsi_now > 75:
+        return IndicatorResult(
+            name="RSI", key="rsi", score=-3, max_score=2,
+            value=round(rsi_now, 2),
+            detail=f"RSI {rsi_now:.0f} — sert asiri alim, tepeden alma riski",
+        )
+
+    # -1: RSI 70-75 arasi (asiri alim cezasi)
     if rsi_now > 70:
         return IndicatorResult(
             name="RSI", key="rsi", score=-1, max_score=2,
@@ -313,6 +321,14 @@ def _score_bbands(open_: pd.Series, close: pd.Series) -> IndicatorResult:
             name="Bollinger", key="bbands", score=0, max_score=2,
             value=round(upper_now, 4),
             detail="fiyat ust band uzerinde — geri cekilme riski",
+        )
+
+    # -1 puan: ust banda %2 yakin (yapışmış, geri cekilme riski yakın)
+    if price >= upper_now * 0.98:
+        return IndicatorResult(
+            name="Bollinger", key="bbands", score=-1, max_score=2,
+            value=round(upper_now, 4),
+            detail="fiyat ust banda yakin — geri cekilme riski yakin",
         )
 
     # +2: alt banda dokup ici yesil kapanis
@@ -515,6 +531,13 @@ def score_symbol(symbol: str, df: pd.DataFrame) -> ScoreResult | None:
 
     indicators = [trend, momentum, rsi_ind, bbands, hacim]
     raw_total = sum(ind.score for ind in indicators)
+
+    # 52-hafta tepe yakini filtresi: tepenin %3 yakininda + RSI > 65 ise -2
+    # ("yillik tepedeyken son hiz" senaryolarini eler)
+    near_peak_check = bool(high_52 and high_52 > 0 and last_close >= high_52 * 0.97)
+    if near_peak_check and rsi_ind.value is not None and rsi_ind.value > 65:
+        raw_total -= 2
+
     score = max(0, min(10, raw_total))
     sparkline_raw = close.tail(30).dropna().tolist()
     week_change = _pct_change_back(close, 5)
