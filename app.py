@@ -199,7 +199,7 @@ def create_app() -> Flask:
         return jsonify({
             "total_users": total_users,
             "lifetime_users": lifetime_users,
-            "lifetime_slots_left": max(0, 100 - total_users),
+            "lifetime_slots_left": max(0, 100 - lifetime_users),
             "newsletter_subscribers": len(load_newsletter()),
         })
 
