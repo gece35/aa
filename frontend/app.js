@@ -20,6 +20,9 @@
         portfolioAdd: (body) => fetch('/api/portfolio', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json()),
         portfolioRemove: (id) => fetch(`/api/portfolio/${id}`, { method: 'DELETE' }).then((r) => r.json()),
         backtest: (market, force = false) => fetch(`/api/backtest?market=${market}&force=${force ? 1 : 0}`).then((r) => r.json()),
+        commentsList: (symbol) => fetch(`/api/comments/${encodeURIComponent(symbol)}`).then((r) => r.json()),
+        commentsAdd: (symbol, body) => fetch(`/api/comments/${encodeURIComponent(symbol)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ body }) }).then((r) => r.json()),
+        commentsDelete: (id) => fetch(`/api/comments/${id}`, { method: 'DELETE' }).then((r) => r.json()),
     };
 
     const WATCHLIST_KEY = 'nebula.watchlist.v1';
@@ -686,6 +689,7 @@
             wireModalWatchToggle(data.symbol);
             wireModalShare(data.symbol, data.score);
             wireModalPortfolioForm(data);
+            loadAndWireComments(data.symbol);
         } catch (err) {
             els.modalContent.innerHTML = `<div class="empty">Detay yuklenemedi: ${err.message}</div>`;
         }
@@ -881,6 +885,19 @@
                         <button class="btn btn-primary" id="posConfirmBtn">Portf&ouml;ye Ekle</button>
                         <button class="btn" id="posCancelBtn">&#304;ptal</button>
                     </div>
+                </div>
+            </div>
+            <div id="commentsSection" style="margin-top:28px;">
+                <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--text-3);margin-bottom:12px;">Topluluk Yorumlar&#305;</div>
+                <div class="comment-form">
+                    <textarea id="commentInput" class="comment-textarea" maxlength="500" placeholder="Bu hisse hakk&#305;nda d&#252;&#351;&#252;ncelerinizi payla&#351;&#305;n... (maks. 500 karakter)"></textarea>
+                    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:6px;">
+                        <span id="commentCharCount" style="font-size:11px;color:var(--text-3);align-self:center;">0/500</span>
+                        <button class="btn btn-primary" id="commentSubmitBtn" style="font-size:13px;padding:6px 16px;">Yorum Yap</button>
+                    </div>
+                </div>
+                <div id="commentsList" style="margin-top:12px;">
+                    <div class="empty" style="font-size:13px;">Yorumlar y&#252;kleniyor...</div>
                 </div>
             </div>
         `;
@@ -1662,6 +1679,94 @@
                 toggle.style.cssText = 'background:rgba(52,245,168,.12);color:var(--neon);border-color:rgba(52,245,168,.4);pointer-events:none;';
             }
         });
+    }
+
+    // --- yorumlar ---
+    async function loadAndWireComments(symbol) {
+        const listEl = document.getElementById('commentsList');
+        const input = document.getElementById('commentInput');
+        const submitBtn = document.getElementById('commentSubmitBtn');
+        const charCount = document.getElementById('commentCharCount');
+        if (!listEl) return;
+
+        function renderComments(comments) {
+            if (!comments.length) {
+                listEl.innerHTML = `<div style="color:var(--text-3);font-size:13px;padding:8px 0;">Henüz yorum yok. İlk yorumu sen yap!</div>`;
+                return;
+            }
+            listEl.innerHTML = comments.map((c) => {
+                const date = c.created_at ? new Date(c.created_at * 1000).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+                const isOwn = _currentUser && c.user_id === _currentUser.id;
+                return `<div class="comment-item" data-id="${c.id}">
+                    <div class="comment-meta">
+                        <span class="comment-author">${escapeHtml(c.user_email)}</span>
+                        <span class="comment-date">${date}</span>
+                        ${isOwn ? `<button class="comment-delete-btn" data-id="${c.id}" title="Yorumu sil">✕</button>` : ''}
+                    </div>
+                    <div class="comment-body">${escapeHtml(c.body)}</div>
+                </div>`;
+            }).join('');
+            listEl.querySelectorAll('.comment-delete-btn').forEach((btn) => {
+                btn.addEventListener('click', async () => {
+                    const id = parseInt(btn.dataset.id);
+                    await API.commentsDelete(id);
+                    btn.closest('.comment-item').remove();
+                    if (!listEl.querySelector('.comment-item')) {
+                        listEl.innerHTML = `<div style="color:var(--text-3);font-size:13px;padding:8px 0;">Henüz yorum yok. İlk yorumu sen yap!</div>`;
+                    }
+                });
+            });
+        }
+
+        try {
+            const data = await API.commentsList(symbol);
+            renderComments(data.comments || []);
+        } catch (_) {
+            listEl.innerHTML = `<div style="color:var(--text-3);font-size:13px;">Yorumlar yüklenemedi.</div>`;
+        }
+
+        if (input && charCount) {
+            input.addEventListener('input', () => {
+                charCount.textContent = `${input.value.length}/500`;
+            });
+        }
+
+        if (submitBtn && input) {
+            submitBtn.addEventListener('click', async () => {
+                const body = input.value.trim();
+                if (!body) return;
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Gönderiliyor...';
+                try {
+                    const res = await API.commentsAdd(symbol, body);
+                    if (res.ok) {
+                        input.value = '';
+                        if (charCount) charCount.textContent = '0/500';
+                        const existing = Array.from(listEl.querySelectorAll('.comment-item'));
+                        const newHtml = document.createElement('div');
+                        const c = res.comment;
+                        const date = c.created_at ? new Date(c.created_at * 1000).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+                        newHtml.innerHTML = `<div class="comment-item" data-id="${c.id}">
+                            <div class="comment-meta">
+                                <span class="comment-author">${escapeHtml(c.user_email)}</span>
+                                <span class="comment-date">${date}</span>
+                                <button class="comment-delete-btn" data-id="${c.id}" title="Yorumu sil">✕</button>
+                            </div>
+                            <div class="comment-body">${escapeHtml(c.body)}</div>
+                        </div>`;
+                        const item = newHtml.firstChild;
+                        item.querySelector('.comment-delete-btn').addEventListener('click', async () => {
+                            await API.commentsDelete(c.id);
+                            item.remove();
+                        });
+                        if (!existing.length) listEl.innerHTML = '';
+                        listEl.insertBefore(item, listEl.firstChild);
+                    }
+                } catch (_) {}
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Yorum Yap';
+            });
+        }
     }
 
     // --- grafik analizi (portföy + tarama) ---

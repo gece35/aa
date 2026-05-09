@@ -2007,3 +2007,51 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
 .newsletter-success { color: var(--neon); }
 .newsletter-error { color: var(--danger); }
 .evb-resend:disabled { opacity: 0.5; cursor: default; }
+
+
+/* ── Yorumlar ─────────────────────────────────────────────────────────── */
+.comment-textarea {
+    width: 100%;
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-m);
+    color: var(--text-1);
+    font-size: 13px;
+    font-family: inherit;
+    padding: 10px 14px;
+    resize: vertical;
+    min-height: 72px;
+    outline: none;
+    transition: border-color var(--trans);
+    box-sizing: border-box;
+}
+.comment-textarea:focus { border-color: var(--accent-2); }
+.comment-textarea::placeholder { color: var(--text-3); }
+.comment-item {
+    padding: 12px 14px;
+    border-radius: var(--radius-m);
+    background: rgba(255,255,255,.03);
+    border: 1px solid var(--glass-brd-soft);
+    margin-bottom: 8px;
+}
+.comment-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+.comment-author { font-size: 12px; font-weight: 700; color: var(--accent-2); }
+.comment-date { font-size: 11px; color: var(--text-3); margin-left: auto; }
+.comment-body { font-size: 13px; color: var(--text-2); line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+.comment-delete-btn {
+    background: none;
+    border: none;
+    color: var(--text-3);
+    cursor: pointer;
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: color var(--trans), background var(--trans);
+    margin-left: 4px;
+}
+.comment-delete-btn:hover { color: var(--danger); background: rgba(239,68,68,.1); }

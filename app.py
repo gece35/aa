@@ -36,7 +36,7 @@ from backend.config import (
 from backend.data_fetcher import download_ohlcv, fetch_exchange_rate
 from backend.db import db, migrate
 from backend.limits import PLANS, enforce_collection_limit, get_plan, quota, requires_plan
-from backend.models import Portfolio, User, Watchlist
+from backend.models import Portfolio, StockComment, User, Watchlist
 from backend.news import fetch_news, fetch_stock_news
 from backend.backtest import run_backtest
 from backend.scanner import scan_market, scan_market_chunk
@@ -543,6 +543,49 @@ def create_app() -> Flask:
         if p is None or p.user_id != current_user.id:
             return jsonify({"error": "not_found"}), 404
         db.session.delete(p)
+        db.session.commit()
+        return jsonify({"ok": True})
+
+    # ── API: Yorumlar ──────────────────────────────────────────────────────────
+    _COMMENT_MAX_LEN = 500
+
+    @flask_app.route("/api/comments/<symbol>", methods=["GET"])
+    @login_required
+    def comments_list(symbol: str):
+        symbol = symbol.upper()
+        rows = (
+            db.session.query(StockComment)
+            .filter_by(symbol=symbol)
+            .order_by(StockComment.created_at.desc())
+            .limit(50)
+            .all()
+        )
+        return jsonify({"comments": [c.to_dict() for c in rows]})
+
+    @flask_app.route("/api/comments/<symbol>", methods=["POST"])
+    @login_required
+    @email_verified_required
+    def comments_add(symbol: str):
+        symbol = symbol.upper()
+        body = (request.get_json(silent=True, force=True) or {}).get("body", "").strip()
+        if not body:
+            return jsonify({"error": "empty"}), 400
+        if len(body) > _COMMENT_MAX_LEN:
+            return jsonify({"error": "too_long", "max": _COMMENT_MAX_LEN}), 400
+        comment = StockComment(user_id=current_user.id, symbol=symbol, body=body)
+        db.session.add(comment)
+        db.session.commit()
+        return jsonify({"ok": True, "comment": comment.to_dict()}), 201
+
+    @flask_app.route("/api/comments/<int:comment_id>", methods=["DELETE"])
+    @login_required
+    def comments_delete(comment_id: int):
+        comment = db.session.get(StockComment, comment_id)
+        if comment is None:
+            return jsonify({"error": "not_found"}), 404
+        if comment.user_id != current_user.id and not current_user.is_admin:
+            return jsonify({"error": "forbidden"}), 403
+        db.session.delete(comment)
         db.session.commit()
         return jsonify({"ok": True})
 

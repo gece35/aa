@@ -162,6 +162,27 @@ class WebhookEvent(db.Model):
     processed_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class StockComment(db.Model):
+    __tablename__ = "stock_comments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    symbol: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    user: Mapped["User"] = relationship("User")
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "user_email": self.user.email[:3] + "***" + self.user.email[self.user.email.index("@"):] if "@" in self.user.email else "***",
+            "user_id": self.user_id,
+            "body": self.body,
+            "created_at": int(self.created_at.timestamp()) if self.created_at else None,
+        }
+
+
 class EmailToken(db.Model):
     __tablename__ = "email_tokens"
 
