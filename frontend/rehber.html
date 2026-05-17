@@ -649,28 +649,6 @@
     </li>
   </ol>
 
-  <!-- FAQ -->
-  <h2>Sık Sorulan Sorular</h2>
-
-  <h3>Skor neden hızlı değişiyor?</h3>
-  <p>Skor, günlük kapanış fiyatlarına göre hesaplanır. Piyasa koşullarındaki hızlı değişimler göstergeleri etkileyerek skoru birkaç günde önemli ölçüde değiştirebilir. Bu nedenle tek bir güne değil, birkaç günlük trende bakmak daha sağlıklı bir değerlendirme sunar.</p>
-
-  <h3>8-10 aralığındaki her hisse "güvenli" midir?</h3>
-  <p>Hayır. Yüksek skor, teknik göstergelerin pozitif hizalandığını gösterir; ancak haber riskleri, makroekonomik değişimler ve şirket bazlı gelişmeler teknik analizin kapsamı dışındadır. Teknik skor, tek başına yeterli bir değerlendirme kriteri değildir.</p>
-
-  <h3>Neden 7, 8 değil?</h3>
-  <p>Skor 8 + ardışık gün koşulu yıllık yalnızca 30-50 işlem üretir — istatistiksel anlamlılık için yetersiz bir örneklem. TDO v2 eşiği 7'ye indirdi, ancak 4 ek filtre (trend alt-skoru ≥ 2, hacim onayı, dual rejim, 52w pozisyonu) kaliteyi koruyor. Sonuç: daha fazla işlem, benzer kalite. 6 veya altı ise filtresiz geçen yanıltıcı göstergelerle dolduğundan giriş eşiği olarak önerilmez.</p>
-
-  <h3>Neden "2 gün üst üste" şartı var?</h3>
-  <p>Tek bir günde 7+ alan bazı hisseler ertesi gün hızla geri çekilebilir — bu "yanıltıcı hareket" olarak adlandırılır. Backtest, giriş göstergesinin 2 ardışık gün korunduğu durumlarda kazanma oranının belirgin biçimde arttığını göstermektedir. Bu kısa bekleme, birkaç günlük girişi kaçırma pahasına yanıltıcı hareketlere karşı güçlü bir filtre işlevi görür.</p>
-
-  <h3>Koruma seviyesi nasıl çalışır?</h3>
-  <p>BIST hisseleri arasında günlük volatilite 5 kata kadar farklılaşır; tek tip bir yüzdelik stop bu gerçeği görmezden gelir. Sistem bu yüzden her hissenin kendi gürültü seviyesine göre ölçülen ATR (Average True Range) değerini kullanır.</p>
-  <p>Stop noktası <strong>giriş fiyatı − 2.5 × ATR</strong> formülüyle belirlenir. Düşük volatil bir hissede bu mesafe dar tutulur, yüksek volatil bir hissede doğal dalgalanmayı absorbe edecek kadar genişler. Sonuç: gereksiz erken çıkışlar (whipsaw) azalır, aynı zamanda pozisyon her hisse için orantılı büyüklükte tutulur. Pozisyon %4 kâra ulaştığında stop giriş fiyatına çekilir, %6+ kârda ise Chandelier trailing moduna geçer.</p>
-
-  <h3>Veriler ne zaman güncellenir?</h3>
-  <p>Skorlar günlük kapanış verilerine dayanır ve piyasa kapandıktan sonra yenilenir. Gün içi fiyat hareketleri skora yansımaz. Tam tarama yenilemesi için ana ekranda "Yenile" butonunu kullanabilirsiniz.</p>
-
   <footer class="legal-footer">
     <p>Bu sayfa yalnızca eğitim amaçlıdır; yatırım tavsiyesi değildir.</p>
     <p style="margin-top:8px">&copy; 2026 Nebula Scanner &bull; <a href="/legal/risk">Risk Uyarısı</a> &bull; <a href="/legal/kosullar">Kullanım Koşulları</a> &bull; <a href="/">Ana Sayfa</a></p>
