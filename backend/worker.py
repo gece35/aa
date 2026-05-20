@@ -26,8 +26,10 @@ logging.basicConfig(level=LOG_LEVEL, format="%(asctime)s [%(levelname)s] %(name)
 
 _TICK_SECONDS = int(os.environ.get("WORKER_TICK_SECONDS", "60"))
 _TWEET_INTERVAL_SECONDS = int(os.environ.get("TWEET_INTERVAL_SECONDS", str(2 * 3600)))
+_CLEANUP_INTERVAL_SECONDS = 24 * 3600
 _LOCK_KEY = 42_000_001  # arbitrary, sabit
 _last_tweet_scan: float = 0.0
+_last_cleanup: float = 0.0
 
 
 def _try_advisory_lock(session) -> bool:
@@ -117,6 +119,23 @@ def _check_user(user: User) -> int:
     return fired
 
 
+def cleanup_unverified_users() -> None:
+    """Kaydolup 7 gün içinde e-postasını doğrulamayan hesapları siler."""
+    from datetime import timedelta
+    cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+    users = db.session.execute(
+        select(User).where(
+            User.email_verified_at.is_(None),
+            User.created_at < cutoff,
+        )
+    ).scalars().all()
+    for user in users:
+        db.session.delete(user)
+    if users:
+        db.session.commit()
+        logger.info("cleanup: %d doğrulanmamış hesap silindi", len(users))
+
+
 def tweet_tick() -> None:
     """BIST ve ABD taraması yap, skor >= MIN_SCORE hisseler için tweet at.
     Son 24 saat içinde paylaşılan hisseler atlanır."""
@@ -166,6 +185,7 @@ def tweet_tick() -> None:
 
 
 def tick():
+    global _last_cleanup
     if not _try_advisory_lock(db.session):
         logger.debug("worker: advisory lock alınamadı, başka worker çalışıyor")
         return
@@ -186,6 +206,15 @@ def tick():
             tweet_tick()
         except Exception:
             logger.exception("worker: tweet_tick hatası")
+
+        # Doğrulanmamış hesap temizliği (günlük)
+        now_ts = time.time()
+        if now_ts - _last_cleanup >= _CLEANUP_INTERVAL_SECONDS:
+            _last_cleanup = now_ts
+            try:
+                cleanup_unverified_users()
+            except Exception:
+                logger.exception("worker: cleanup hatası")
     finally:
         _release_advisory_lock(db.session)
 
