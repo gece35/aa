@@ -183,6 +183,21 @@ class StockComment(db.Model):
         }
 
 
+class TweetLog(db.Model):
+    """Otomatik atılan tweetleri takip eder — aynı hisseyi 24 saat içinde tekrar paylaşmamak için."""
+    __tablename__ = "tweet_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    symbol: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    score: Mapped[int] = mapped_column(Integer, nullable=False)
+    tweet_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    tweeted_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("ix_tweet_logs_symbol_date", "symbol", "tweeted_at"),
+    )
+
+
 class EmailToken(db.Model):
     __tablename__ = "email_tokens"
 
