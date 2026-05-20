@@ -18,13 +18,16 @@ from .config import LOG_LEVEL
 from .db import db
 from .email import send_alert_triggered
 from .limits import get_plan
-from .models import Alert, User
+from .models import Alert, TweetLog, User
+from .twitter_bot import MIN_SCORE, post_signal_tweet
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=LOG_LEVEL, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 
 _TICK_SECONDS = int(os.environ.get("WORKER_TICK_SECONDS", "60"))
+_TWEET_INTERVAL_SECONDS = int(os.environ.get("TWEET_INTERVAL_SECONDS", str(2 * 3600)))
 _LOCK_KEY = 42_000_001  # arbitrary, sabit
+_last_tweet_scan: float = 0.0
 
 
 def _try_advisory_lock(session) -> bool:
@@ -32,16 +35,14 @@ def _try_advisory_lock(session) -> bool:
 
     SQLite (lokal dev) için her zaman True döner.
     """
-    bind = session.get_bind()
-    if bind.dialect.name != "postgresql":
+    if db.engine.dialect.name != "postgresql":
         return True
     row = session.execute(text("SELECT pg_try_advisory_lock(:k)"), {"k": _LOCK_KEY}).first()
     return bool(row and row[0])
 
 
 def _release_advisory_lock(session) -> None:
-    bind = session.get_bind()
-    if bind.dialect.name != "postgresql":
+    if db.engine.dialect.name != "postgresql":
         return
     try:
         session.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": _LOCK_KEY})
@@ -116,14 +117,61 @@ def _check_user(user: User) -> int:
     return fired
 
 
+def tweet_tick() -> None:
+    """BIST ve ABD taraması yap, skor >= MIN_SCORE hisseler için tweet at.
+    Son 24 saat içinde paylaşılan hisseler atlanır."""
+    global _last_tweet_scan
+    now_ts = time.time()
+    if now_ts - _last_tweet_scan < _TWEET_INTERVAL_SECONDS:
+        return
+    _last_tweet_scan = now_ts
+
+    from datetime import timedelta
+    from .scanner import scan_market
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+
+    for market in ("bist", "us"):
+        logger.info("tweet_tick: %s taraması başlıyor (min_score=%d)", market.upper(), MIN_SCORE)
+        try:
+            result = scan_market(market)
+            candidates = [r for r in result.get("results", []) if r.get("score", 0) >= MIN_SCORE]
+        except Exception:
+            logger.exception("tweet_tick: %s tarama hatası", market)
+            continue
+
+        if not candidates:
+            logger.info("tweet_tick: %s — %d puanın üstünde hisse yok", market.upper(), MIN_SCORE)
+            continue
+
+        for stock in candidates:
+            symbol = stock.get("symbol", "")
+            score = stock.get("score", 0)
+            if not symbol:
+                continue
+            # Son 24 saat içinde bu hisseyi paylaştık mı?
+            recent = db.session.execute(
+                select(TweetLog)
+                .where(TweetLog.symbol == symbol, TweetLog.tweeted_at >= cutoff)
+            ).scalar_one_or_none()
+            if recent:
+                logger.debug("tweet_tick: %s son 24s içinde paylaşıldı, atlanıyor", symbol)
+                continue
+
+            tweet_id = post_signal_tweet(symbol, score, stock, market=market)
+            log = TweetLog(symbol=symbol, score=score, tweet_id=tweet_id)
+            db.session.add(log)
+            db.session.commit()
+            logger.info("tweet_tick: %s paylaşıldı (score=%d market=%s)", symbol, score, market)
+
+
 def tick():
     if not _try_advisory_lock(db.session):
         logger.debug("worker: advisory lock alınamadı, başka worker çalışıyor")
         return
     try:
+        # Kullanıcı alarmları
         users = _due_users(time.time())
-        if not users:
-            return
         total = 0
         for u in users:
             try:
@@ -132,6 +180,12 @@ def tick():
                 logger.exception("worker: user %s check hatası", u.id)
         if total:
             logger.info("worker: %d alarm tetiklendi", total)
+
+        # Twitter otomatik paylaşım
+        try:
+            tweet_tick()
+        except Exception:
+            logger.exception("worker: tweet_tick hatası")
     finally:
         _release_advisory_lock(db.session)
 
