@@ -107,10 +107,8 @@ def signup():
     sent = send_verify_email(user.email, plain)
     if not sent:
         logger.warning("Kayıt sonrası doğrulama e-postası gönderilemedi: %s", user.email)
-    login_user(user)
-    user.last_login_at = now
-    db.session.commit()
-    return jsonify({"ok": True, "user": user.to_public_dict(), "verify_email_sent": sent}), 201
+    return jsonify({"ok": True, "verify_email_sent": sent,
+                    "message": "Hesabınız oluşturuldu. Giriş yapabilmek için e-posta adresinizi doğrulamanız gerekiyor."}), 201
 
 
 @auth_bp.route("/login", methods=["POST"])
