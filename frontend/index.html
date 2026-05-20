@@ -309,7 +309,10 @@
                 <label class="af-label">E-posta</label>
                 <input id="loginEmail" class="af-input" type="email" placeholder="ornek@mail.com" autocomplete="email" />
                 <label class="af-label">Şifre</label>
-                <input id="loginPassword" class="af-input" type="password" placeholder="Şifreniz" autocomplete="current-password" />
+                <div class="pw-wrap">
+                    <input id="loginPassword" class="af-input" type="password" placeholder="Şifreniz" autocomplete="current-password" />
+                    <button type="button" class="pw-toggle" data-target="loginPassword" title="Şifreyi göster/gizle"></button>
+                </div>
                 <div id="loginError" class="auth-error hidden"></div>
                 <button id="loginSubmit" class="btn btn-primary" style="width:100%;margin-top:16px;">Giriş Yap</button>
                 <p style="text-align:center;margin-top:12px;font-size:13px;color:var(--text-3)">
@@ -322,7 +325,10 @@
                 <label class="af-label">E-posta</label>
                 <input id="signupEmail" class="af-input" type="email" placeholder="ornek@mail.com" autocomplete="email" />
                 <label class="af-label">Şifre <span style="color:var(--text-3);font-size:11px;">(en az 10 karakter, harf+rakam)</span></label>
-                <input id="signupPassword" class="af-input" type="password" placeholder="Güçlü bir şifre" autocomplete="new-password" />
+                <div class="pw-wrap">
+                    <input id="signupPassword" class="af-input" type="password" placeholder="Güçlü bir şifre" autocomplete="new-password" />
+                    <button type="button" class="pw-toggle" data-target="signupPassword" title="Şifreyi göster/gizle"></button>
+                </div>
 
                 <div class="consent-block">
                     <label class="consent-row">
@@ -348,7 +354,10 @@
                     Yeni şifrenizi belirleyin.
                 </p>
                 <label class="af-label">Yeni Şifre <span style="color:var(--text-3);font-size:11px;">(en az 10 karakter, harf+rakam)</span></label>
-                <input id="resetPassword" class="af-input" type="password" placeholder="Yeni şifreniz" autocomplete="new-password" />
+                <div class="pw-wrap">
+                    <input id="resetPassword" class="af-input" type="password" placeholder="Yeni şifreniz" autocomplete="new-password" />
+                    <button type="button" class="pw-toggle" data-target="resetPassword" title="Şifreyi göster/gizle"></button>
+                </div>
                 <div id="resetMsg" style="font-size:13px;margin-top:8px;display:none;"></div>
                 <button id="resetSubmit" class="btn btn-primary" style="width:100%;margin-top:16px;">Şifremi Güncelle</button>
             </div>
