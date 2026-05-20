@@ -36,7 +36,7 @@ from backend.config import (
 from backend.data_fetcher import download_ohlcv, fetch_exchange_rate
 from backend.db import db, migrate
 from backend.limits import PLANS, enforce_collection_limit, get_plan, quota, requires_plan
-from backend.models import Portfolio, StockComment, User, Watchlist
+from backend.models import Portfolio, StockComment, TweetLog, User, Watchlist
 from backend.news import fetch_news, fetch_stock_news
 from backend.backtest import run_backtest
 from backend.scanner import scan_market, scan_market_chunk
@@ -82,9 +82,16 @@ def create_app() -> Flask:
         try:
             import sentry_sdk
             from sentry_sdk.integrations.flask import FlaskIntegration
+            from sentry_sdk.integrations.logging import LoggingIntegration
             sentry_sdk.init(
                 dsn=SENTRY_DSN,
-                integrations=[FlaskIntegration()],
+                integrations=[
+                    FlaskIntegration(),
+                    LoggingIntegration(
+                        level=logging.INFO,
+                        event_level=logging.ERROR,
+                    ),
+                ],
                 traces_sample_rate=0.1,
                 send_default_pii=False,
             )
@@ -201,6 +208,37 @@ def create_app() -> Flask:
             "lifetime_users": lifetime_users,
             "lifetime_slots_left": max(0, 100 - lifetime_users),
             "newsletter_subscribers": len(load_newsletter()),
+        })
+
+    @flask_app.route("/api/admin/users")
+    @admin_required
+    def api_admin_users():
+        from backend.models import User as UserModel
+        page = request.args.get("page", 1, type=int)
+        per_page = 50
+        q = request.args.get("q", "").strip()
+        query = db.session.query(UserModel)
+        if q:
+            query = query.filter(UserModel.email.ilike(f"%{q}%"))
+        total = query.count()
+        users = query.order_by(UserModel.created_at.desc()).offset((page - 1) * per_page).limit(per_page).all()
+        return jsonify({
+            "users": [
+                {
+                    "email": u.email,
+                    "plan": u.plan,
+                    "subscription_status": u.subscription_status or "-",
+                    "is_admin": u.is_admin,
+                    "email_verified": bool(u.email_verified_at),
+                    "created_at": u.created_at.strftime("%d.%m.%Y %H:%M") if u.created_at else "-",
+                    "last_login_at": u.last_login_at.strftime("%d.%m.%Y %H:%M") if u.last_login_at else "-",
+                }
+                for u in users
+            ],
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+            "pages": (total + per_page - 1) // per_page,
         })
 
     # ── API: Config ────────────────────────────────────────────────────────
