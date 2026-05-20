@@ -25,6 +25,97 @@
         commentsDelete: (id) => fetch(`/api/comments/${id}`, { method: 'DELETE' }).then((r) => r.json()),
     };
 
+    // ── Admin: Kullanıcı listesi modalı ──────────────────────────────────────
+    let _adminUsersPage = 1;
+    let _adminUsersQuery = '';
+
+    function openAdminUsers(page, q) {
+        page = page || 1;
+        q = (q !== undefined) ? q : _adminUsersQuery;
+        _adminUsersPage = page;
+        _adminUsersQuery = q;
+
+        const modal = document.getElementById('adminUsersModal');
+        if (!modal) return;
+        modal.classList.remove('hidden');
+
+        const tbody = document.getElementById('adminUsersTbody');
+        const empty = document.getElementById('adminUsersEmpty');
+        const pager = document.getElementById('adminUsersPager');
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-3);">Yükleniyor…</td></tr>';
+        empty.style.display = 'none';
+        pager.innerHTML = '';
+
+        const url = `/api/admin/users?page=${page}&q=${encodeURIComponent(q)}`;
+        fetch(url).then(r => r.json()).then(data => {
+            tbody.innerHTML = '';
+            if (!data.users || data.users.length === 0) {
+                tbody.innerHTML = '';
+                empty.style.display = '';
+                return;
+            }
+            data.users.forEach(u => {
+                const planBadge = u.plan === 'premium'
+                    ? '<span style="color:#a78bfa;font-weight:600;">Premium</span>'
+                    : '<span style="color:var(--text-3);">Ücretsiz</span>';
+                const adminBadge = u.is_admin ? ' <span style="background:#7c3aed;color:#fff;border-radius:4px;font-size:10px;padding:1px 5px;">Admin</span>' : '';
+                const verifiedBadge = u.email_verified
+                    ? '<span style="color:#4ade80;">&#10003;</span>'
+                    : '<span style="color:var(--danger);">&#10007;</span>';
+                const tr = document.createElement('tr');
+                tr.style.borderBottom = '1px solid var(--glass-brd)';
+                tr.innerHTML = `
+                    <td style="padding:7px 8px;"></td>
+                    <td style="text-align:center;padding:7px 8px;">${planBadge}</td>
+                    <td style="text-align:center;padding:7px 8px;color:var(--text-2);font-size:12px;">${u.subscription_status}</td>
+                    <td style="text-align:center;padding:7px 8px;">${verifiedBadge}</td>
+                    <td style="text-align:center;padding:7px 8px;color:var(--text-3);font-size:12px;">${u.created_at}</td>
+                    <td style="text-align:center;padding:7px 8px;color:var(--text-3);font-size:12px;">${u.last_login_at}</td>
+                `;
+                // Email textContent ile set et (XSS önlemi)
+                const emailTd = tr.querySelector('td:first-child');
+                emailTd.textContent = u.email;
+                if (u.is_admin) emailTd.insertAdjacentHTML('beforeend', adminBadge);
+                tbody.appendChild(tr);
+            });
+
+            // Sayfalandırma
+            const prevDisabled = page <= 1;
+            const nextDisabled = page >= data.pages;
+            pager.innerHTML = `
+                <span>${data.total} kullanıcı &bull; Sayfa ${data.page}/${data.pages || 1}</span>
+                <div style="display:flex;gap:6px;">
+                    <button class="btn btn-ghost" style="font-size:12px;padding:3px 10px;" ${prevDisabled ? 'disabled' : ''} id="adminPagePrev">&#8592; Önceki</button>
+                    <button class="btn btn-ghost" style="font-size:12px;padding:3px 10px;" ${nextDisabled ? 'disabled' : ''} id="adminPageNext">Sonraki &#8594;</button>
+                </div>
+            `;
+            if (!prevDisabled) {
+                document.getElementById('adminPagePrev').addEventListener('click', () => openAdminUsers(page - 1));
+            }
+            if (!nextDisabled) {
+                document.getElementById('adminPageNext').addEventListener('click', () => openAdminUsers(page + 1));
+            }
+        }).catch(() => {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--danger);">Veriler yüklenemedi.</td></tr>';
+        });
+
+        // Kapat
+        document.getElementById('adminUsersClose').onclick = () => modal.classList.add('hidden');
+        document.getElementById('adminUsersBackdrop').onclick = () => modal.classList.add('hidden');
+
+        // Arama
+        const searchBtn = document.getElementById('adminUsersSearchBtn');
+        const searchInput = document.getElementById('adminUsersSearch');
+        if (searchInput) searchInput.value = q;
+        if (searchBtn) {
+            searchBtn.onclick = () => openAdminUsers(1, (searchInput ? searchInput.value.trim() : ''));
+        }
+        if (searchInput) {
+            searchInput.onkeydown = (e) => { if (e.key === 'Enter') openAdminUsers(1, searchInput.value.trim()); };
+        }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     const WATCHLIST_KEY = 'nebula.watchlist.v1';
     const MARKET_KEY = 'nebula.market.v1';
     const BATCH_SIZE = 30;
@@ -685,7 +776,7 @@
             }
             if (data.error) throw new Error(data.error);
             els.modalContent.innerHTML = renderStockDetail(data, newsData);
-            drawDetailChart(data.history || [], data.supports || [], data.resistances || [], data.stop_loss, data.take_profit);
+            wireDetailTabs(data);
             wireModalWatchToggle(data.symbol);
             wireModalShare(data.symbol, data.score);
             wireModalPortfolioForm(data);
@@ -796,10 +887,6 @@
                         <span class="sl-tp-value">${fmtPrice(tp, ccy)}</span>
                         <span class="sl-tp-pct">+${tpPct}%</span>
                     </div>` : ''}
-                    ${rr ? `<div class="sl-tp-item rr">
-                        <span class="sl-tp-label">Risk / Odul</span>
-                        <span class="sl-tp-value">1 : ${rr}</span>
-                    </div>` : ''}
                 </div>
             </div>` : '';
 
@@ -833,161 +920,104 @@
                 </div>
             </div>
             ${reason ? `<div style="margin-top:12px;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,.03);border:1px solid var(--glass-brd-soft);font-size:13px;color:var(--text-2);line-height:1.6;">${escapeHtml(reason)}</div>` : ''}
-            <canvas id="detailChart" class="mini-chart" style="margin-top:18px;"></canvas>
-            <div class="detail-row"><span class="k">Fiyat</span><span>${fmtPrice(d.price, ccy)}</span></div>
-            <div class="detail-row"><span class="k">Gunluk Degisim</span><span style="color:${change >= 0 ? 'var(--neon)' : 'var(--danger)'}">${fmtChange(change)}</span></div>
-            <div class="detail-row"><span class="k">Haftalik Degisim</span><span style="color:${(d.change_week_pct || 0) >= 0 ? 'var(--neon)' : 'var(--danger)'}">${fmtChange(d.change_week_pct)}</span></div>
-            <div class="detail-row"><span class="k">Aylik Degisim</span><span style="color:${(d.change_month_pct || 0) >= 0 ? 'var(--neon)' : 'var(--danger)'}">${fmtChange(d.change_month_pct)}</span></div>
-            <div class="detail-row"><span class="k">52 Hafta Yuksek</span><span>${fmtPrice(d.high_52w, ccy)}</span></div>
-            <div class="detail-row"><span class="k">52 Hafta Dusuk</span><span>${fmtPrice(d.low_52w, ccy)}</span></div>
-            <div class="detail-row"><span class="k">20g Ort. Hacim</span><span>${fmtVolume(d.avg_volume_20d || 0)}</span></div>
-            ${slTpHtml}
-            ${srHtml}
-            <div style="margin-top:18px;">
-                ${d.indicators.map((ind) => {
-                    const cls = ind.score > 0 ? 'on' : (ind.score < 0 ? 'penalty' : '');
-                    const sign = ind.score > 0 ? '+' : '';
-                    const scoreLabel = ind.max_score > 0
-                        ? `${sign}${ind.score} / ${ind.max_score}`
-                        : (ind.score < 0 ? `${ind.score}` : '—');
-                    return `
-                    <div class="detail-ind">
-                        <div class="di-head">
-                            <span class="di-name">${escapeHtml(ind.name)} ${ind.value != null ? `<span style="color:var(--text-3);font-weight:500">(${ind.value})</span>` : ''}</span>
-                            <span class="badge ${cls}">${scoreLabel}</span>
-                        </div>
-                        <div class="di-reason">${escapeHtml(ind.detail || '')}</div>
-                    </div>`;
-                }).join('')}
+
+            <!-- Sekme çubuğu -->
+            <div style="display:flex;gap:0;margin-top:18px;border-bottom:1px solid var(--glass-brd);">
+                <button class="detail-modal-tab active" data-dtab="ozet" style="padding:8px 18px;font-size:13px;font-weight:500;background:none;border:none;border-bottom:2px solid var(--accent);color:var(--text-1);cursor:pointer;">Özet</button>
+                <button class="detail-modal-tab" data-dtab="haberler" style="padding:8px 18px;font-size:13px;font-weight:500;background:none;border:none;border-bottom:2px solid transparent;color:var(--text-3);cursor:pointer;">Haberler</button>
             </div>
-            <div style="margin-top:22px;">
+
+            <!-- ÖZET paneli -->
+            <div id="dtab-ozet" class="dtab-panel" style="padding-top:14px;">
+                <div class="detail-row"><span class="k">Fiyat</span><span>${fmtPrice(d.price, ccy)}</span></div>
+                <div class="detail-row"><span class="k">Gunluk Degisim</span><span style="color:${change >= 0 ? 'var(--neon)' : 'var(--danger)'}">${fmtChange(change)}</span></div>
+                <div class="detail-row"><span class="k">Haftalik Degisim</span><span style="color:${(d.change_week_pct || 0) >= 0 ? 'var(--neon)' : 'var(--danger)'}">${fmtChange(d.change_week_pct)}</span></div>
+                <div class="detail-row"><span class="k">Aylik Degisim</span><span style="color:${(d.change_month_pct || 0) >= 0 ? 'var(--neon)' : 'var(--danger)'}">${fmtChange(d.change_month_pct)}</span></div>
+                <div class="detail-row"><span class="k">52 Hafta Yuksek</span><span>${fmtPrice(d.high_52w, ccy)}</span></div>
+                <div class="detail-row"><span class="k">52 Hafta Dusuk</span><span>${fmtPrice(d.low_52w, ccy)}</span></div>
+                <div class="detail-row"><span class="k">20g Ort. Hacim</span><span>${fmtVolume(d.avg_volume_20d || 0)}</span></div>
+                ${slTpHtml}
+                ${srHtml}
+                <div style="margin-top:18px;">
+                    ${d.indicators.map((ind) => {
+                        const cls = ind.score > 0 ? 'on' : (ind.score < 0 ? 'penalty' : '');
+                        const sign = ind.score > 0 ? '+' : '';
+                        const scoreLabel = ind.max_score > 0
+                            ? `${sign}${ind.score} / ${ind.max_score}`
+                            : (ind.score < 0 ? `${ind.score}` : '—');
+                        return `
+                        <div class="detail-ind">
+                            <div class="di-head">
+                                <span class="di-name">${escapeHtml(ind.name)} ${ind.value != null ? `<span style="color:var(--text-3);font-weight:500">(${ind.value})</span>` : ''}</span>
+                                <span class="badge ${cls}">${scoreLabel}</span>
+                            </div>
+                            <div class="di-reason">${escapeHtml(ind.detail || '')}</div>
+                        </div>`;
+                    }).join('')}
+                </div>
+                <div id="addPosSection" class="add-pos-section">
+                    <button class="btn add-pos-toggle">&#128204; Portf&ouml;ye Ekle</button>
+                    <div class="add-pos-form hidden">
+                        <div class="add-pos-fields">
+                            <label class="add-pos-field">
+                                <span>Al&#305;&#351; Tarihi</span>
+                                <input type="date" id="posDate" />
+                            </label>
+                            <label class="add-pos-field">
+                                <span>Al&#305;&#351; Fiyat&#305;</span>
+                                <input type="number" id="posPrice" step="0.01" min="0.01" />
+                            </label>
+                            <label class="add-pos-field">
+                                <span>Adet</span>
+                                <input type="number" id="posQty" min="1" step="1" value="1" />
+                            </label>
+                        </div>
+                        <div class="add-pos-btns">
+                            <button class="btn btn-primary" id="posConfirmBtn">Portf&ouml;ye Ekle</button>
+                            <button class="btn" id="posCancelBtn">&#304;ptal</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- HABERLER paneli -->
+            <div id="dtab-haberler" class="dtab-panel" style="display:none;padding-top:14px;">
                 <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--text-3);margin-bottom:10px;">Son Haberler</div>
                 <div class="stock-news-list">${newsItems}</div>
-            </div>
-            <div id="addPosSection" class="add-pos-section">
-                <button class="btn add-pos-toggle">&#128204; Portf&ouml;ye Ekle</button>
-                <div class="add-pos-form hidden">
-                    <div class="add-pos-fields">
-                        <label class="add-pos-field">
-                            <span>Al&#305;&#351; Tarihi</span>
-                            <input type="date" id="posDate" />
-                        </label>
-                        <label class="add-pos-field">
-                            <span>Al&#305;&#351; Fiyat&#305;</span>
-                            <input type="number" id="posPrice" step="0.01" min="0.01" />
-                        </label>
-                        <label class="add-pos-field">
-                            <span>Adet</span>
-                            <input type="number" id="posQty" min="1" step="1" value="1" />
-                        </label>
+                <div id="commentsSection" style="margin-top:28px;">
+                    <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--text-3);margin-bottom:12px;">Topluluk Yorumlar&#305;</div>
+                    <div class="comment-form">
+                        <textarea id="commentInput" class="comment-textarea" maxlength="500" placeholder="Bu hisse hakk&#305;nda d&#252;&#351;&#252;ncelerinizi payla&#351;&#305;n... (maks. 500 karakter)"></textarea>
+                        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:6px;">
+                            <span id="commentCharCount" style="font-size:11px;color:var(--text-3);align-self:center;">0/500</span>
+                            <button class="btn btn-primary" id="commentSubmitBtn" style="font-size:13px;padding:6px 16px;">Yorum Yap</button>
+                        </div>
                     </div>
-                    <div class="add-pos-btns">
-                        <button class="btn btn-primary" id="posConfirmBtn">Portf&ouml;ye Ekle</button>
-                        <button class="btn" id="posCancelBtn">&#304;ptal</button>
+                    <div id="commentsList" style="margin-top:12px;">
+                        <div class="empty" style="font-size:13px;">Yorumlar y&#252;kleniyor...</div>
                     </div>
-                </div>
-            </div>
-            <div id="commentsSection" style="margin-top:28px;">
-                <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--text-3);margin-bottom:12px;">Topluluk Yorumlar&#305;</div>
-                <div class="comment-form">
-                    <textarea id="commentInput" class="comment-textarea" maxlength="500" placeholder="Bu hisse hakk&#305;nda d&#252;&#351;&#252;ncelerinizi payla&#351;&#305;n... (maks. 500 karakter)"></textarea>
-                    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:6px;">
-                        <span id="commentCharCount" style="font-size:11px;color:var(--text-3);align-self:center;">0/500</span>
-                        <button class="btn btn-primary" id="commentSubmitBtn" style="font-size:13px;padding:6px 16px;">Yorum Yap</button>
-                    </div>
-                </div>
-                <div id="commentsList" style="margin-top:12px;">
-                    <div class="empty" style="font-size:13px;">Yorumlar y&#252;kleniyor...</div>
                 </div>
             </div>
         `;
     }
 
-    function drawDetailChart(history, supports, resistances, stopLoss, takeProfit) {
-        const canvas = document.getElementById('detailChart');
-        if (!canvas || !history.length) return;
-
-        const closes = history.map((p) => p.close);
-        const last = closes[closes.length - 1];
-        const first = closes[0];
-        const isUp = last >= first;
-
-        const dpr = window.devicePixelRatio || 1;
-        const rect = canvas.getBoundingClientRect();
-        const w = Math.max(1, rect.width);
-        const h = Math.max(1, rect.height);
-        canvas.width = w * dpr;
-        canvas.height = h * dpr;
-        const ctx = canvas.getContext('2d');
-        ctx.scale(dpr, dpr);
-        ctx.clearRect(0, 0, w, h);
-
-        // Price range: include S/R and SL/TP levels
-        const allPrices = [...closes];
-        if (stopLoss && stopLoss > 0) allPrices.push(stopLoss);
-        if (takeProfit && takeProfit > 0) allPrices.push(takeProfit);
-
-        const rawMin = Math.min(...allPrices);
-        const rawMax = Math.max(...allPrices);
-        const pad5 = (rawMax - rawMin) * 0.05 || rawMin * 0.02;
-        const minP = rawMin - pad5;
-        const maxP = rawMax + pad5;
-        const range = maxP - minP || 1;
-        const pad = 12;
-
-        const priceToY = (p) => h - ((p - minP) / range) * (h - pad * 2) - pad;
-
-        // Draw horizontal level lines
-        const drawHLine = (price, color, dash, alpha) => {
-            if (price == null || price <= 0) return;
-            const y = priceToY(price);
-            if (y < 0 || y > h) return;
-            ctx.save();
-            ctx.beginPath();
-            ctx.setLineDash(dash || [4, 4]);
-            ctx.lineWidth = 1;
-            ctx.strokeStyle = color;
-            ctx.globalAlpha = alpha || 0.45;
-            ctx.moveTo(0, y);
-            ctx.lineTo(w, y);
-            ctx.stroke();
-            ctx.restore();
-        };
-
-        // Nearest 2 supports below price and 2 resistances above
-        const nearSups = (supports || []).filter(s => s < last).slice(-2);
-        const nearRess = (resistances || []).filter(r => r > last).slice(0, 2);
-        nearSups.forEach(s => drawHLine(s, '#34f5a8', [3, 4], 0.4));
-        nearRess.forEach(r => drawHLine(r, '#ff5370', [3, 4], 0.4));
-        if (stopLoss) drawHLine(stopLoss, '#ff5370', [8, 4], 0.7);
-        if (takeProfit) drawHLine(takeProfit, '#34f5a8', [8, 4], 0.7);
-
-        // Draw price line
-        const color = isUp ? '#34f5a8' : '#ff5370';
-        const shadowCol = isUp ? 'rgba(52,245,168,.45)' : 'rgba(255,83,112,.45)';
-        const grad = ctx.createLinearGradient(0, 0, 0, h);
-        grad.addColorStop(0, isUp ? 'rgba(52,245,168,0.35)' : 'rgba(255,83,112,0.3)');
-        grad.addColorStop(1, isUp ? 'rgba(52,245,168,0)' : 'rgba(255,83,112,0)');
-
-        const step = w / Math.max(1, closes.length - 1);
-        ctx.beginPath();
-        closes.forEach((v, i) => {
-            const x = i * step;
-            const y = priceToY(v);
-            if (i === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
+    // --- Detail modal sekme yönetimi ---
+    function wireDetailTabs(data) {
+        const tabs = document.querySelectorAll('.detail-modal-tab');
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                const target = tab.dataset.dtab;
+                tabs.forEach(t => {
+                    const isActive = t.dataset.dtab === target;
+                    t.style.color = isActive ? 'var(--text-1)' : 'var(--text-3)';
+                    t.style.borderBottom = isActive ? '2px solid var(--accent)' : '2px solid transparent';
+                    t.classList.toggle('active', isActive);
+                });
+                document.querySelectorAll('.dtab-panel').forEach(p => {
+                    p.style.display = p.id === `dtab-${target}` ? '' : 'none';
+                });
+            });
         });
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = color;
-        ctx.shadowColor = shadowCol;
-        ctx.shadowBlur = 6;
-        ctx.stroke();
-        ctx.lineTo(w, h);
-        ctx.lineTo(0, h);
-        ctx.closePath();
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = grad;
-        ctx.fill();
     }
 
     function closeModal() { els.modal.classList.add('hidden'); }
@@ -1069,7 +1099,7 @@
 
     async function removePosition(id) {
         if (!confirm('Bu pozisyonu portföyden kaldırmak istiyor musunuz?')) return;
-        port.positions = port.positions.filter(p => p.id !== id);
+        port.positions = port.positions.filter(p => String(p.id) !== String(id));
         if (_currentUser) {
             API.portfolioRemove(id).catch(() => {});
         } else {
@@ -1966,7 +1996,113 @@
 
         chart.timeScale().fitContent();
 
-        const ro = new ResizeObserver(() => { try { chart.applyOptions({ width: chartEl.clientWidth }); } catch (_) {} });
+        // Overlay canvas — kullanıcı piksel koordinatında serbestçe çizer
+        chartEl.style.position = 'relative';
+        const overlayCanvas = document.createElement('canvas');
+        overlayCanvas.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:5;';
+        chartEl.appendChild(overlayCanvas);
+        overlayCanvas.width = chartEl.clientWidth;
+        overlayCanvas.height = chartEl.clientHeight || 400;
+
+        const trendLines = [];
+        let _trendPending = null;
+        let _trendHintEl = null;
+
+        function redrawTrendOverlay() {
+            const w = overlayCanvas.width;
+            const h = overlayCanvas.height;
+            const ctx = overlayCanvas.getContext('2d');
+            ctx.clearRect(0, 0, w, h);
+            ctx.strokeStyle = 'rgba(251,191,36,0.9)';
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            trendLines.forEach(({ x1r, y1r, x2r, y2r }) => {
+                ctx.beginPath();
+                ctx.moveTo(x1r * w, y1r * h);
+                ctx.lineTo(x2r * w, y2r * h);
+                ctx.stroke();
+            });
+            if (_trendPending) {
+                ctx.fillStyle = 'rgba(251,191,36,0.9)';
+                ctx.beginPath();
+                ctx.arc(_trendPending.xr * w, _trendPending.yr * h, 5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        overlayCanvas.addEventListener('click', e => {
+            const rect = overlayCanvas.getBoundingClientRect();
+            const xr = (e.clientX - rect.left) / rect.width;
+            const yr = (e.clientY - rect.top) / rect.height;
+            if (!_trendPending) {
+                _trendPending = { xr, yr };
+                if (_trendHintEl) _trendHintEl.textContent = '2. noktas\u0131n\u0131 se\u00E7';
+                redrawTrendOverlay();
+            } else {
+                trendLines.push({ x1r: _trendPending.xr, y1r: _trendPending.yr, x2r: xr, y2r: yr });
+                _trendPending = null;
+                redrawTrendOverlay();
+                if (_trendHintEl) _trendHintEl.textContent = '\u00C7izildi \u2713';
+                setTimeout(() => { if (_trendHintEl) _trendHintEl.textContent = '1. noktas\u0131n\u0131 se\u00E7'; }, 1200);
+            }
+        });
+
+        // Trendline toolbar
+        const toolbarEl = document.getElementById('portTrendToolbar');
+        if (toolbarEl) {
+            toolbarEl.style.display = 'flex';
+            toolbarEl.style.gap = '8px';
+            toolbarEl.style.alignItems = 'center';
+            toolbarEl.style.margin = '8px 0 4px';
+            toolbarEl.innerHTML = `
+                <button id="portTrendBtn" class="btn btn-ghost" style="font-size:12px;padding:4px 10px;">&#x1F4C8; Trend \u00C7iz</button>
+                <button id="portTrendUndoBtn" class="btn btn-ghost" style="font-size:12px;padding:4px 10px;" title="Son \u00E7izgiyi sil">&#x21A9; Geri Al</button>
+                <button id="portTrendClearBtn" class="btn btn-ghost" style="font-size:12px;padding:4px 10px;" title="T\u00FCm\u00FCn\u00FC sil">&#x1F5D1; Temizle</button>
+                <span id="portTrendHint" style="font-size:11px;color:var(--text-3);"></span>
+            `;
+            let trendMode = false;
+            const trendBtn = document.getElementById('portTrendBtn');
+            const undoBtn = document.getElementById('portTrendUndoBtn');
+            const clearBtn = document.getElementById('portTrendClearBtn');
+            _trendHintEl = document.getElementById('portTrendHint');
+
+            trendBtn.addEventListener('click', () => {
+                trendMode = !trendMode;
+                _trendPending = null;
+                trendBtn.style.color = trendMode ? 'var(--neon)' : '';
+                _trendHintEl.textContent = trendMode ? '1. noktas\u0131n\u0131 se\u00E7' : '';
+                overlayCanvas.style.pointerEvents = trendMode ? 'auto' : 'none';
+                overlayCanvas.style.cursor = trendMode ? 'crosshair' : '';
+                if (!trendMode) redrawTrendOverlay();
+            });
+
+            undoBtn.addEventListener('click', () => {
+                if (_trendPending) {
+                    _trendPending = null;
+                    redrawTrendOverlay();
+                } else {
+                    trendLines.pop();
+                    redrawTrendOverlay();
+                }
+                _trendHintEl.textContent = trendMode ? '1. noktas\u0131n\u0131 se\u00E7' : '';
+            });
+
+            clearBtn.addEventListener('click', () => {
+                trendLines.length = 0;
+                _trendPending = null;
+                _trendHintEl.textContent = '';
+                redrawTrendOverlay();
+            });
+        }
+
+        const ro = new ResizeObserver(() => {
+            try {
+                chart.applyOptions({ width: chartEl.clientWidth });
+                overlayCanvas.width = chartEl.clientWidth;
+                overlayCanvas.height = chartEl.clientHeight || 400;
+                redrawTrendOverlay();
+            } catch (_) {}
+        });
         ro.observe(chartEl);
         chartEl._resizeObs = ro;
 
@@ -2005,7 +2141,10 @@
             if (chartEl._lwChart) { try { chartEl._lwChart.remove(); } catch (_) {} chartEl._lwChart = null; }
             if (chartEl._resizeObs) { chartEl._resizeObs.disconnect(); chartEl._resizeObs = null; }
             chartEl.innerHTML = '';
+            chartEl.style.cursor = '';
         }
+        const toolbarEl = document.getElementById('portTrendToolbar');
+        if (toolbarEl) { toolbarEl.style.display = 'none'; toolbarEl.innerHTML = ''; }
     }
 
     document.getElementById('portChartClose')?.addEventListener('click', closePortChartModal);
@@ -2369,7 +2508,9 @@
                 if (user.is_admin) {
                     adminBar.classList.remove('hidden');
                     fetch('/api/admin/stats').then(r => r.json()).then(s => {
-                        adminBar.innerHTML = `<span>👤 Kullanıcı: <strong>${s.total_users}</strong></span><span>🎁 Lifetime: <strong>${s.lifetime_users}/100</strong> (${s.lifetime_slots_left} yer kaldı)</span><span>📬 Newsletter: <strong>${s.newsletter_subscribers}</strong></span>`;
+                        adminBar.innerHTML = `<span>👤 Kullanıcı: <strong>${s.total_users}</strong></span><span>🎁 Lifetime: <strong>${s.lifetime_users}/100</strong> (${s.lifetime_slots_left} yer kaldı)</span><span>📬 Newsletter: <strong>${s.newsletter_subscribers}</strong></span><button id="adminUsersBtn" class="btn btn-ghost" style="font-size:12px;padding:3px 10px;margin-left:8px;">👥 Kullanıcılar</button>`;
+                        const btn = document.getElementById('adminUsersBtn');
+                        if (btn) btn.addEventListener('click', () => openAdminUsers());
                     }).catch(() => { adminBar.innerHTML = '<span>Admin verileri yüklenemedi.</span>'; });
                 } else {
                     adminBar.classList.add('hidden');
@@ -2483,6 +2624,26 @@
                 applyUserState(d.user);
                 closeAuthModal();
                 showToast('Giriş yapıldı.', 'success');
+            } else if (d.error === 'email_not_verified') {
+                errEl.innerHTML = '';
+                const msg = document.createTextNode('E-posta adresiniz henüz doğrulanmamış. ');
+                const link = document.createElement('a');
+                link.href = '#';
+                link.style.color = 'var(--accent)';
+                link.textContent = 'Doğrulama e-postası gönder';
+                link.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    link.textContent = 'Gönderiliyor...';
+                    await fetch('/api/auth/resend-verify-public', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email }),
+                    });
+                    errEl.textContent = 'Doğrulama e-postası gönderildi. Gelen kutunuzu kontrol edin.';
+                });
+                errEl.appendChild(msg);
+                errEl.appendChild(link);
+                errEl.classList.remove('hidden');
             } else {
                 errEl.textContent = d.message || 'E-posta veya şifre hatalı.';
                 errEl.classList.remove('hidden');
@@ -2695,8 +2856,8 @@
 
     // ── Pricing modal ────────────────────────────────────────────────────
     const pricingModal = document.getElementById('pricingModal');
-    function openPricingModal() { pricingModal.classList.remove('hidden'); }
-    function closePricingModal() { pricingModal.classList.add('hidden'); }
+    function openPricingModal() { if (pricingModal) pricingModal.classList.remove('hidden'); }
+    function closePricingModal() { if (pricingModal) pricingModal.classList.add('hidden'); }
     document.getElementById('pricingModalClose')?.addEventListener('click', closePricingModal);
     document.getElementById('pricingModalBackdrop')?.addEventListener('click', closePricingModal);
 
