@@ -114,8 +114,7 @@
                 <span id="cacheState" class="meta-value">-</span>
             </div>
             <a href="/rehber" target="_blank" class="btn btn-ghost rehber-nav-btn" title="Nasıl çalışır?">&#x1F4DA; <span class="rehber-text">Rehber</span></a>
-            <a href="/faq" target="_blank" class="btn btn-ghost rehber-nav-btn" title="Sık sorulan sorular">&#x2753; <span class="rehber-text">SSS</span></a>
-            <!-- Auth area -->
+<!-- Auth area -->
             <div id="authArea" class="auth-area">
                 <button id="loginBtn" class="btn btn-ghost">Giriş Yap</button>
                 <button id="signupBtn" class="btn btn-primary">Üye Ol</button>
@@ -267,6 +266,7 @@
             <button class="modal-close" id="portChartClose">&times;</button>
             <div id="portChartHeader"></div>
             <div id="portChartContainer" class="port-chart-wrap"></div>
+            <div id="portTrendToolbar" style="display:none;padding:0 4px;"></div>
             <div id="portPatternCards"></div>
         </div>
     </div>
@@ -477,6 +477,36 @@
             <div class="feedback-char"><span id="feedbackCharCount">0</span>/2000</div>
             <button id="feedbackSubmit" class="btn btn-primary" style="width:100%;margin-top:8px;">Gönder</button>
             <p id="feedbackSuccess" class="feedback-success hidden">Teşekkürler! Geri bildiriminiz alındı.</p>
+        </div>
+    </div>
+
+    <!-- Admin kullanıcı listesi modalı -->
+    <div id="adminUsersModal" class="modal hidden" role="dialog" aria-label="Kullanıcı Listesi">
+        <div class="modal-backdrop" id="adminUsersBackdrop"></div>
+        <div class="modal-card glass" style="max-width:860px;width:96%;max-height:85vh;display:flex;flex-direction:column;">
+            <button class="modal-close" id="adminUsersClose">&times;</button>
+            <h3 style="margin:0 0 14px;font-size:18px;font-family:'Inter';">&#x1F465; Kayıtlı Kullanıcılar</h3>
+            <div style="display:flex;gap:8px;margin-bottom:12px;">
+                <input id="adminUsersSearch" class="af-input" type="search" placeholder="E-posta ile ara..." style="flex:1;margin:0;" autocomplete="off" />
+                <button id="adminUsersSearchBtn" class="btn btn-primary" style="padding:6px 14px;">Ara</button>
+            </div>
+            <div style="overflow:auto;flex:1;">
+                <table id="adminUsersTable" style="width:100%;border-collapse:collapse;font-size:13px;">
+                    <thead>
+                        <tr style="color:var(--text-3);border-bottom:1px solid var(--glass-brd);">
+                            <th style="text-align:left;padding:6px 8px;font-weight:500;">E-posta</th>
+                            <th style="text-align:center;padding:6px 8px;font-weight:500;">Plan</th>
+                            <th style="text-align:center;padding:6px 8px;font-weight:500;">Durum</th>
+                            <th style="text-align:center;padding:6px 8px;font-weight:500;">Doğrulama</th>
+                            <th style="text-align:center;padding:6px 8px;font-weight:500;">Kayıt</th>
+                            <th style="text-align:center;padding:6px 8px;font-weight:500;">Son Giriş</th>
+                        </tr>
+                    </thead>
+                    <tbody id="adminUsersTbody"></tbody>
+                </table>
+                <p id="adminUsersEmpty" style="text-align:center;color:var(--text-3);padding:24px;display:none;">Kullanıcı bulunamadı.</p>
+            </div>
+            <div id="adminUsersPager" style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:12px;color:var(--text-3);"></div>
         </div>
     </div>
 
