@@ -104,11 +104,13 @@ def signup():
     ))
     db.session.commit()
 
-    send_verify_email(user.email, plain)
+    sent = send_verify_email(user.email, plain)
+    if not sent:
+        logger.warning("Kayıt sonrası doğrulama e-postası gönderilemedi: %s", user.email)
     login_user(user)
     user.last_login_at = now
     db.session.commit()
-    return jsonify({"ok": True, "user": user.to_public_dict()}), 201
+    return jsonify({"ok": True, "user": user.to_public_dict(), "verify_email_sent": sent}), 201
 
 
 @auth_bp.route("/login", methods=["POST"])
@@ -124,6 +126,12 @@ def login():
     if not user or not verify_password(password, user.password_hash):
         return jsonify({"error": "invalid_credentials",
                         "message": "E-posta veya şifre hatalı."}), 401
+
+    if not user.email_verified_at and not user.is_admin:
+        return jsonify({
+            "error": "email_not_verified",
+            "message": "Giriş yapabilmek için e-posta adresinizi doğrulamanız gerekiyor. Lütfen gelen kutunuzu kontrol edin.",
+        }), 403
 
     login_user(user, remember=True)
     user.last_login_at = now_utc()
@@ -253,6 +261,28 @@ def verify_get():
     et.used_at = now_utc()
     db.session.commit()
     return redirect(f"{APP_BASE_URL}/?verify=ok")
+
+
+@auth_bp.route("/resend-verify-public", methods=["POST"])
+def resend_verify_public():
+    """Giriş yapamayan (doğrulanmamış) kullanıcı için herkese açık yeniden gönderme."""
+    body = request.get_json(silent=True) or {}
+    try:
+        email = _normalize_email((body.get("email") or "").strip())
+    except ValueError:
+        return jsonify({"ok": True})  # email varlığını sızdırma
+    user = db.session.execute(select(User).where(User.email == email)).scalar_one_or_none()
+    if user and not user.email_verified_at:
+        plain, hashed = generate_token()
+        db.session.add(EmailToken(
+            user_id=user.id,
+            kind="verify",
+            token_hash=hashed,
+            expires_at=token_expiry(hours=24),
+        ))
+        db.session.commit()
+        send_verify_email(user.email, plain)
+    return jsonify({"ok": True})
 
 
 @auth_bp.route("/resend-verify", methods=["POST"])
