@@ -1321,6 +1321,23 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
 }
 .af-input:focus { outline: none; border-color: var(--accent); }
 .af-input option { background: #1a1a2e; color: var(--text-1); }
+.pw-wrap { position: relative; }
+.pw-wrap .af-input { padding-right: 38px; }
+.pw-toggle {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-3);
+    padding: 0;
+    line-height: 0;
+    opacity: 0.6;
+    transition: opacity var(--trans);
+}
+.pw-toggle:hover { opacity: 1; color: var(--text-1); }
 
 /* Toast bildirimleri */
 #toastContainer {
