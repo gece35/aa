@@ -323,7 +323,7 @@
     <div class="band-card band-yellow">
       <div class="band-score">3–4</div>
       <div class="band-title">Karışık Sinyaller</div>
-      <p class="band-desc">Göstergeler ne net pozitif ne de net negatif. Bu bantta 3 ardışık gün kalan hisseler TDO v2 backtest kurallarında tam çıkış koşulunu karşılar. Yön belirsiz; trendin tersine dönmesi olası.</p>
+      <p class="band-desc">Göstergeler ne net pozitif ne de net negatif. Bu bantta 3 ardışık gün kalan hisseler TDO v2 backtest kurallarında tam sonlandırma koşulunu karşılar. Yön belirsiz; trendin tersine dönmesi olası.</p>
       <div class="band-profile">Zayıflama uyarı bandı — TDO v2 skor filtresi</div>
     </div>
 
@@ -360,15 +360,15 @@
     <div class="layer-card layer-card-blue">
       <div class="layer-num">2</div>
       <div>
-        <div class="layer-title">Çıkış Kriterleri — Backtest Stop Parametreleri</div>
-        <div class="layer-subtitle">Backtest metodolojisinde uygulanan çıkış koşulları</div>
+        <div class="layer-title">Sonlandırma Kriterleri — Backtest Stop Parametreleri</div>
+        <div class="layer-subtitle">Backtest metodolojisinde uygulanan sonlandırma koşulları</div>
         <div class="layer-pills">
           <span class="layer-pill">%0–4 getiri: ATR stop (hisseye özel)</span>
           <span class="layer-pill">%4 getiri eşiğinde: stop başlangıç fiyatına (break-even)</span>
           <span class="layer-pill">%6+ getiri: trailing stop devreye girer</span>
-          <span class="layer-pill">%8 getiri eşiğinde: kısmi çıkış kriteri</span>
-          <span class="layer-pill">3 gün skor ≤ 4: tam çıkış kriteri</span>
-          <span class="layer-pill">20. günde durağan: çıkış kriteri</span>
+          <span class="layer-pill">%8 getiri eşiğinde: kısmi sonlandırma kriteri</span>
+          <span class="layer-pill">3 gün skor ≤ 4: tam sonlandırma kriteri</span>
+          <span class="layer-pill">20. günde durağan: sonlandırma kriteri</span>
         </div>
       </div>
     </div>
@@ -383,7 +383,7 @@
           <span class="layer-pill">Aynı sektörde en fazla 3</span>
           <span class="layer-pill">İşlem başı %1 risk</span>
           <span class="layer-pill">Aylık -%8 drawdown → 14 gün tarama durdurulur</span>
-          <span class="layer-pill">Aylık -%15 drawdown → tam çıkış koşulu</span>
+          <span class="layer-pill">Aylık -%15 drawdown → tam sonlandırma koşulu</span>
         </div>
       </div>
     </div>
@@ -551,14 +551,14 @@
       <span class="check-icon check-yellow">↓</span>
       <div>
         <strong>Tek Günde Skor -3 → Kısmi Çıkış Koşulu (Backtest)</strong>
-        <p>Hızlı bozulma belirtisi. Kısmi çıkış koşulu henüz oluşmadıysa backtest modelinde %50 çıkış kriteri oluşur.</p>
+        <p>Hızlı bozulma belirtisi. Kısmi sonlandırma koşulu henüz oluşmadıysa backtest modelinde %50 sonlandırma kriteri oluşur.</p>
       </div>
     </div>
     <div class="check-item">
       <span class="check-icon check-gray">⊘</span>
       <div>
         <strong>3 Ardışık Gün Skor ≤ 4 → Tam Çıkış Koşulu (Backtest)</strong>
-        <p>Backtest kurallarında yapısal bozulma göstergesi. Tek günlük dalgalanma değil, sürekli zayıflama. Backtest modelinde tam çıkış koşulu oluşur.</p>
+        <p>Backtest kurallarında yapısal bozulma göstergesi. Tek günlük dalgalanma değil, sürekli zayıflama. Backtest modelinde tam sonlandırma koşulu oluşur.</p>
       </div>
     </div>
     <div class="check-item">
@@ -572,7 +572,7 @@
       <span class="check-icon check-gray">⏱</span>
       <div>
         <strong>60 Gün Limit (90 Gün Maksimum)</strong>
-        <p>60. günde fiyat +%3 üstündeyse ve skor hâlâ 7+ ise +30 gün uzatma. Aksi halde pozisyon kapatılır. 90. günde her durumda zorunlu çıkış.</p>
+        <p>60. günde fiyat +%3 üstündeyse ve skor hâlâ 7+ ise +30 gün uzatma. Aksi halde pozisyon kapatılır. 90. günde her durumda zorunlu sonlandırma.</p>
       </div>
     </div>
   </div>
@@ -592,7 +592,7 @@
       <span class="check-icon check-gray">🚨</span>
       <div>
         <strong>Aylık -%15 Drawdown → Tam Çıkış Koşulu + 30 Gün Duraklama</strong>
-        <p>Backtest modelinde "kill switch" devreye girer. Tüm açık pozisyonlar için çıkış koşulu oluşur; 30 işlem günü tarama yapılmaz. Bu kural CTA fonlarının çekirdek mekanizmasıdır.</p>
+        <p>Backtest modelinde "kill switch" devreye girer. Tüm açık pozisyonlar için sonlandırma koşulu oluşur; 30 işlem günü tarama yapılmaz. Bu kural CTA fonlarının çekirdek mekanizmasıdır.</p>
       </div>
     </div>
   </div>
@@ -637,14 +637,14 @@
       <div class="step-num">5</div>
       <div class="step-body">
         <strong>ATR Parametrelerini İncele</strong>
-        <p>TDO v2 modelinde ATR-bazlı stop hesaplaması: <strong>başlangıç fiyatı − 2.5 × ATR</strong>. Sabit %5 değil; her hisse kendi volatilitesiyle ölçülür. Backtest parametrelerine göre %8 getiri eşiğinde kısmi çıkış kriteri oluşur; kalan bölüm için stop başlangıç fiyatına taşınır ve trailing moda geçer.</p>
+        <p>TDO v2 modelinde ATR-bazlı stop hesaplaması: <strong>başlangıç fiyatı − 2.5 × ATR</strong>. Sabit %5 değil; her hisse kendi volatilitesiyle ölçülür. Backtest parametrelerine göre %8 getiri eşiğinde kısmi sonlandırma kriteri oluşur; kalan bölüm için stop başlangıç fiyatına taşınır ve trailing moda geçer.</p>
       </div>
     </li>
     <li class="step-item">
       <div class="step-num">6</div>
       <div class="step-body">
         <strong>Portföy Uyarılarını Yorumla</strong>
-        <p>Portföy sekmesi rozet sistemiyle pozisyon sağlığını gösterir. "Trend Sağlıklı" → skor 7+, göstergeler pozitif. "Zayıflama Belirtileri" → skor düşmekte, izleme önerilir. "Yüksek Risk" → stop bölgesine yaklaşıldı veya skor 0-2. 3 ardışık gün skor 4 veya altına düşmesi TDO v2 backtest modelinde tam çıkış koşulu olarak değerlendirilir.</p>
+        <p>Portföy sekmesi rozet sistemiyle pozisyon sağlığını gösterir. "Trend Sağlıklı" → skor 7+, göstergeler pozitif. "Zayıflama Belirtileri" → skor düşmekte, izleme önerilir. "Yüksek Risk" → stop bölgesine yaklaşıldı veya skor 0-2. 3 ardışık gün skor 4 veya altına düşmesi TDO v2 backtest modelinde tam sonlandırma koşulu olarak değerlendirilir.</p>
       </div>
     </li>
   </ol>
