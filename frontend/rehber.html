@@ -316,14 +316,14 @@
     <div class="band-card band-blue">
       <div class="band-score">5–6</div>
       <div class="band-title">Trend Oluşumu</div>
-      <p class="band-desc">Göstergelerin önemli bir kısmı pozitife dönmüş, ancak sinyal eşiğine henüz ulaşılmamıştır. Bu seviye izleme niteliğindedir; skor 4'e veya altına 3 ardışık gün düşmesi TDO v2 backtest modelinde zayıflama sinyali olarak değerlendirilir.</p>
+      <p class="band-desc">Göstergelerin önemli bir kısmı pozitife dönmüş, ancak sinyal eşiğine henüz ulaşılmamıştır. Bu seviye izleme niteliğindedir; skor 4'e veya altına 3 ardışık gün düşmesi TDO v2 backtest modelinde zayıflama göstergesi olarak değerlendirilir.</p>
       <div class="band-profile">İzleme — sinyal eşiğinin hemen altında</div>
     </div>
 
     <div class="band-card band-yellow">
       <div class="band-score">3–4</div>
       <div class="band-title">Karışık Sinyaller</div>
-      <p class="band-desc">Göstergeler ne net pozitif ne de net negatif. Bu bantta 3 ardışık gün kalan hisseler TDO v2 backtest kurallarında tam çıkış sinyali üretir. Yön belirsiz; trendin tersine dönmesi olası.</p>
+      <p class="band-desc">Göstergeler ne net pozitif ne de net negatif. Bu bantta 3 ardışık gün kalan hisseler TDO v2 backtest kurallarında tam çıkış koşulunu karşılar. Yön belirsiz; trendin tersine dönmesi olası.</p>
       <div class="band-profile">Zayıflama uyarı bandı — TDO v2 skor filtresi</div>
     </div>
 
@@ -344,8 +344,8 @@
     <div class="layer-card layer-card-green">
       <div class="layer-num">1</div>
       <div>
-        <div class="layer-title">Sinyal Koşulları — Çoklu Filtre</div>
-        <div class="layer-subtitle">Yanıltıcı göstergeleri eler, sağlam başlangıçları tespit eder</div>
+        <div class="layer-title">Filtre Kriterleri — Çoklu Filtre</div>
+        <div class="layer-subtitle">Yanıltıcı göstergeleri eler, güçlü trend yapılarını ayırt eder</div>
         <div class="layer-pills">
           <span class="layer-pill">Skor ≥ 7</span>
           <span class="layer-pill">2 gün üst üste</span>
@@ -360,15 +360,15 @@
     <div class="layer-card layer-card-blue">
       <div class="layer-num">2</div>
       <div>
-        <div class="layer-title">Çıkış Parametreleri — Backtest Stop Sistemi</div>
+        <div class="layer-title">Çıkış Kriterleri — Backtest Stop Parametreleri</div>
         <div class="layer-subtitle">Backtest metodolojisinde uygulanan çıkış koşulları</div>
         <div class="layer-pills">
           <span class="layer-pill">%0–4 getiri: ATR stop (hisseye özel)</span>
-          <span class="layer-pill">%4 getiri eşiğinde: stop sinyal fiyatına taşınır</span>
+          <span class="layer-pill">%4 getiri eşiğinde: stop başlangıç fiyatına (break-even)</span>
           <span class="layer-pill">%6+ getiri: trailing stop devreye girer</span>
-          <span class="layer-pill">%8 getiri eşiğinde: kısmi çıkış sinyali</span>
-          <span class="layer-pill">3 gün skor ≤ 4: tam çıkış sinyali</span>
-          <span class="layer-pill">20. günde durağan: çıkış sinyali</span>
+          <span class="layer-pill">%8 getiri eşiğinde: kısmi çıkış kriteri</span>
+          <span class="layer-pill">3 gün skor ≤ 4: tam çıkış kriteri</span>
+          <span class="layer-pill">20. günde durağan: çıkış kriteri</span>
         </div>
       </div>
     </div>
@@ -382,8 +382,8 @@
           <span class="layer-pill">Maks 8 açık pozisyon (BIST)</span>
           <span class="layer-pill">Aynı sektörde en fazla 3</span>
           <span class="layer-pill">İşlem başı %1 risk</span>
-          <span class="layer-pill">Aylık -%8 drawdown → 14 gün sinyal aranmaz</span>
-          <span class="layer-pill">Aylık -%15 drawdown → tam çıkış sinyali</span>
+          <span class="layer-pill">Aylık -%8 drawdown → 14 gün tarama durdurulur</span>
+          <span class="layer-pill">Aylık -%15 drawdown → tam çıkış koşulu</span>
         </div>
       </div>
     </div>
@@ -506,14 +506,14 @@
       <span class="check-icon check-yellow">1</span>
       <div>
         <strong>Aşama 1 — Sinyal Fiyatından %4 Getiriye Kadar: ATR Stop</strong>
-        <p>Stop = sinyal fiyatı − 2.5 × ATR. Tipik olarak %4-7 aralığında. Düşük volatil hissede dar, yüksek volatil hissede geniş. Erken aşamada whipsaw'a karşı koruma sağlar.</p>
+        <p>Stop = başlangıç fiyatı − 2.5 × ATR. Tipik olarak %4-7 aralığında. Düşük volatil hissede dar, yüksek volatil hissede geniş. Erken aşamada whipsaw'a karşı koruma sağlar.</p>
       </div>
     </div>
     <div class="check-item">
       <span class="check-icon check-blue">2</span>
       <div>
         <strong>Aşama 2 — %4 Getiri Eşiğinde: Break-Even Taşıma</strong>
-        <p>Stop sinyal fiyatına taşınır (komisyon koruması için ufak buffer). Backtest parametrelerinde bu noktadan sonra pozisyon sıfır kayıp riskiyle devam eder.</p>
+        <p>Stop başlangıç fiyatına taşınır (komisyon koruması için ufak buffer). Backtest parametrelerinde bu noktadan sonra pozisyon sıfır kayıp riskiyle devam eder.</p>
       </div>
     </div>
     <div class="check-item">
@@ -532,7 +532,7 @@
     <div class="check-item">
       <span class="check-icon check-green">A</span>
       <div>
-        <strong>%8 Getiri Eşiğinde: %50 Çıkış Sinyali</strong>
+        <strong>%8 Getiri Eşiğinde: %50 Çıkış Koşulu (Backtest)</strong>
         <p>Backtest verilerine göre getiri kilitlenir. Risk-ödül oranı pozitife döner; matematiksel beklenti artı yönde seyreder. Risk-reward 1.6:1 minimum.</p>
       </div>
     </div>
@@ -550,15 +550,15 @@
     <div class="check-item">
       <span class="check-icon check-yellow">↓</span>
       <div>
-        <strong>Tek Günde Skor -3 → Kısmi Çıkış Sinyali</strong>
-        <p>Hızlı bozulma belirtisi. Kısmi çıkış koşulu henüz oluşmadıysa backtest kurallarında %50 çıkış sinyali üretilir.</p>
+        <strong>Tek Günde Skor -3 → Kısmi Çıkış Koşulu (Backtest)</strong>
+        <p>Hızlı bozulma belirtisi. Kısmi çıkış koşulu henüz oluşmadıysa backtest modelinde %50 çıkış kriteri oluşur.</p>
       </div>
     </div>
     <div class="check-item">
       <span class="check-icon check-gray">⊘</span>
       <div>
-        <strong>3 Ardışık Gün Skor ≤ 4 → Tam Çıkış Sinyali</strong>
-        <p>Backtest kurallarında yapısal bozulma sinyali. Tek günlük dalgalanma değil, sürekli zayıflama. Tam çıkış sinyali üretilir.</p>
+        <strong>3 Ardışık Gün Skor ≤ 4 → Tam Çıkış Koşulu (Backtest)</strong>
+        <p>Backtest kurallarında yapısal bozulma göstergesi. Tek günlük dalgalanma değil, sürekli zayıflama. Backtest modelinde tam çıkış koşulu oluşur.</p>
       </div>
     </div>
     <div class="check-item">
@@ -584,15 +584,15 @@
     <div class="check-item">
       <span class="check-icon check-yellow">⚠</span>
       <div>
-        <strong>Aylık -%8 Drawdown → 14 Gün Sinyal Aranmaz</strong>
-        <p>Mevcut pozisyonlar backtest kurallarıyla izlenir; yeni sinyal aranmaz. Piyasa toparlanma şansı verilir.</p>
+        <strong>Aylık -%8 Drawdown → 14 Gün Tarama Durdurulur</strong>
+        <p>Mevcut pozisyonlar backtest kurallarıyla izlenir; yeni tarama başlatılmaz. Piyasa toparlanma şansı verilir.</p>
       </div>
     </div>
     <div class="check-item">
       <span class="check-icon check-gray">🚨</span>
       <div>
-        <strong>Aylık -%15 Drawdown → Tam Çıkış Sinyali + 30 Gün Halt</strong>
-        <p>Backtest modelinde "kill switch" devreye girer. Tüm açık pozisyonlar için çıkış sinyali üretilir; 30 işlem günü yeni sinyal aranmaz. Bu kural CTA fonlarının çekirdek mekanizmasıdır.</p>
+        <strong>Aylık -%15 Drawdown → Tam Çıkış Koşulu + 30 Gün Duraklama</strong>
+        <p>Backtest modelinde "kill switch" devreye girer. Tüm açık pozisyonlar için çıkış koşulu oluşur; 30 işlem günü tarama yapılmaz. Bu kural CTA fonlarının çekirdek mekanizmasıdır.</p>
       </div>
     </div>
   </div>
@@ -637,14 +637,14 @@
       <div class="step-num">5</div>
       <div class="step-body">
         <strong>ATR Parametrelerini İncele</strong>
-        <p>TDO v2 modelinde ATR-bazlı stop hesaplaması: <strong>sinyal fiyatı − 2.5 × ATR</strong>. Sabit %5 değil; her hisse kendi volatilitesiyle ölçülür. Backtest parametrelerine göre %8 getiri eşiğinde kısmi çıkış sinyali oluşur; kalan bölüm için stop sinyal fiyatına taşınır ve trailing moda geçer.</p>
+        <p>TDO v2 modelinde ATR-bazlı stop hesaplaması: <strong>başlangıç fiyatı − 2.5 × ATR</strong>. Sabit %5 değil; her hisse kendi volatilitesiyle ölçülür. Backtest parametrelerine göre %8 getiri eşiğinde kısmi çıkış kriteri oluşur; kalan bölüm için stop başlangıç fiyatına taşınır ve trailing moda geçer.</p>
       </div>
     </li>
     <li class="step-item">
       <div class="step-num">6</div>
       <div class="step-body">
         <strong>Portföy Uyarılarını Yorumla</strong>
-        <p>Portföy sekmesi rozet sistemiyle pozisyon sağlığını gösterir. "Trend Sağlıklı" → skor 7+, göstergeler pozitif. "Zayıflama Belirtileri" → skor düşmekte, izleme önerilir. "Yüksek Risk" → stop bölgesine yaklaşıldı veya skor 0-2. 3 ardışık gün skor 4 veya altına düşmesi TDO v2 backtest modelinde tam çıkış sinyali olarak değerlendirilir.</p>
+        <p>Portföy sekmesi rozet sistemiyle pozisyon sağlığını gösterir. "Trend Sağlıklı" → skor 7+, göstergeler pozitif. "Zayıflama Belirtileri" → skor düşmekte, izleme önerilir. "Yüksek Risk" → stop bölgesine yaklaşıldı veya skor 0-2. 3 ardışık gün skor 4 veya altına düşmesi TDO v2 backtest modelinde tam çıkış koşulu olarak değerlendirilir.</p>
       </div>
     </li>
   </ol>
