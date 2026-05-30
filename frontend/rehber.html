@@ -7,7 +7,7 @@
 <meta name="description" content="Nebula Scanner puan sistemi nasıl çalışır? Hangi skor aralığı ne anlama gelir? Göstergeler ve kullanım kılavuzu." />
 <meta property="og:type" content="article" />
 <meta property="og:title" content="Kullanım Rehberi — Nebula Scanner" />
-<meta property="og:description" content="Nebula Scanner'ın 0-10 puanlama sistemi, TDO v2 stratejisi, giriş/çıkış kriterleri ve backtest sonuçları hakkında kapsamlı rehber." />
+<meta property="og:description" content="Nebula Scanner'ın 0-10 puanlama sistemi, TDO v2 stratejisi, sinyal kriterleri ve backtest sonuçları hakkında kapsamlı rehber." />
 <meta property="og:url" content="https://nebulascanner.com/rehber.html" />
 <meta property="og:image" content="https://nebulascanner.com/logo.svg" />
 <meta name="twitter:card" content="summary" />
@@ -293,8 +293,8 @@
   <div class="hero">
     <div class="hero-tag">Kullanım Rehberi</div>
     <h1>Puan Sistemi Nasıl Çalışır?</h1>
-    <p class="meta">Her hisse 0-10 arasında bir trend sağlığı skoru alır. Bu sayfa skorun ne anlama geldiğini, nasıl yorumlanabileceğini ve geçmiş verilere dayalı giriş/çıkış kriterlerini açıklar.</p>
-    <p>Nebula Scanner dört teknik göstergeyi birleştirerek bir hissenin mevcut trend gücünü ölçer. Skor, "şu an giriş fırsatı var mı?" değil, <strong>"bu trendin sağlığı ne durumda?"</strong> sorusuna yanıt verir. Bu sayfada anlatılan kriterler — <strong>TDO v2 (Trend Devamlılığı Onayı)</strong> — son 1 yıllık tarihsel veriyle backtest edilmiş çoklu filtre stratejisidir.</p>
+    <p class="meta">Her hisse 0-10 arasında bir trend sağlığı skoru alır. Bu sayfa skorun ne anlama geldiğini, nasıl yorumlanabileceğini ve geçmiş verilere dayalı backtest sinyal kriterlerini açıklar.</p>
+    <p>Nebula Scanner dört teknik göstergeyi birleştirerek bir hissenin mevcut trend gücünü ölçer. Skor, alım ya da satım kararı vermek için değil, <strong>"bu trendin sağlığı ne durumda?"</strong> sorusuna yanıt vermek için tasarlanmıştır. Bu sayfada anlatılan kriterler — <strong>TDO v2 (Trend Devamlılığı Onayı)</strong> — son 1 yıllık tarihsel veriyle backtest edilmiş çoklu filtre modelidir.</p>
   </div>
 
   <div class="warning-box">
@@ -308,23 +308,23 @@
   <div class="band-grid">
     <div class="band-card band-green">
       <div class="band-score">7–10</div>
-      <div class="band-title">Giriş Bölgesi — TDO v2 Eşiği</div>
-      <p class="band-desc">Dört göstergenin büyük çoğunluğu pozitif. Fiyat kısa ve orta vadeli ortalamaların üzerinde, momentum aktif. <strong>TDO v2 stratejisi bu banttan giriş yapar</strong>: 2 gün üst üste skor 7+, trend alt-skoru en az 2 ve hacim ortalamanın üzerinde olmalıdır. Skor 8-10 arasında gösterge güvenilirliği en yüksek seviyesindedir.</p>
-      <div class="band-profile">Backtest onaylı giriş — çoklu filtre kapısı</div>
+      <div class="band-title">Yüksek Sinyal Bölgesi — TDO v2 Eşiği</div>
+      <p class="band-desc">Dört göstergenin büyük çoğunluğu pozitif. Fiyat kısa ve orta vadeli ortalamaların üzerinde, momentum aktif. <strong>TDO v2 backtest modelinin koşullarını karşılayan bant</strong>: 2 gün üst üste skor 7+, trend alt-skoru en az 2 ve hacim ortalamanın üzerinde olmalıdır. Skor 8-10 arasında gösterge güvenilirliği en yüksek seviyesindedir.</p>
+      <div class="band-profile">Backtest referans bölgesi — çoklu filtre kapısı</div>
     </div>
 
     <div class="band-card band-blue">
       <div class="band-score">5–6</div>
       <div class="band-title">Trend Oluşumu</div>
-      <p class="band-desc">Göstergelerin önemli bir kısmı pozitife dönmüş, ancak giriş eşiğine henüz ulaşılmamıştır. Pozisyondaysanız bu seviye uyarı niteliğindedir; skor 4'e veya altına 3 ardışık gün düşerse TDO v2 stratejisi çıkış belirtisi verir.</p>
-      <div class="band-profile">İzleme — giriş eşiğinin hemen altında</div>
+      <p class="band-desc">Göstergelerin önemli bir kısmı pozitife dönmüş, ancak sinyal eşiğine henüz ulaşılmamıştır. Bu seviye izleme niteliğindedir; skor 4'e veya altına 3 ardışık gün düşmesi TDO v2 backtest modelinde zayıflama sinyali olarak değerlendirilir.</p>
+      <div class="band-profile">İzleme — sinyal eşiğinin hemen altında</div>
     </div>
 
     <div class="band-card band-yellow">
       <div class="band-score">3–4</div>
       <div class="band-title">Karışık Sinyaller</div>
-      <p class="band-desc">Göstergeler ne net pozitif ne de net negatif. Pozisyondaysanız bu bantta 3 ardışık gün kalan hisseler tam çıkışla kapatılır. Yön belirsiz; trendin tersine dönmesi olası.</p>
-      <div class="band-profile">Çıkış uyarı bandı — TDO v2 skor filtresi</div>
+      <p class="band-desc">Göstergeler ne net pozitif ne de net negatif. Bu bantta 3 ardışık gün kalan hisseler TDO v2 backtest kurallarında tam çıkış sinyali üretir. Yön belirsiz; trendin tersine dönmesi olası.</p>
+      <div class="band-profile">Zayıflama uyarı bandı — TDO v2 skor filtresi</div>
     </div>
 
     <div class="band-card band-gray">
@@ -344,8 +344,8 @@
     <div class="layer-card layer-card-green">
       <div class="layer-num">1</div>
       <div>
-        <div class="layer-title">Giriş — Çoklu Filtre</div>
-        <div class="layer-subtitle">Yanıltıcı göstergeleri eler, sadece sağlam başlangıçlara girer</div>
+        <div class="layer-title">Sinyal Koşulları — Çoklu Filtre</div>
+        <div class="layer-subtitle">Yanıltıcı göstergeleri eler, sağlam başlangıçları tespit eder</div>
         <div class="layer-pills">
           <span class="layer-pill">Skor ≥ 7</span>
           <span class="layer-pill">2 gün üst üste</span>
@@ -360,15 +360,15 @@
     <div class="layer-card layer-card-blue">
       <div class="layer-num">2</div>
       <div>
-        <div class="layer-title">Çıkış — Akıllı Stop Sistemi</div>
-        <div class="layer-subtitle">Kayıpları erkenden kes, kazananları sonuna kadar koştur</div>
+        <div class="layer-title">Çıkış Parametreleri — Backtest Stop Sistemi</div>
+        <div class="layer-subtitle">Backtest metodolojisinde uygulanan çıkış koşulları</div>
         <div class="layer-pills">
-          <span class="layer-pill">%0–4 kârda: ATR stop (hisseye özel)</span>
-          <span class="layer-pill">%4 kârda: stop giriş fiyatına çekilir</span>
-          <span class="layer-pill">%6+ kârda: trailing stop devreye girer</span>
-          <span class="layer-pill">%8 kârda: pozisyonun yarısı satılır</span>
-          <span class="layer-pill">3 gün skor ≤ 4: tam çıkış</span>
-          <span class="layer-pill">20. günde durağansa çık</span>
+          <span class="layer-pill">%0–4 getiri: ATR stop (hisseye özel)</span>
+          <span class="layer-pill">%4 getiri eşiğinde: stop sinyal fiyatına taşınır</span>
+          <span class="layer-pill">%6+ getiri: trailing stop devreye girer</span>
+          <span class="layer-pill">%8 getiri eşiğinde: kısmi çıkış sinyali</span>
+          <span class="layer-pill">3 gün skor ≤ 4: tam çıkış sinyali</span>
+          <span class="layer-pill">20. günde durağan: çıkış sinyali</span>
         </div>
       </div>
     </div>
@@ -382,8 +382,8 @@
           <span class="layer-pill">Maks 8 açık pozisyon (BIST)</span>
           <span class="layer-pill">Aynı sektörde en fazla 3</span>
           <span class="layer-pill">İşlem başı %1 risk</span>
-          <span class="layer-pill">Aylık -%8 → 14 gün yeni giriş yok</span>
-          <span class="layer-pill">Aylık -%15 → tüm pozisyon kapat</span>
+          <span class="layer-pill">Aylık -%8 drawdown → 14 gün sinyal aranmaz</span>
+          <span class="layer-pill">Aylık -%15 drawdown → tam çıkış sinyali</span>
         </div>
       </div>
     </div>
@@ -456,8 +456,8 @@
   </div>
 
   <!-- Backtest criteria -->
-  <h2>TDO v2 — Giriş Kriterleri (5 Filtre)</h2>
-  <p>Aşağıdaki beş filtrenin <strong>hepsi aynı anda</strong> sağlanmalıdır. Tek bir filtrenin kaçırılması girişi iptal eder. Bu çoklu filtre yapısı yanıltıcı göstergeleri eler:</p>
+  <h2>TDO v2 — Backtest Sinyal Kriterleri (5 Filtre)</h2>
+  <p>Aşağıdaki beş filtrenin <strong>hepsi aynı anda</strong> sağlanmalıdır. Tek bir filtrenin kaçırılması sinyali geçersiz kılar. Bu çoklu filtre yapısı yanıltıcı göstergeleri eler:</p>
 
   <div class="checklist-box">
     <div class="check-item">
@@ -471,14 +471,14 @@
       <span class="check-icon check-blue">2</span>
       <div>
         <strong>Trend Alt-Skoru ≥ 2</strong>
-        <p>Toplam skor 7 olsa bile, sadece Bollinger ve RSI'dan toplanmışsa (trend bileşeni 0) giriş <em>iptal</em>. Fiyat EMA50 ve EMA200 üzerinde olmalı. Bu filtre "yapısal trendi olmayan ama göstergelerden puan toplamış" sahte adayları eler.</p>
+        <p>Toplam skor 7 olsa bile, sadece Bollinger ve RSI'dan toplanmışsa (trend bileşeni 0) sinyal koşulu <em>karşılanmaz</em>. Fiyat EMA50 ve EMA200 üzerinde olmalı. Bu filtre "yapısal trendi olmayan ama göstergelerden puan toplamış" sahte adayları eler.</p>
       </div>
     </div>
     <div class="check-item">
       <span class="check-icon check-blue">3</span>
       <div>
         <strong>Hacim Onayı — Günlük Hacim ≥ 20-Gün Ortalaması</strong>
-        <p>Düşük hacimli kırılımların başarı oranı %38, yüksek hacimli olanların %58 (akademik veri). Sistem giriş gününde hacmin SMA20 üstünde olmasını şart koşar.</p>
+        <p>Düşük hacimli kırılımların başarı oranı %38, yüksek hacimli olanların %58 (akademik veri). TDO v2 modeli sinyal gününde hacmin SMA20 üstünde olmasını şart koşar.</p>
       </div>
     </div>
     <div class="check-item">
@@ -498,22 +498,22 @@
   </div>
 
   <!-- Position management -->
-  <h2>Pozisyondayken: 3-Aşamalı Stop</h2>
-  <p>Sabit %5 koruma seviyesi tüm hisseleri aynı volatilitede sayar — bu yanlıştır. BIST hisseleri arasında 5x ATR farkı vardır. TDO v2 ATR (Average True Range) bazlı dinamik stop kullanır:</p>
+  <h2>3-Aşamalı Stop Parametreleri (TDO v2 Backtest)</h2>
+  <p>Sabit %5 koruma seviyesi tüm hisseleri aynı volatilitede sayar — bu yanlıştır. BIST hisseleri arasında 5x ATR farkı vardır. TDO v2 backtest modeli ATR (Average True Range) bazlı dinamik stop parametresi kullanır:</p>
 
   <div class="checklist-box">
     <div class="check-item">
       <span class="check-icon check-yellow">1</span>
       <div>
-        <strong>Aşama 1 — Giriş'ten %4 Kâra Kadar: Sabit ATR Stop</strong>
-        <p>Stop = giriş − 2.5 × ATR. Tipik olarak %4-7 aralığında. Düşük volatil hissede dar, yüksek volatil hissede geniş. Erken aşamada whipsaw'a karşı koruma sağlar.</p>
+        <strong>Aşama 1 — Sinyal Fiyatından %4 Getiriye Kadar: ATR Stop</strong>
+        <p>Stop = sinyal fiyatı − 2.5 × ATR. Tipik olarak %4-7 aralığında. Düşük volatil hissede dar, yüksek volatil hissede geniş. Erken aşamada whipsaw'a karşı koruma sağlar.</p>
       </div>
     </div>
     <div class="check-item">
       <span class="check-icon check-blue">2</span>
       <div>
-        <strong>Aşama 2 — %4 Kârda: Break-Even Taşıma</strong>
-        <p>Stop giriş fiyatına çekilir (komisyon koruması için ufak buffer). "Free trade" — pozisyon artık zarar etmez. Bu noktadan sonra en kötü senaryo: sıfır kazanç.</p>
+        <strong>Aşama 2 — %4 Getiri Eşiğinde: Break-Even Taşıma</strong>
+        <p>Stop sinyal fiyatına taşınır (komisyon koruması için ufak buffer). Backtest parametrelerinde bu noktadan sonra pozisyon sıfır kayıp riskiyle devam eder.</p>
       </div>
     </div>
     <div class="check-item">
@@ -532,15 +532,15 @@
     <div class="check-item">
       <span class="check-icon check-green">A</span>
       <div>
-        <strong>%8 Kârda: Pozisyonun %50'sini Sat</strong>
-        <p>Kâr garantilenir. Erken duygusal sevinç + matematiksel beklenti pozitif zone'a kilitlenir. Risk-reward 1.6:1 minimum.</p>
+        <strong>%8 Getiri Eşiğinde: %50 Çıkış Sinyali</strong>
+        <p>Backtest verilerine göre getiri kilitlenir. Risk-ödül oranı pozitife döner; matematiksel beklenti artı yönde seyreder. Risk-reward 1.6:1 minimum.</p>
       </div>
     </div>
     <div class="check-item">
       <span class="check-icon check-blue">B</span>
       <div>
-        <strong>Kalan %50: Trailing Stop ile Devam</strong>
-        <p>Chandelier trailing stop ile büyük trendlerde ortalama %15-25 getiri yakalanır. Kalan kısım için "tavan yok" — trend kırılana kadar tutulur.</p>
+        <strong>Kalan %50: Trailing Stop ile İzleme</strong>
+        <p>Chandelier trailing stop parametresinde büyük trendlerde ortalama %15-25 getiri gözlemlenmiştir. Kalan sinyal, trend kırılma koşuluna kadar devam eder.</p>
       </div>
     </div>
   </div>
@@ -550,15 +550,15 @@
     <div class="check-item">
       <span class="check-icon check-yellow">↓</span>
       <div>
-        <strong>Tek Günde Skor -3 → Yarı Çıkış</strong>
-        <p>Hızlı bozulma belirtisi. Kısmi TP henüz alınmadıysa pozisyonun %50'si satılır.</p>
+        <strong>Tek Günde Skor -3 → Kısmi Çıkış Sinyali</strong>
+        <p>Hızlı bozulma belirtisi. Kısmi çıkış koşulu henüz oluşmadıysa backtest kurallarında %50 çıkış sinyali üretilir.</p>
       </div>
     </div>
     <div class="check-item">
       <span class="check-icon check-gray">⊘</span>
       <div>
-        <strong>3 Ardışık Gün Skor ≤ 4 → Tam Çıkış</strong>
-        <p>Yapısal bozulma. Tek günlük dalgalanma değil, sürekli zayıflama. Pozisyon tamamen kapatılır.</p>
+        <strong>3 Ardışık Gün Skor ≤ 4 → Tam Çıkış Sinyali</strong>
+        <p>Backtest kurallarında yapısal bozulma sinyali. Tek günlük dalgalanma değil, sürekli zayıflama. Tam çıkış sinyali üretilir.</p>
       </div>
     </div>
     <div class="check-item">
@@ -584,15 +584,15 @@
     <div class="check-item">
       <span class="check-icon check-yellow">⚠</span>
       <div>
-        <strong>Aylık -%8 Drawdown → 14 Gün Yeni Giriş Yok</strong>
-        <p>Mevcut pozisyonlar normal yönetilir, ama yeni alım yapılmaz. Piyasa toparlanma şansı verilir.</p>
+        <strong>Aylık -%8 Drawdown → 14 Gün Sinyal Aranmaz</strong>
+        <p>Mevcut pozisyonlar backtest kurallarıyla izlenir; yeni sinyal aranmaz. Piyasa toparlanma şansı verilir.</p>
       </div>
     </div>
     <div class="check-item">
       <span class="check-icon check-gray">🚨</span>
       <div>
-        <strong>Aylık -%15 Drawdown → Tüm Pozisyonlar Kapanır + 30 Gün Halt</strong>
-        <p>"Kill switch" devreye girer. Tüm açık pozisyonlar kapatılır, 30 işlem günü hiçbir alım yapılmaz. Bu kural CTA fonlarının çekirdek mekanizmasıdır.</p>
+        <strong>Aylık -%15 Drawdown → Tam Çıkış Sinyali + 30 Gün Halt</strong>
+        <p>Backtest modelinde "kill switch" devreye girer. Tüm açık pozisyonlar için çıkış sinyali üretilir; 30 işlem günü yeni sinyal aranmaz. Bu kural CTA fonlarının çekirdek mekanizmasıdır.</p>
       </div>
     </div>
   </div>
@@ -616,14 +616,14 @@
       <div class="step-num">2</div>
       <div class="step-body">
         <strong>"≥ 7 Puan" Filtresini Uygula</strong>
-        <p>Ana ekranda BIST veya ABD pazarını seçin. Filtre çiplerinden <strong>≥ 7 Puan</strong> seçeneğini etkinleştirin. TDO v2 stratejisinin giriş eşiği 7'dir; kalite, ardışık gün + trend alt-skoru + hacim onayı filtrelerinden gelir.</p>
+        <p>Ana ekranda BIST veya ABD pazarını seçin. Filtre çiplerinden <strong>≥ 7 Puan</strong> seçeneğini etkinleştirin. TDO v2 backtest modelinin sinyal eşiği 7'dir; kalite, ardışık gün + trend alt-skoru + hacim onayı filtrelerinden gelir.</p>
       </div>
     </li>
     <li class="step-item">
       <div class="step-num">3</div>
       <div class="step-body">
         <strong>2 Gün Üst Üste Teyit Et</strong>
-        <p>Bir hisse 7+ skor aldığında hemen harekete geçme. Ertesi gün skoru yeniden kontrol et — eğer skor 7'nin üzerinde kalmaya devam ediyorsa gösterge doğrulanmıştır. Bu ikinci gün kontrolü tek günlük sahte spike'ları filtreler.</p>
+        <p>Bir hisse 7+ skor aldığında, ertesi gün skoru yeniden kontrol etmek TDO v2 modelinin temel kuralıdır — eğer skor 7'nin üzerinde kalmaya devam ediyorsa gösterge doğrulanmış sayılır. Bu ikinci gün kontrolü tek günlük sahte spike'ları filtreler.</p>
       </div>
     </li>
     <li class="step-item">
@@ -636,15 +636,15 @@
     <li class="step-item">
       <div class="step-num">5</div>
       <div class="step-body">
-        <strong>ATR Stop'u Hesapla ve Kur</strong>
-        <p>Pozisyon açmadan önce ATR-bazlı stop'u belirle: <strong>giriş fiyatı − 2.5 × ATR</strong>. Sabit %5 değil; her hisse kendi volatilitesine göre ölçülür. %8 kârda pozisyonun yarısını sat, kalan yarı için stop'u giriş fiyatına çek ve trailing moduna geç.</p>
+        <strong>ATR Parametrelerini İncele</strong>
+        <p>TDO v2 modelinde ATR-bazlı stop hesaplaması: <strong>sinyal fiyatı − 2.5 × ATR</strong>. Sabit %5 değil; her hisse kendi volatilitesiyle ölçülür. Backtest parametrelerine göre %8 getiri eşiğinde kısmi çıkış sinyali oluşur; kalan bölüm için stop sinyal fiyatına taşınır ve trailing moda geçer.</p>
       </div>
     </li>
     <li class="step-item">
       <div class="step-num">6</div>
       <div class="step-body">
         <strong>Portföy Uyarılarını Yorumla</strong>
-        <p>Portföy sekmesi rozet sistemiyle pozisyon sağlığını gösterir. "Trend Sağlıklı" → skor 7+, göstergeler pozitif. "Zayıflama Belirtileri" → skor düşmekte, dikkatli ol. "Yüksek Risk" → stop bölgesine yaklaşıldı veya skor 0-2, çıkışı değerlendir. 3 ardışık gün skor 4 veya altına düşerse pozisyondan çıkmak TDO v2 stratejisinin bir parçasıdır.</p>
+        <p>Portföy sekmesi rozet sistemiyle pozisyon sağlığını gösterir. "Trend Sağlıklı" → skor 7+, göstergeler pozitif. "Zayıflama Belirtileri" → skor düşmekte, izleme önerilir. "Yüksek Risk" → stop bölgesine yaklaşıldı veya skor 0-2. 3 ardışık gün skor 4 veya altına düşmesi TDO v2 backtest modelinde tam çıkış sinyali olarak değerlendirilir.</p>
       </div>
     </li>
   </ol>
