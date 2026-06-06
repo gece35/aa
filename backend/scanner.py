@@ -10,21 +10,45 @@ from typing import Dict, List
 from .cache import scan_cache, symbol_cache
 from .data_fetcher import download_ohlcv
 from .scoring import score_symbol
-from .tickers import MARKETS, get_tickers
+from .tickers import MARKETS, get_index_symbol, get_tickers
 
 logger = logging.getLogger(__name__)
 
 SCAN_CACHE_TTL = 600  # 10 dakika (cache icinde zaten tanimli)
 
 
-def _compute_scores(data: Dict) -> List[dict]:
+def _fetch_index_df(market: str):
+    """Market endeksini (goreceli guc icin) indirir; basarisizsa None."""
+    index_symbol = get_index_symbol(market)
+    if not index_symbol:
+        return None
+    try:
+        idx_data = download_ohlcv([index_symbol], period="300d", interval="1d")
+        return idx_data.get(index_symbol)
+    except Exception:
+        logger.warning("Endeks verisi alinamadi: %s", index_symbol)
+        return None
+
+
+def get_index_df(market: str):
+    """Market endeksini cache'den (yoksa indirip) doner. Tekil hisse detayinda da kullanilir."""
+    cached = symbol_cache.get(f"index:{market}")
+    if cached is not None:
+        return cached
+    idx = _fetch_index_df(market)
+    if idx is not None:
+        symbol_cache.set(f"index:{market}", idx)
+    return idx
+
+
+def _compute_scores(data: Dict, index_df=None) -> List[dict]:
     results: List[dict] = []
     if not data:
         return results
 
     with ThreadPoolExecutor(max_workers=16) as pool:
         futures = {
-            pool.submit(score_symbol, symbol, df): symbol for symbol, df in data.items()
+            pool.submit(score_symbol, symbol, df, index_df): symbol for symbol, df in data.items()
         }
         for fut in as_completed(futures):
             symbol = futures[fut]
@@ -64,10 +88,11 @@ def scan_market(market: str, force: bool = False, max_tickers: int = None) -> di
 
     started = time.time()
     data = download_ohlcv(tickers, period="300d", interval="1d")
+    index_df = get_index_df(market)
     download_secs = time.time() - started
 
     compute_started = time.time()
-    results = _compute_scores(data)
+    results = _compute_scores(data, index_df)
     compute_secs = time.time() - compute_started
 
     payload = {
@@ -168,13 +193,15 @@ def scan_market_chunk(market: str, offset: int, limit: int, force: bool = False,
     if missing:
         started = time.time()
         data = download_ohlcv(missing, period="300d", interval="1d")
+        # Endeksi (goreceli guc icin) market basina cache'le, her chunk'ta yeniden indirme
+        index_df = get_index_df(market)
         download_secs = time.time() - started
 
         compute_started = time.time()
         if data:
             with ThreadPoolExecutor(max_workers=min(16, len(data))) as pool:
                 futures = {
-                    pool.submit(score_symbol, symbol, df): symbol for symbol, df in data.items()
+                    pool.submit(score_symbol, symbol, df, index_df): symbol for symbol, df in data.items()
                 }
                 for fut in as_completed(futures):
                     symbol = futures[fut]

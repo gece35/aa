@@ -137,7 +137,9 @@
   <p>Hedefimiz basit: Türk bireysel yatırımcıya kurumsal yatırımcının kullandığı tarama kalitesini, ücretsiz ve Türkçe olarak sunmak.</p>
 
   <h2>Nasıl Çalışır?</h2>
-  <p>Her hisse için 4 teknik gösterge analiz edilir ve birleştirilerek 0-10 arası bir toplam puan oluşturulur:</p>
+  <p>Her hisse için 6 teknik gösterge <strong>sürekli ve durum bazlı</strong> olarak analiz edilir,
+     birleştirilip 0-10 arası bir toplam puan oluşturulur. Puan tek bir günün "kesişim olayına" değil,
+     <strong>sürdürülen trendin gücüne</strong> dayanır ve gün-gün ani zıplamaları önlemek için hafifçe yumuşatılır:</p>
 
   <table class="indicator-table">
     <thead>
@@ -151,22 +153,32 @@
       <tr>
         <td><strong>Trend (EMA)</strong> <span class="badge badge-purple">TREND</span></td>
         <td>3</td>
-        <td>Fiyatın kısa, orta ve uzun vadeli üstel ortalamaların üzerinde olup olmadığı</td>
+        <td>Fiyatın kısa/orta/uzun vadeli ortalamalara göre dizilimi ve ortalamaların eğimi (yükseliş yönü)</td>
       </tr>
       <tr>
         <td><strong>Momentum (MACD)</strong> <span class="badge badge-blue">MOMENTUM</span></td>
-        <td>3</td>
-        <td>MACD histogram yönü ve sinyal kesişimi; fiyat ivmesi</td>
+        <td>2</td>
+        <td>MACD sinyal ve sıfır çizgisine göre konumu; 3 barlık histogram eğilimi (gürültüye dayanıklı)</td>
+      </tr>
+      <tr>
+        <td><strong>Trend Gücü (ADX)</strong> <span class="badge badge-purple">ADX</span></td>
+        <td>1.5</td>
+        <td>Trendin gücü ve yönü; yatay/zayıf trendleri eler</td>
+      </tr>
+      <tr>
+        <td><strong>Göreceli Güç</strong> <span class="badge badge-blue">RS</span></td>
+        <td>1.5</td>
+        <td>Hissenin endekse (BIST100 / S&amp;P 500) göre 20 ve 60 günlük performansı — piyasa liderlerini ayırt eder</td>
       </tr>
       <tr>
         <td><strong>RSI</strong> <span class="badge badge-green">RSI</span></td>
-        <td>2 (min -1)</td>
-        <td>Aşırı alım/satım durumu; 30-70 arası normal bölge</td>
+        <td>1</td>
+        <td>Sağlıklı momentum bölgesi (50-65) zirve puan; aşırı alımda kademeli azalır</td>
       </tr>
       <tr>
-        <td><strong>Bollinger Bandları</strong> <span class="badge badge-orange">BB</span></td>
-        <td>2</td>
-        <td>Fiyatın bant içindeki konumu ve bant genişliği</td>
+        <td><strong>Bollinger + Hacim</strong> <span class="badge badge-orange">BB</span></td>
+        <td>1</td>
+        <td>Fiyatın bant içindeki konumu, hacim teyidiyle ölçeklenir</td>
       </tr>
     </tbody>
   </table>

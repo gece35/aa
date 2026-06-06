@@ -39,9 +39,9 @@ from backend.limits import PLANS, enforce_collection_limit, get_plan, quota, req
 from backend.models import Portfolio, StockComment, TweetLog, User, Watchlist
 from backend.news import fetch_news, fetch_stock_news
 from backend.backtest import run_backtest
-from backend.scanner import scan_market, scan_market_chunk
+from backend.scanner import get_index_df, scan_market, scan_market_chunk
 from backend.scoring import score_symbol_detailed
-from backend.tickers import MARKETS
+from backend.tickers import MARKETS, market_of_symbol
 
 logging.basicConfig(
     level=LOG_LEVEL,
@@ -354,7 +354,8 @@ def create_app() -> Flask:
         if df is None or df.empty:
             return jsonify({"error": f"data unavailable for {symbol}"}), 404
 
-        detail = score_symbol_detailed(symbol, df)
+        index_df = get_index_df(market_of_symbol(symbol))
+        detail = score_symbol_detailed(symbol, df, index_df=index_df)
         if detail is None:
             return jsonify({"error": f"insufficient data for {symbol}"}), 404
 
@@ -491,7 +492,8 @@ def create_app() -> Flask:
             df = data.get(symbol)
             if df is None or df.empty:
                 return {}
-            return score_symbol_detailed(symbol, df) or {}
+            index_df = get_index_df(market_of_symbol(symbol))
+            return score_symbol_detailed(symbol, df, index_df=index_df) or {}
 
         try:
             check_alerts_for_user(current_user.id, _fetcher)

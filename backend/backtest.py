@@ -40,6 +40,7 @@ import numpy as np
 import pandas as pd
 
 from .data_fetcher import download_ohlcv
+from .scoring import compute_score_frame
 from .sectors import get_sector
 from .tickers import get_tickers
 
@@ -158,88 +159,28 @@ def _regime_short_series(index_df: pd.DataFrame) -> pd.Series:
     return above_ema50 | not_falling
 
 
-def _score_subscores(df: pd.DataFrame) -> Tuple[pd.Series, pd.Series, pd.Series, pd.Series, pd.Series]:
-    """Toplam skoru ve 4 alt-skoru döndürür: (toplam, trend, momentum, rsi, bb)."""
-    close  = df["Close"].astype(float)
-    open_  = df["Open"].astype(float) if "Open" in df.columns else close
-    volume = df["Volume"].astype(float) if "Volume" in df.columns else pd.Series(0.0, index=df.index)
+def _score_series(df: pd.DataFrame, index_close: Optional[pd.Series] = None) -> Tuple[pd.Series, pd.Series]:
+    """Birlesik puanlama motorundan (toplam_int, trend_sub) serilerini doner.
 
-    # Trend
-    ema20  = close.ewm(span=20,  adjust=False).mean()
-    ema50  = close.ewm(span=50,  adjust=False).mean()
-    ema200 = close.ewm(span=200, adjust=False).mean()
-    trend = pd.Series(0, index=df.index, dtype=int)
-    above_50_200 = (close > ema50) & (close > ema200)
-    trend[above_50_200] = 2
-    full_align = (close > ema20) & (ema20 > ema50) & (ema50 > ema200)
-    trend[full_align] = 3
-
-    # Momentum (MACD)
-    ema12 = close.ewm(span=12, adjust=False).mean()
-    ema26 = close.ewm(span=26, adjust=False).mean()
-    macd_line = ema12 - ema26
-    signal_line = macd_line.ewm(span=9, adjust=False).mean()
-    histogram = macd_line - signal_line
-    macd_above_sig = macd_line > signal_line
-    hist_rising = histogram > histogram.shift(1)
-    cross_up = (
-        macd_above_sig
-        & ~macd_above_sig.shift(1).fillna(False)
-        & (macd_line < 0)
-    )
-    cross_up_3 = cross_up | cross_up.shift(1).fillna(False) | cross_up.shift(2).fillna(False)
-    momentum = pd.Series(0, index=df.index, dtype=int)
-    momentum[(macd_above_sig) & hist_rising] = 2
-    momentum[cross_up_3] = 3
-
-    # RSI
-    delta = close.diff()
-    avg_gain = delta.clip(lower=0).ewm(com=13, min_periods=14, adjust=False).mean()
-    avg_loss = (-delta).clip(lower=0).ewm(com=13, min_periods=14, adjust=False).mean()
-    rs = avg_gain / avg_loss.replace(0, np.nan)
-    rsi = 100 - (100 / (1 + rs))
-    rsi_cross30 = (rsi > 30) & (rsi.shift(1) <= 30)
-    rsi_cross30_3 = rsi_cross30 | rsi_cross30.shift(1).fillna(False) | rsi_cross30.shift(2).fillna(False)
-    rsi_mid = (rsi >= 45) & (rsi <= 65) & (rsi > rsi.shift(1))
-    rsi_ob = rsi > 70
-    rsi_score = pd.Series(0, index=df.index, dtype=int)
-    rsi_score[rsi_mid] = 1
-    rsi_score[rsi_cross30_3] = 2
-    rsi_score[rsi_ob] = -1
-
-    # Bollinger
-    bb_mid = close.rolling(20).mean()
-    bb_std = close.rolling(20).std()
-    bb_upper = bb_mid + 2 * bb_std
-    bb_lower = bb_mid - 2 * bb_std
-    above_upper = close > bb_upper
-    mid_break = (close > bb_mid) & (close.shift(1) <= bb_mid.shift(1))
-    mid_break_3 = mid_break | mid_break.shift(1).fillna(False) | mid_break.shift(2).fillna(False)
-    lower_touch = (open_.shift(1) <= bb_lower.shift(1) * 1.01) & (close > open_)
-    bb_score = pd.Series(0, index=df.index, dtype=int)
-    bb_score[mid_break_3] = 1
-    bb_score[lower_touch] = 2
-    bb_score[above_upper] = 0
-
-    # Hacim filtresi (cezalar)
-    vol_sma20 = volume.rolling(20).mean()
-    low_volume = volume < vol_sma20
-    momentum[(momentum == 3) & low_volume] = 2
-    bb_score[(bb_score == 2) & low_volume] = 1
-
-    total = (trend + momentum + rsi_score + bb_score).clip(0, 10).fillna(0).astype(int)
-    return total, trend, momentum, rsi_score, bb_score
+    Canli tarayici ile ayni `compute_score_frame` motorunu kullanir — backtest
+    ekranda gosterilen puandan farkli bir sistemi test etmez.
+    """
+    frame = compute_score_frame(df, index_close)
+    total = frame["total"].round().clip(0, 10).fillna(0).astype(int)
+    trend = frame["trend"].fillna(0)
+    return total, trend
 
 
 # ── Sembol başına sinyal verisi inşası ──────────────────────────────────────
 
 def _build_signals(symbol: str, df: pd.DataFrame, atr_period: int,
-                   master_timeline: pd.DatetimeIndex) -> Optional[Dict[str, pd.Series]]:
+                   master_timeline: pd.DatetimeIndex,
+                   index_close: Optional[pd.Series] = None) -> Optional[Dict[str, pd.Series]]:
     """Bir sembolün tüm sinyallerini hesaplar ve master timeline'a hizalar."""
     if df is None or df.empty or len(df) < MIN_HISTORY:
         return None
     try:
-        total, trend, _mom, _rsi, _bb = _score_subscores(df)
+        total, trend = _score_series(df, index_close)
         atr = _atr_series(df, atr_period)
         high52w = df["Close"].rolling(252, min_periods=60).max()
         vol_sma20 = df["Volume"].rolling(20).mean() if "Volume" in df.columns else pd.Series(0.0, index=df.index)
@@ -658,10 +599,12 @@ def run_backtest(market: str) -> dict:
     data: Dict[str, pd.DataFrame] = download_ohlcv(tickers, period="500d", interval="1d")
     atr_period = ATR_PERIOD_BIST if market == "bist" else ATR_PERIOD_US
 
+    index_close = idx_df["Close"].astype(float)
+
     signal_data: Dict[str, Dict[str, pd.Series]] = {}
     for symbol in tickers:
         df = data.get(symbol)
-        sd = _build_signals(symbol, df, atr_period, master_timeline)
+        sd = _build_signals(symbol, df, atr_period, master_timeline, index_close)
         if sd is not None:
             signal_data[symbol] = sd
 

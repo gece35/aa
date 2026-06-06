@@ -637,39 +637,39 @@
             .replace(/>/g, '&gt;');
     }
 
+    // Sürekli puanlamada her gösterge 0..max_score arası float verir; en güçlü
+    // katkıları (normalize oran ≥ 0.6) doğal bir cümleye çeviririz.
+    const REASON_PHRASE = {
+        trend: 'güçlü yükseliş trendi',
+        momentum: 'MACD momentumu pozitif',
+        adx: 'güçlü yönlü trend',
+        rel_strength: 'endekse göre güçlü (piyasa lideri)',
+        rsi: 'RSI sağlıklı bölgede',
+        bbands: 'Bollinger bandında sağlıklı konum',
+    };
+
     function buildScoreReason(r) {
         if (!r || !r.indicators) return '';
-        const parts = [];
         const byKey = {};
         r.indicators.forEach((ind) => { byKey[ind.key] = ind; });
 
-        const trend = byKey['trend'];
-        const momentum = byKey['momentum'];
+        // Pozitif katkılar: normalize orana göre güçlüden zayıfa sırala
+        const positives = r.indicators
+            .filter((ind) => ind.max_score > 0 && REASON_PHRASE[ind.key]
+                && (ind.score / ind.max_score) >= 0.6)
+            .sort((a, b) => (b.score / b.max_score) - (a.score / a.max_score))
+            .map((ind) => REASON_PHRASE[ind.key]);
+
+        // Uyarılar
+        const warnings = [];
         const rsi = byKey['rsi'];
-        const bbands = byKey['bbands'];
+        if (rsi && rsi.value != null && rsi.value > 70) warnings.push('dikkat: RSI aşırı alım bölgesinde');
+        const bb = byKey['bbands'];
+        if (bb && bb.value != null && bb.value > 1) warnings.push('dikkat: Bollinger üst bandı dışında');
+        if (r.volume_spike) positives.push('hacim ortalamanın üzerinde');
+        if (r.near_peak) warnings.push('dikkat: zirveye yakın');
 
-        if (trend && trend.score === 3) parts.push('güçlü EMA dizilimi (20>50>200)');
-        else if (trend && trend.score === 2) parts.push('fiyat EMA50 ve EMA200 üzerinde');
-
-        if (momentum && momentum.score === 3) parts.push('MACD dipten taze dönüş');
-        else if (momentum && momentum.score === 2) parts.push('MACD pozitif, histogram artıyor');
-
-        if (rsi && rsi.score === 2) {
-            const v = rsi.value != null ? ` (${rsi.value})` : '';
-            parts.push(`RSI${v} aşırı satımdan çıkış`);
-        } else if (rsi && rsi.score === 1) {
-            const v = rsi.value != null ? ` (${rsi.value})` : '';
-            parts.push(`RSI${v} pozitif eğim`);
-        } else if (rsi && rsi.score === -1) {
-            parts.push('dikkat: RSI aşırı alım bölgesinde');
-        }
-
-        if (bbands && bbands.score === 2) parts.push('Bollinger alt banttan yeşil dönüş');
-        else if (bbands && bbands.score === 1) parts.push('orta band yukarı kırılım');
-
-        if (r.volume_spike) parts.push('hacim ortalamanın üzerinde');
-        if (r.near_peak) parts.push('dikkat: zirveye yakın');
-
+        const parts = positives.concat(warnings);
         if (!parts.length) return r.score === 0 ? 'Aktif teknik gösterge bulunmuyor.' : '';
         const sentence = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
         const rest = parts.slice(1);

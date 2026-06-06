@@ -294,7 +294,7 @@
     <div class="hero-tag">Kullanım Rehberi</div>
     <h1>Puan Sistemi Nasıl Çalışır?</h1>
     <p class="meta">Her hisse 0-10 arasında bir trend sağlığı skoru alır. Bu sayfa skorun ne anlama geldiğini, nasıl yorumlanabileceğini ve geçmiş verilere dayalı backtest sinyal kriterlerini açıklar.</p>
-    <p>Nebula Scanner dört teknik göstergeyi birleştirerek bir hissenin mevcut trend gücünü ölçer. Skor, alım ya da satım kararı vermek için değil, <strong>"bu trendin sağlığı ne durumda?"</strong> sorusuna yanıt vermek için tasarlanmıştır. Bu sayfada anlatılan kriterler — <strong>TDO v2 (Trend Devamlılığı Onayı)</strong> — son 1 yıllık tarihsel veriyle backtest edilmiş çoklu filtre modelidir.</p>
+    <p>Nebula Scanner altı teknik göstergeyi birleştirerek bir hissenin mevcut trend gücünü ölçer. Skor, alım ya da satım kararı vermek için değil, <strong>"bu trendin sağlığı ne durumda?"</strong> sorusuna yanıt vermek için tasarlanmıştır. Bu sayfada anlatılan kriterler — <strong>TDO v2 (Trend Devamlılığı Onayı)</strong> — son 1 yıllık tarihsel veriyle backtest edilmiş çoklu filtre modelidir.</p>
   </div>
 
   <div class="warning-box">
@@ -309,7 +309,7 @@
     <div class="band-card band-green">
       <div class="band-score">7–10</div>
       <div class="band-title">Yüksek Sinyal Bölgesi — TDO v2 Eşiği</div>
-      <p class="band-desc">Dört göstergenin büyük çoğunluğu pozitif. Fiyat kısa ve orta vadeli ortalamaların üzerinde, momentum aktif. <strong>TDO v2 backtest modelinin koşullarını karşılayan bant</strong>: 2 gün üst üste skor 7+, trend alt-skoru en az 2 ve hacim ortalamanın üzerinde olmalıdır. Skor 8-10 arasında gösterge güvenilirliği en yüksek seviyesindedir.</p>
+      <p class="band-desc">Göstergelerin büyük çoğunluğu pozitif. Fiyat kısa ve orta vadeli ortalamaların üzerinde, momentum aktif. <strong>TDO v2 backtest modelinin koşullarını karşılayan bant</strong>: 2 gün üst üste skor 7+, trend alt-skoru en az 2 ve hacim ortalamanın üzerinde olmalıdır. Skor 8-10 arasında gösterge güvenilirliği en yüksek seviyesindedir.</p>
       <div class="band-profile">Backtest referans bölgesi — çoklu filtre kapısı</div>
     </div>
 
@@ -392,7 +392,10 @@
 
   <!-- Indicators -->
   <h2>Göstergeler</h2>
-  <p>Toplam 10 puan dört göstergeye dağıtılır. Her gösterge koşula göre kısmi puan üretir; hacim yetersizse tam puan alan göstergelerden 1 puan düşülür.</p>
+  <p>Toplam 10 puan altı göstergeye dağıtılır. Her gösterge <strong>sürekli (kademeli)</strong> puan üretir:
+     bir koşul zayıfladığında puan uçurum gibi düşmek yerine yavaşça azalır. Puanlar tek günlük "kesişim olayına"
+     değil, <strong>sürdürülen trendin gücüne</strong> dayanır ve bileşik puan gün-gün ani zıplamaları önlemek için
+     hafifçe yumuşatılır. Böylece sağlıklı bir hisse bir günde 7'den 0'a düşmez.</p>
 
   <div class="indicator-grid">
     <div class="ind-card">
@@ -400,59 +403,78 @@
         <span class="ind-badge max3">Maks +3</span>
         <span class="ind-title">Trend / EMA</span>
       </div>
-      <p>Fiyatın kısa, orta ve uzun vadeli üssel hareketli ortalamaların (EMA20, EMA50, EMA200) üzerinde olup olmadığını ölçer.</p>
+      <p>Fiyatın EMA20/50/200 dizilimini <em>ve</em> ortalamaların eğimini (yükseliş yönünü) ölçer.</p>
       <ul>
-        <li><strong>+3:</strong> Fiyat &gt; EMA20 &gt; EMA50 &gt; EMA200 — tam hizalama</li>
-        <li><strong>+2:</strong> Fiyat &gt; EMA50 ve EMA200 üzerinde</li>
-        <li><strong>+1:</strong> Fiyat yalnızca EMA50 üzerinde</li>
-        <li><strong>0:</strong> Fiyat EMA200 altında</li>
+        <li>Fiyat EMA20 / EMA50 üzerinde, EMA50 &gt; EMA200 — her koşul kısmi puan ekler</li>
+        <li>EMA50 ve EMA200 eğimi pozitif (yükseliyor) — ek kademeli puan</li>
+        <li>Koşullar bozuldukça puan kademeli düşer, sıfırlanmaz</li>
       </ul>
     </div>
 
     <div class="ind-card">
       <div class="ind-header">
-        <span class="ind-badge max3">Maks +3</span>
+        <span class="ind-badge max2">Maks +2</span>
         <span class="ind-title">Momentum / MACD</span>
       </div>
-      <p>Alıcı baskısının büyüdüğünü ya da küçüldüğünü ölçen MACD göstergesi, sinyal çizgisine göre konumlanır.</p>
+      <p>MACD'nin sinyal ve sıfır çizgisine göre konumu ile histogramın <strong>3 barlık</strong> eğilimi (tek günlük gürültü değil).</p>
       <ul>
-        <li><strong>+3:</strong> MACD sıfır altından sinyal çizgisini yukarı kesti — taze dönüş</li>
-        <li><strong>+2:</strong> MACD &gt; sinyal ve histogram büyüyor</li>
-        <li><strong>+1:</strong> MACD &gt; sinyal ama momentum azalıyor</li>
-        <li><strong>0:</strong> MACD &lt; sinyal</li>
+        <li>MACD &gt; sinyal — histogram büyüklüğüyle ölçekli puan</li>
+        <li>3 barlık histogram eğimi pozitif — ek puan</li>
+        <li>MACD &gt; 0 (sıfır üzerinde, teyitli yükseliş) — ek puan</li>
       </ul>
     </div>
 
     <div class="ind-card">
       <div class="ind-header">
-        <span class="ind-badge max2">Maks +2</span>
+        <span class="ind-badge max2">Maks +1.5</span>
+        <span class="ind-title">Trend Gücü / ADX</span>
+      </div>
+      <p>Trendin gücünü ve yönünü ölçer; yatay/zayıf seyreden hisseleri eler.</p>
+      <ul>
+        <li>ADX 15 → 30 arası kademeli artan puan</li>
+        <li>+DI &gt; -DI (yukarı yönlü) ise tam kredi</li>
+        <li>Yön aşağıysa puan büyük ölçüde kısılır</li>
+      </ul>
+    </div>
+
+    <div class="ind-card">
+      <div class="ind-header">
+        <span class="ind-badge max2">Maks +1.5</span>
+        <span class="ind-title">Göreceli Güç</span>
+      </div>
+      <p>Hissenin endekse (BIST100 / S&amp;P 500) göre 20 ve 60 günlük performansı — piyasa <strong>liderlerini</strong> ayırt eder.</p>
+      <ul>
+        <li>Endeksten ne kadar güçlü, o kadar yüksek puan</li>
+        <li>60 günlük üstünlüğe daha fazla ağırlık verilir</li>
+        <li>Endeksten zayıf hisseler düşük puan alır</li>
+      </ul>
+    </div>
+
+    <div class="ind-card">
+      <div class="ind-header">
+        <span class="ind-badge max2">Maks +1</span>
         <span class="ind-title">RSI</span>
       </div>
-      <p>Göreceli güç endeksi, alımların aşırıya kaçıp kaçmadığını ve momentumun yönünü gösterir.</p>
+      <p>Momentumun sağlığını ölçer; sert eşikler yerine yumuşak bir eğri kullanır.</p>
       <ul>
-        <li><strong>+2:</strong> RSI son 3 barda 30'u yukarı kesti</li>
-        <li><strong>+1:</strong> RSI 45-65 arasında ve yükseliyor</li>
-        <li><strong>0:</strong> Nötr ya da negatif</li>
-        <li><strong>-1 ceza:</strong> RSI &gt; 70 — aşırı alım bölgesi</li>
+        <li>50-65 bandı (sağlıklı momentum) — zirve puan</li>
+        <li>70 üzeri (aşırı alım) — puan kademeli azalır</li>
+        <li>80 üzeri — hafif negatif (geri çekilme riski)</li>
       </ul>
     </div>
 
     <div class="ind-card">
       <div class="ind-header">
-        <span class="ind-badge max2">Maks +2</span>
-        <span class="ind-title">Bollinger Bantları</span>
+        <span class="ind-badge max2">Maks +1</span>
+        <span class="ind-title">Bollinger + Hacim</span>
       </div>
-      <p>Fiyatın volatilite bantlarına göre nerede olduğunu, dipten dönüş ya da orta banda geçiş gibi durumları takip eder.</p>
+      <p>Fiyatın bant içindeki konumunu ölçer, hacim teyidiyle ölçeklenir.</p>
       <ul>
-        <li><strong>+2:</strong> Alt banda değdi ve yeşil kapandı — dipten dönüş</li>
-        <li><strong>+1:</strong> Fiyat orta bandı yukarı geçti</li>
-        <li><strong>0:</strong> Fiyat üst bandın dışında ya da bant altında</li>
+        <li>Bandın orta-üst yarısı (sağlıklı) — yüksek puan</li>
+        <li>Üst bandın dışı (aşırı uzanma) — puan azalır</li>
+        <li>Hacim ortalamanın altındaysa puan kademeli kısılır (sahte kırılım filtresi)</li>
       </ul>
     </div>
-  </div>
-
-  <div class="info-box">
-    <strong>Hacim Filtresi:</strong> Herhangi bir gösterge tam puanını almışken son günün işlem hacmi 20 günlük ortalamanın altındaysa, o göstergeden 1 puan düşülür. Yeterli hacimle desteklenmeyen hareketler daha zayıf sonuçlar doğurur.
   </div>
 
   <!-- Backtest criteria -->

@@ -66,12 +66,15 @@ def _due_users(now_ts: float) -> list[User]:
 
 def _detail_fetcher(symbol: str) -> dict:
     from .data_fetcher import download_ohlcv
+    from .scanner import get_index_df
     from .scoring import score_symbol_detailed
+    from .tickers import market_of_symbol
     data = download_ohlcv([symbol], period="200d", interval="1d")
     df = data.get(symbol)
     if df is None or df.empty:
         return {}
-    return score_symbol_detailed(symbol, df) or {}
+    index_df = get_index_df(market_of_symbol(symbol))
+    return score_symbol_detailed(symbol, df, index_df=index_df) or {}
 
 
 def _check_user(user: User) -> int:

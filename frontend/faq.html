@@ -171,7 +171,7 @@
     <div class="faq-item">
       <button class="faq-q">0-10 puan nasıl hesaplanıyor? <span class="arrow">▾</span></button>
       <div class="faq-a">
-        4 teknik göstergenin bileşiminden oluşuyor: <strong>Trend (EMA, max 3 puan)</strong>, <strong>Momentum (MACD, max 3 puan)</strong>, <strong>RSI (max 2, min -1 puan)</strong> ve <strong>Bollinger Bandları (max 2 puan)</strong>. Her gösterge kendi alt-kriterlerine göre puanlanır ve toplam 0-10 aralığına normalleştirilir. Detaylar için <a href="/rehber.html">Kullanım Rehberi</a>'ni incele.
+        6 teknik göstergenin bileşiminden oluşuyor: <strong>Trend (EMA, max 3)</strong>, <strong>Momentum (MACD, max 2)</strong>, <strong>Trend Gücü (ADX, max 1.5)</strong>, <strong>Göreceli Güç (endekse karşı, max 1.5)</strong>, <strong>RSI (max 1)</strong> ve <strong>Bollinger + Hacim (max 1)</strong>. Her gösterge <em>sürekli ve durum bazlı</em> puanlanır (tek günlük kesişim olayına değil, sürdürülen trende dayanır), toplam 0-10 aralığına getirilir ve gün-gün ani zıplamaları önlemek için hafifçe yumuşatılır. Detaylar için <a href="/rehber.html">Kullanım Rehberi</a>'ni incele.
       </div>
     </div>
 
@@ -185,7 +185,7 @@
     <div class="faq-item">
       <button class="faq-q">Skor neden hızlı değişiyor? <span class="arrow">▾</span></button>
       <div class="faq-a">
-        Skor günlük kapanış fiyatlarına göre yeniden hesaplanır. Özellikle MACD ve Bollinger göstergeleri kısa vadeli fiyat hareketlerine duyarlıdır. Bu yüzden tek bir günün skoruna göre hareket etmek yerine <strong>birkaç günlük trendi</strong> takip etmek daha sağlıklıdır. TDO v2 bu nedenle "2 ardışık gün skor ≥7" şartını koyuyor.
+        Skor günlük kapanış fiyatlarına göre yeniden hesaplanır. Yeni puanlama motoru <strong>sürekli ve durum bazlıdır</strong>: bir gösterge zayıfladığında puan uçurum gibi düşmek yerine kademeli azalır ve bileşik puan hafifçe yumuşatılır. Böylece sağlıklı bir trend bir günde 7'den 0'a düşmez. Yine de tek bir günün skoru yerine <strong>birkaç günlük trendi</strong> takip etmek daha sağlıklıdır; TDO v2 bu nedenle "2 ardışık gün skor ≥7" şartını koyuyor.
       </div>
     </div>
 

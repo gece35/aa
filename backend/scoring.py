@@ -1,38 +1,29 @@
-"""Teknik gosterge bazli 10 puanlik puanlama motoru.
+"""Surekli, durum bazli 10 puanlik puanlama motoru.
 
-4 ana gostergeden + hacim filtresinden olusur, toplam 0-10 puan:
+Eski sistem "olay" puanliyordu (taze kesisim, histogram bugun>dun gibi)
+ve esiklerde uucurumlar vardi; bu yuzden puan gun-gun 7'den 0'a ziplayabiliyordu.
+Yeni motor 6 gostergeyi *surekli* ve *durum bazli* puanlar, sonra puan serisini
+hafifce yumusatir. Bir kosul kaybolunca puan kademeli duser, ucurum olmaz.
 
-  1. TREND (EMA20/50/200) - max 3 puan:
-     - Fiyat > EMA20 > EMA50 > EMA200 dizilimi (guclu trend): +3
-     - Fiyat sadece EMA50 ve EMA200 ustunde: +2
-     - Fiyat EMA200 altinda: 0
+Toplam 0-10, agirliklar (max):
 
-  2. MOMENTUM (MACD) - max 3 puan:
-     - MACD sinyali sifir cizgisi altinda yukari kesti (taze donus): +3
-     - MACD > sinyal VE histogram artiyor: +2
-     - MACD < sinyal: 0
+  1. TREND (EMA dizilim + egim)        0-3.0
+  2. MOMENTUM (MACD, durum bazli)      0-2.0
+  3. TREND GUCU (ADX 14)               0-1.5
+  4. GORECELI GUC (endekse karsi)      0-1.5
+  5. RSI (14, plateau egrisi)          0-1.0  (asiri alimda hafif negatif)
+  6. BOLLINGER + HACIM                  0-1.0
 
-  3. RSI (14) - max 2 puan:
-     - RSI 30 yukari kesisi (asiri satimdan cikis): +2
-     - RSI 45-65 arasi VE yukari egim: +1
-     - RSI > 70 (asiri alim/duzeltme riski): -1 (ceza)
+Bilesik puan EMA(span=2) ile hafifce yumusatilir (tepki oncelikli) ve 0-10'a clamp edilir.
 
-  4. VOLATILITE (Bollinger 20,2) - max 2 puan:
-     - Alt banda dokup ici yesil kapanis: +2
-     - Orta band yukari yonlu kirilim: +1
-     - Ust band disinda: 0
-
-  5. HACIM ONAYI (filtre):
-     MACD veya BB tam puan aldi VE gunluk hacim < 20-gunluk ortalama
-     ise -1 (sahte kirilim filtresi).
-
-Toplam puan clamp(0, 10) ile sinirlanir.
+`compute_score_frame` tum df boyunca vektorize seriler uretir; hem canli tarayici
+(`score_symbol`) hem backtest ayni motoru tuketir — tek kaynak, sapma yok.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, asdict
-from typing import List
+from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -40,12 +31,26 @@ import pandas as pd
 from backend.patterns import detect_patterns
 
 
+# --- ayarlanabilir agirliklar / esikler (backtest ile ince ayara acik) ---
+
+WEIGHTS = {
+    "trend": 3.0,
+    "momentum": 2.0,
+    "adx": 1.5,
+    "rel_strength": 1.5,
+    "rsi": 1.0,
+    "bbands": 1.0,
+}
+SMOOTH_SPAN = 2  # bilesik puan yumusatma (tepki oncelikli: kucuk = cevik)
+REL_NEUTRAL = WEIGHTS["rel_strength"] * 0.5  # endeks yoksa notr goreceli guc
+
+
 @dataclass
 class IndicatorResult:
     name: str
     key: str
-    score: int
-    max_score: int
+    score: float
+    max_score: float
     signal: bool = False  # Geriye uyum: score > 0 ise True
     value: float | None = None
     detail: str = ""
@@ -88,7 +93,7 @@ class ScoreResult:
         }
 
 
-# --- saf pandas indikatör hesaplamalari ---
+# --- saf pandas indikator hesaplamalari ---
 
 def _ema(series: pd.Series, span: int) -> pd.Series:
     return series.ewm(span=span, adjust=False).mean()
@@ -124,6 +129,29 @@ def _bbands(close: pd.Series, length=20, std_mult=2.0):
     return upper, mid, lower
 
 
+def _adx(high: pd.Series, low: pd.Series, close: pd.Series, length: int = 14):
+    """Wilder ADX + yonlu gostergeler (+DI / -DI)."""
+    up = high.diff()
+    down = -low.diff()
+    plus_dm = ((up > down) & (up > 0)).astype(float) * up.clip(lower=0)
+    minus_dm = ((down > up) & (down > 0)).astype(float) * down.clip(lower=0)
+
+    prev_close = close.shift(1)
+    tr = pd.concat([
+        high - low,
+        (high - prev_close).abs(),
+        (low - prev_close).abs(),
+    ], axis=1).max(axis=1)
+
+    alpha = 1.0 / length
+    atr = tr.ewm(alpha=alpha, adjust=False, min_periods=length).mean()
+    plus_di = 100 * plus_dm.ewm(alpha=alpha, adjust=False, min_periods=length).mean() / atr.replace(0, np.nan)
+    minus_di = 100 * minus_dm.ewm(alpha=alpha, adjust=False, min_periods=length).mean() / atr.replace(0, np.nan)
+    dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, np.nan)
+    adx = dx.ewm(alpha=alpha, adjust=False, min_periods=length).mean()
+    return adx, plus_di, minus_di
+
+
 def _safe_last(series: pd.Series):
     if series is None or len(series) == 0:
         return None
@@ -133,275 +161,246 @@ def _safe_last(series: pd.Series):
     return float(val)
 
 
-# --- yardimci ---
-
-def _crossed_above(a: pd.Series, b, lookback: int = 3) -> bool:
-    """Son `lookback` barda a serisi b'yi (sayi veya seri) yukari kesti mi?"""
-    if len(a) < 2:
-        return False
-    pairs = min(lookback, len(a) - 1)
-    for i in range(pairs):
-        a_now = a.iloc[-(i + 1)]
-        a_prev = a.iloc[-(i + 2)]
-        if isinstance(b, (int, float)):
-            b_now = b_prev = float(b)
-        else:
-            if len(b) < i + 2:
-                continue
-            b_now = b.iloc[-(i + 1)]
-            b_prev = b.iloc[-(i + 2)]
-        if any(pd.isna(v) for v in [a_now, a_prev, b_now, b_prev]):
-            continue
-        if float(a_prev) <= float(b_prev) and float(a_now) > float(b_now):
-            return True
-    return False
+def _clip01(s: pd.Series) -> pd.Series:
+    return s.clip(lower=0.0, upper=1.0)
 
 
-# --- indikator skorlama (10'luk sistem) ---
+# --- surekli alt-puan serileri ---
 
-def _score_trend(close: pd.Series) -> IndicatorResult:
-    """TREND (EMA20/50/200) - max 3 puan."""
+def _trend_series(close: pd.Series) -> tuple[pd.Series, pd.Series]:
+    """TREND (0-3): EMA dizilimi + egim, kismi kredi. (skor, ema50) doner."""
     ema20 = _ema(close, 20)
     ema50 = _ema(close, 50)
     ema200 = _ema(close, 200)
-    price = _safe_last(close)
-    e20 = _safe_last(ema20)
-    e50 = _safe_last(ema50)
-    e200 = _safe_last(ema200)
 
-    if price is None or e50 is None or e200 is None:
-        return IndicatorResult(
-            name="Trend (EMA)", key="trend", score=0, max_score=3,
-            value=None, detail="veri yok",
-        )
-
-    if e20 is not None and price > e20 > e50 > e200:
-        return IndicatorResult(
-            name="Trend (EMA)", key="trend", score=3, max_score=3,
-            value=round(e50, 4),
-            detail="guclu trend: fiyat > EMA20 > EMA50 > EMA200",
-        )
-    if price > e50 and price > e200:
-        return IndicatorResult(
-            name="Trend (EMA)", key="trend", score=2, max_score=3,
-            value=round(e50, 4),
-            detail="fiyat EMA50 ve EMA200 uzerinde",
-        )
-    if price < e200:
-        return IndicatorResult(
-            name="Trend (EMA)", key="trend", score=0, max_score=3,
-            value=round(e200, 4),
-            detail="fiyat EMA200 altinda — trend bozuk",
-        )
-    return IndicatorResult(
-        name="Trend (EMA)", key="trend", score=0, max_score=3,
-        value=round(e50, 4),
-        detail="karma trend: dizilim bozuk",
+    score = (
+        0.50 * (close > ema20).astype(float)
+        + 0.75 * (close > ema50).astype(float)
+        + 0.75 * (ema50 > ema200).astype(float)
+        + 0.50 * _clip01(ema50.pct_change(10) / 0.05)
+        + 0.50 * _clip01(ema200.pct_change(20) / 0.05)
     )
+    return score.clip(0, WEIGHTS["trend"]), ema50
 
 
-def _score_momentum(close: pd.Series) -> IndicatorResult:
-    """MOMENTUM (MACD) - max 3 puan."""
+def _momentum_series(close: pd.Series) -> tuple[pd.Series, pd.Series]:
+    """MOMENTUM (0-2): MACD durum bazli. (skor, macd_line) doner."""
     macd_line, signal_line = _macd(close)
-    macd_now = _safe_last(macd_line)
-    sig_now = _safe_last(signal_line)
-    if macd_now is None or sig_now is None or len(macd_line) < 3:
-        return IndicatorResult(
-            name="Momentum (MACD)", key="momentum", score=0, max_score=3,
-            value=None, detail="veri yok",
-        )
-
-    # Histogram = MACD - Signal
     hist = macd_line - signal_line
-    hist_now = float(hist.iloc[-1]) if not pd.isna(hist.iloc[-1]) else None
-    hist_prev = float(hist.iloc[-2]) if not pd.isna(hist.iloc[-2]) else None
 
-    # +3: Sinyal cizgisini sifirin altinda yukari kesti (taze donus)
-    cross_below_zero = _crossed_above(macd_line, signal_line, lookback=3) and macd_now < 0
-    if cross_below_zero:
-        return IndicatorResult(
-            name="Momentum (MACD)", key="momentum", score=3, max_score=3,
-            value=round(macd_now, 4),
-            detail="dipten taze donus: sifir altinda yukari kesis",
-        )
+    above = (macd_line > signal_line).astype(float)
+    # fiyata gore normalize histogram buyuklugu (gurultu yerine olcek)
+    hist_norm = _clip01((hist / close.replace(0, np.nan)) / 0.015)
+    comp_a = above * (0.5 + 0.5 * hist_norm)                       # 0-1.0
+    # 3-barlik ortalama histogram egimi (tek gunluk flip yerine)
+    hist_slope3 = (hist - hist.shift(3)) / 3.0
+    comp_b = 0.5 * _clip01(hist_slope3 / (close.replace(0, np.nan) * 0.003))  # 0-0.5
+    comp_c = 0.5 * (macd_line > 0).astype(float)                   # 0-0.5
 
-    # +2: MACD > Sinyal VE histogram artiyor
-    if macd_now > sig_now and hist_now is not None and hist_prev is not None and hist_now > hist_prev:
-        return IndicatorResult(
-            name="Momentum (MACD)", key="momentum", score=2, max_score=3,
-            value=round(macd_now, 4),
-            detail="sinyal uzerinde, histogram artisi devam",
-        )
-
-    # 0: MACD < Sinyal
-    if macd_now < sig_now:
-        return IndicatorResult(
-            name="Momentum (MACD)", key="momentum", score=0, max_score=3,
-            value=round(macd_now, 4),
-            detail="sinyal altinda — momentum zayif",
-        )
-
-    # MACD > Sinyal ama histogram dusus halinde
-    return IndicatorResult(
-        name="Momentum (MACD)", key="momentum", score=0, max_score=3,
-        value=round(macd_now, 4),
-        detail="sinyal uzerinde ama histogram zayifliyor",
-    )
+    score = (comp_a + comp_b + comp_c).clip(0, WEIGHTS["momentum"])
+    return score, macd_line
 
 
-def _score_rsi(close: pd.Series) -> IndicatorResult:
-    """RSI (14) - max 2 puan, asiri alim cezasi -1."""
+def _adx_series(high: pd.Series, low: pd.Series, close: pd.Series) -> tuple[pd.Series, pd.Series]:
+    """TREND GUCU (0-1.5): ADX, bullish yonde tam kredi. (skor, adx) doner."""
+    adx, plus_di, minus_di = _adx(high, low, close)
+    strength = _clip01((adx - 15) / 15.0)            # 0 @15, 1 @30+
+    bullish = (plus_di > minus_di)
+    dir_factor = bullish.astype(float) * 1.0 + (~bullish).astype(float) * 0.3
+    score = (strength * WEIGHTS["adx"] * dir_factor).clip(0, WEIGHTS["adx"])
+    return score, adx
+
+
+def _rel_strength_series(close: pd.Series, index_close: Optional[pd.Series]) -> pd.Series:
+    """GORECELI GUC (0-1.5): hissenin endekse gore 20/60 gun performansi."""
+    if index_close is None or index_close.dropna().empty:
+        return pd.Series(REL_NEUTRAL, index=close.index)
+    idx = index_close.reindex(close.index).ffill()
+    out20 = close.pct_change(20) - idx.pct_change(20)
+    out60 = close.pct_change(60) - idx.pct_change(60)
+    s20 = _clip01(out20 / 0.10)   # +%10 fark = tam
+    s60 = _clip01(out60 / 0.15)   # +%15 fark = tam
+    score = (0.6 * s20 + 0.9 * s60).clip(0, WEIGHTS["rel_strength"])
+    # ilk barlarda NaN -> notr
+    return score.fillna(REL_NEUTRAL)
+
+
+def _rsi_score_series(close: pd.Series) -> tuple[pd.Series, pd.Series]:
+    """RSI (0-1, plateau): 50-65 zirve, asiri alimda hafif negatif. (skor, rsi) doner."""
     rsi = _rsi(close, 14)
-    rsi_now = _safe_last(rsi)
-    if rsi_now is None or len(rsi) < 3:
-        return IndicatorResult(
-            name="RSI", key="rsi", score=0, max_score=2,
-            value=None, detail="veri yok",
-        )
-
-    rsi_prev = float(rsi.iloc[-2]) if not pd.isna(rsi.iloc[-2]) else None
-
-    # +2: RSI 30 cizgisini yukari kesti (son 3 barda)
-    if _crossed_above(rsi, 30, lookback=3):
-        return IndicatorResult(
-            name="RSI", key="rsi", score=2, max_score=2,
-            value=round(rsi_now, 2),
-            detail=f"RSI {rsi_now:.0f} — asiri satimdan cikis",
-        )
-
-    # -2: RSI > 80 (sert asiri alim, momentum tükenmesi yakın)
-    if rsi_now > 80:
-        return IndicatorResult(
-            name="RSI", key="rsi", score=-2, max_score=2,
-            value=round(rsi_now, 2),
-            detail=f"RSI {rsi_now:.0f} — sert asiri alim, momentum tukenmesi",
-        )
-
-    # -1: RSI 70-80 arasi (asiri alim cezasi)
-    if rsi_now > 70:
-        return IndicatorResult(
-            name="RSI", key="rsi", score=-1, max_score=2,
-            value=round(rsi_now, 2),
-            detail=f"RSI {rsi_now:.0f} — asiri alim, duzeltme riski",
-        )
-
-    # +1: RSI 45-65 arasi VE yukari egim
-    if 45 <= rsi_now <= 65 and rsi_prev is not None and rsi_now > rsi_prev:
-        return IndicatorResult(
-            name="RSI", key="rsi", score=1, max_score=2,
-            value=round(rsi_now, 2),
-            detail=f"RSI {rsi_now:.0f} — pozitif egim, saglikli bolge",
-        )
-
-    # 0: diger durumlar
-    return IndicatorResult(
-        name="RSI", key="rsi", score=0, max_score=2,
-        value=round(rsi_now, 2),
-        detail=f"RSI {rsi_now:.0f} — notr",
+    r = rsi.to_numpy(dtype=float)
+    val = np.select(
+        [r <= 50, r <= 65, r <= 80],
+        [
+            np.clip((r - 35) / 15.0, 0.0, 1.0),       # 35->50 : 0->1
+            1.0,                                       # 50-65 plateau
+            1.0 - 0.8 * ((r - 65) / 15.0),             # 65->80 : 1.0->0.2
+        ],
+        default=np.maximum(-0.3, 0.2 - 0.5 * ((r - 80) / 10.0)),  # >80 : 0.2->-0.3
     )
+    val = np.where(np.isnan(r), np.nan, val)
+    return pd.Series(val, index=close.index), rsi
 
 
-def _score_bbands(open_: pd.Series, close: pd.Series) -> IndicatorResult:
-    """VOLATILITE (Bollinger 20,2) - max 2 puan."""
-    upper, middle, lower = _bbands(close)
-    price = _safe_last(close)
-    upper_now = _safe_last(upper)
-    middle_now = _safe_last(middle)
-    lower_now = _safe_last(lower)
+def _bbands_score_series(close: pd.Series, volume: pd.Series) -> tuple[pd.Series, pd.Series]:
+    """BOLLINGER + HACIM (0-1): %B konumu x hacim teyidi. (skor, %B) doner."""
+    upper, mid, lower = _bbands(close)
+    width = (upper - lower).replace(0, np.nan)
+    pctb = (close - lower) / width
+    # 0.8 civarinda zirve yapan ucgen: orta-ust yari saglikli, asiri uzanma cezali
+    loc = (1.0 - (pctb - 0.8).abs() / 0.8).clip(0, 1)
 
-    if price is None or upper_now is None or middle_now is None or lower_now is None:
-        return IndicatorResult(
-            name="Bollinger", key="bbands", score=0, max_score=2,
-            value=None, detail="veri yok",
-        )
+    if volume is not None and not volume.empty:
+        vol_sma = volume.rolling(20).mean()
+        vol_ratio = (volume / vol_sma.replace(0, np.nan)).clip(0.6, 1.2)
+        vol_factor = vol_ratio.fillna(1.0)
+    else:
+        vol_factor = pd.Series(1.0, index=close.index)
 
-    # 0 puan: ust band disinda
-    if price > upper_now:
-        return IndicatorResult(
-            name="Bollinger", key="bbands", score=0, max_score=2,
-            value=round(upper_now, 4),
-            detail="fiyat ust band uzerinde — geri cekilme riski",
-        )
-
-    # -1 puan: ust banda %1 yakin (yapışmış, geri cekilme riski yakın)
-    if price >= upper_now * 0.99:
-        return IndicatorResult(
-            name="Bollinger", key="bbands", score=-1, max_score=2,
-            value=round(upper_now, 4),
-            detail="fiyat ust banda yakin — geri cekilme riski yakin",
-        )
-
-    # +2: alt banda dokup ici yesil kapanis
-    open_now = _safe_last(open_)
-    if (open_now is not None and price > open_now and lower_now is not None
-            and open_now <= lower_now * 1.01):
-        return IndicatorResult(
-            name="Bollinger", key="bbands", score=2, max_score=2,
-            value=round(lower_now, 4),
-            detail="alt banttan yesil donus",
-        )
-
-    # +1: orta band yukari kirilim (son 3 barda)
-    if _crossed_above(close, middle, lookback=3) and price > middle_now:
-        return IndicatorResult(
-            name="Bollinger", key="bbands", score=1, max_score=2,
-            value=round(middle_now, 4),
-            detail="orta band yukari kirilim",
-        )
-
-    # 0: diger durumlar
-    return IndicatorResult(
-        name="Bollinger", key="bbands", score=0, max_score=2,
-        value=round(middle_now, 4),
-        detail="bant ici notr seyir",
-    )
+    score = (loc * vol_factor).clip(0, WEIGHTS["bbands"])
+    return score, pctb
 
 
-def _apply_volume_filter(volume: pd.Series, momentum: IndicatorResult,
-                         bbands: IndicatorResult) -> tuple:
-    """MACD veya BB tam puan aldi VE gunluk hacim < SMA20 ise -1.
+def compute_score_frame(df: pd.DataFrame, index_close: Optional[pd.Series] = None) -> Dict[str, pd.Series]:
+    """Tum df boyunca vektorize alt-puanlari, ham ve yumusatilmis toplami uretir.
 
-    Geri donus: (momentum, bbands, filtre_uygulandi: bool, hacim_detayi: str)
+    Doner: trend/momentum/adx/rel_strength/rsi/bbands alt-puan serileri,
+    total_raw, total (yumusatilmis+clamp), ve detay icin yardimci deger serileri.
+    Canli tarayici ve backtest ayni fonksiyonu kullanir.
     """
-    if volume is None or volume.empty or len(volume) < 21:
-        return momentum, bbands, False, "hacim verisi yok"
+    close = df["Close"].astype(float)
+    high = df["High"].astype(float)
+    low = df["Low"].astype(float)
+    volume = df["Volume"].astype(float) if "Volume" in df.columns else pd.Series(dtype=float)
 
-    vol_clean = volume.dropna()
-    if len(vol_clean) < 21:
-        return momentum, bbands, False, "hacim verisi yok"
+    trend, ema50 = _trend_series(close)
+    momentum, macd_line = _momentum_series(close)
+    adx_score, adx_val = _adx_series(high, low, close)
+    rel = _rel_strength_series(close, index_close)
+    rsi_score, rsi_val = _rsi_score_series(close)
+    bb_score, pctb = _bbands_score_series(close, volume)
 
-    last_vol = float(vol_clean.iloc[-1])
-    avg_20 = float(vol_clean.iloc[-21:-1].mean())
-    if avg_20 <= 0:
-        return momentum, bbands, False, "hacim verisi yok"
+    total_raw = (
+        trend.fillna(0) + momentum.fillna(0) + adx_score.fillna(0)
+        + rel.fillna(REL_NEUTRAL) + rsi_score.fillna(0) + bb_score.fillna(0)
+    )
+    total = total_raw.ewm(span=SMOOTH_SPAN, adjust=False).mean().clip(0, 10)
 
-    ratio = last_vol / avg_20
-    detail = f"hacim 20g ortalamanin %{(ratio - 1) * 100:+.0f}'inde"
+    return {
+        "trend": trend,
+        "momentum": momentum,
+        "adx": adx_score,
+        "rel_strength": rel,
+        "rsi": rsi_score,
+        "bbands": bb_score,
+        "total_raw": total_raw,
+        "total": total,
+        # detay/yardimci degerler
+        "ema50_val": ema50,
+        "macd_val": macd_line,
+        "adx_val": adx_val,
+        "rsi_val": rsi_val,
+        "pctb_val": pctb,
+    }
 
-    if last_vol >= avg_20:
-        return momentum, bbands, False, f"{detail} — onayli"
 
-    # Hacim yetersiz — tam puan alanlardan -1 dus
-    applied = False
-    if momentum.score == momentum.max_score:
-        momentum = IndicatorResult(
-            name=momentum.name, key=momentum.key,
-            score=momentum.score - 1, max_score=momentum.max_score,
-            value=momentum.value,
-            detail=momentum.detail + " (hacim teyitsiz: -1)",
-        )
-        applied = True
-    if bbands.score == bbands.max_score:
-        bbands = IndicatorResult(
-            name=bbands.name, key=bbands.key,
-            score=bbands.score - 1, max_score=bbands.max_score,
-            value=bbands.value,
-            detail=bbands.detail + " (hacim teyitsiz: -1)",
-        )
-        applied = True
+# --- son bardan IndicatorResult uretimi (gosterim) ---
 
-    suffix = " — sahte kirilim filtresi devrede" if applied else ""
-    return momentum, bbands, applied, f"{detail}{suffix}"
+def _round1(v: float | None) -> float | None:
+    return round(float(v), 1) if v is not None and not pd.isna(v) else None
+
+
+def _build_indicators(frame: Dict[str, pd.Series], has_index: bool) -> List[IndicatorResult]:
+    def last(key: str) -> float:
+        v = _safe_last(frame[key])
+        return 0.0 if v is None else v
+
+    trend_s = last("trend")
+    mom_s = last("momentum")
+    adx_s = last("adx")
+    rel_s = last("rel_strength")
+    rsi_s = last("rsi")
+    bb_s = last("bbands")
+
+    adx_v = _safe_last(frame["adx_val"])
+    rsi_v = _safe_last(frame["rsi_val"])
+    macd_v = _safe_last(frame["macd_val"])
+    pctb_v = _safe_last(frame["pctb_val"])
+    ema50_v = _safe_last(frame["ema50_val"])
+
+    def trend_detail() -> str:
+        if trend_s >= 2.5:
+            return "guclu yukselis trendi: EMA dizilimi ve egim pozitif"
+        if trend_s >= 1.5:
+            return "yukari egilimli: fiyat ana ortalamalarin uzerinde"
+        if trend_s >= 0.75:
+            return "karma trend: dizilim kismi"
+        return "trend zayif / bozuk"
+
+    def mom_detail() -> str:
+        if mom_s >= 1.5:
+            return "guclu momentum: MACD sinyal ve sifir uzerinde, histogram artiyor"
+        if mom_s >= 0.8:
+            return "momentum pozitif"
+        if mom_s >= 0.3:
+            return "momentum zayif/toparlaniyor"
+        return "momentum negatif"
+
+    def adx_detail() -> str:
+        av = f"ADX {adx_v:.0f}" if adx_v is not None else "ADX"
+        strong = adx_v is not None and adx_v >= 25
+        if strong and adx_s >= 1.0:
+            return f"{av} — guclu yukari yonlu trend"
+        if strong:
+            return f"{av} — guclu trend ama yon asagi/karma"
+        if adx_v is not None and adx_v >= 20:
+            return f"{av} — trend gucleniyor"
+        return f"{av} — yatay/zayif trend"
+
+    def rel_detail() -> str:
+        if not has_index:
+            return "endeks verisi yok — notr"
+        if rel_s >= 1.0:
+            return "endeksten belirgin guclu (lider)"
+        if rel_s >= 0.5:
+            return "endekse paralel/hafif guclu"
+        return "endeksten zayif"
+
+    def rsi_detail() -> str:
+        rv = f"RSI {rsi_v:.0f}" if rsi_v is not None else "RSI"
+        if rsi_v is None:
+            return rv
+        if rsi_v > 80:
+            return f"{rv} — sert asiri alim, geri cekilme riski"
+        if rsi_v > 70:
+            return f"{rv} — asiri alim bolgesi"
+        if rsi_v >= 55:
+            return f"{rv} — saglikli momentum bolgesi"
+        if rsi_v < 45:
+            return f"{rv} — zayif/asiri satim"
+        return f"{rv} — notr"
+
+    def bb_detail() -> str:
+        if pctb_v is not None and pctb_v > 1.0:
+            return "fiyat ust band disinda — asiri uzanma"
+        if bb_s >= 0.7:
+            return "bant icinde saglikli ust-yari konum"
+        return "bant ici notr seyir"
+
+    return [
+        IndicatorResult("Trend (EMA)", "trend", _round1(trend_s), WEIGHTS["trend"],
+                        value=_round1(ema50_v), detail=trend_detail()),
+        IndicatorResult("Momentum (MACD)", "momentum", _round1(mom_s), WEIGHTS["momentum"],
+                        value=_round1(macd_v), detail=mom_detail()),
+        IndicatorResult("Trend Gucu (ADX)", "adx", _round1(adx_s), WEIGHTS["adx"],
+                        value=_round1(adx_v), detail=adx_detail()),
+        IndicatorResult("Goreceli Guc", "rel_strength", _round1(rel_s), WEIGHTS["rel_strength"],
+                        value=None, detail=rel_detail()),
+        IndicatorResult("RSI", "rsi", _round1(rsi_s), WEIGHTS["rsi"],
+                        value=_round1(rsi_v), detail=rsi_detail()),
+        IndicatorResult("Bollinger", "bbands", _round1(bb_s), WEIGHTS["bbands"],
+                        value=_round1(pctb_v), detail=bb_detail()),
+    ]
 
 
 # --- destek / direnc seviyeleri ---
@@ -472,7 +471,6 @@ def _calc_sl_tp(price: float, supports: list, resistances: list) -> tuple:
 
     if sups_below:
         nearest_sup = max(sups_below)
-        # En yakin destegin %1.5 altini stop-loss olarak belirle
         stop_loss = round(nearest_sup * 0.985, 4)
     else:
         stop_loss = None
@@ -481,7 +479,7 @@ def _calc_sl_tp(price: float, supports: list, resistances: list) -> tuple:
     return stop_loss, take_profit
 
 
-# --- yardımcı ---
+# --- yardimci ---
 
 def _pct_change_back(close: pd.Series, n: int) -> float:
     if len(close) <= n:
@@ -492,17 +490,29 @@ def _pct_change_back(close: pd.Series, n: int) -> float:
     return (float(close.iloc[-1]) - prev) / prev * 100.0
 
 
+def _index_close_of(index_df) -> Optional[pd.Series]:
+    if index_df is None:
+        return None
+    if isinstance(index_df, pd.Series):
+        return index_df.astype(float)
+    if isinstance(index_df, pd.DataFrame) and "Close" in index_df.columns:
+        return index_df["Close"].astype(float)
+    return None
+
+
 # --- ana puanlama ---
 
-def score_symbol(symbol: str, df: pd.DataFrame) -> ScoreResult | None:
+def score_symbol(symbol: str, df: pd.DataFrame, index_df=None) -> ScoreResult | None:
     if df is None or df.empty or len(df) < 60:
         return None
 
     close = df["Close"].astype(float)
-    open_ = df["Open"].astype(float) if "Open" in df.columns else close
     high = df["High"].astype(float)
     low = df["Low"].astype(float)
     volume = df["Volume"].astype(float) if "Volume" in df.columns else pd.Series(dtype=float)
+
+    index_close = _index_close_of(index_df)
+    frame = compute_score_frame(df, index_close)
 
     last_close = float(close.iloc[-1])
     if len(close) >= 2 and not pd.isna(close.iloc[-2]) and close.iloc[-2] != 0:
@@ -510,35 +520,16 @@ def score_symbol(symbol: str, df: pd.DataFrame) -> ScoreResult | None:
     else:
         change_pct = 0.0
 
-    # 52 haftalik yuksek/dusuk
     high_series = high.tail(252).dropna()
     low_series = low.tail(252).dropna()
     high_52 = float(high_series.max()) if not high_series.empty else None
     low_52 = float(low_series.min()) if not low_series.empty else None
 
-    # 4 ana gosterge skoru
-    trend = _score_trend(close)
-    momentum = _score_momentum(close)
-    rsi_ind = _score_rsi(close)
-    bbands = _score_bbands(open_, close)
+    indicators = _build_indicators(frame, has_index=index_close is not None)
 
-    # Hacim onay filtresi (MACD/BB tam puanlarini -1 dusurebilir)
-    momentum, bbands, _, vol_detail = _apply_volume_filter(volume, momentum, bbands)
-    hacim = IndicatorResult(
-        name="Hacim Onayi", key="volume", score=0, max_score=0,
-        value=None, detail=vol_detail,
-    )
+    total_last = _safe_last(frame["total"])
+    score = int(round(max(0.0, min(10.0, total_last)))) if total_last is not None else 0
 
-    indicators = [trend, momentum, rsi_ind, bbands, hacim]
-    raw_total = sum(ind.score for ind in indicators)
-
-    # 52-hafta tepe yakini filtresi: tepenin %3 yakininda + RSI > 72 ise -1
-    # Sadece asiri alim + tepe kombinasyonunu cezalandirir; saglikli trend etkilenmez
-    near_peak_check = bool(high_52 and high_52 > 0 and last_close >= high_52 * 0.97)
-    if near_peak_check and rsi_ind.value is not None and rsi_ind.value > 72:
-        raw_total -= 1
-
-    score = max(0, min(10, raw_total))
     sparkline_raw = close.tail(30).dropna().tolist()
     week_change = _pct_change_back(close, 5)
     month_change = _pct_change_back(close, 21)
@@ -570,8 +561,8 @@ def score_symbol(symbol: str, df: pd.DataFrame) -> ScoreResult | None:
     )
 
 
-def score_symbol_detailed(symbol: str, df: pd.DataFrame) -> dict | None:
-    base = score_symbol(symbol, df)
+def score_symbol_detailed(symbol: str, df: pd.DataFrame, index_df=None) -> dict | None:
+    base = score_symbol(symbol, df, index_df=index_df)
     if base is None:
         return None
 
@@ -608,7 +599,6 @@ def score_symbol_detailed(symbol: str, df: pd.DataFrame) -> dict | None:
 
     avg_vol = float(volume.tail(20).mean()) if not volume.empty else 0.0
 
-    # Destek / direnc seviyeleri ve SL/TP
     sr = _find_sr_levels(high, low, close)
     stop_loss, take_profit = _calc_sl_tp(
         float(close.iloc[-1]),
@@ -624,7 +614,6 @@ def score_symbol_detailed(symbol: str, df: pd.DataFrame) -> dict | None:
         if risk > 0:
             risk_reward = round(reward / risk, 2)
 
-    # Formasyon tespiti
     patterns = detect_patterns(df)
 
     out = base.to_dict()

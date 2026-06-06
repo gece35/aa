@@ -1,16 +1,21 @@
 # Nebula Scanner
 
-BIST (162 hisse) ve ABD borsası hisselerini 4 teknik gösterge + hacim filtresiyle tarayan ve **0-10** arası puanlayan Flask + Vanilla JS uygulaması. Railway üzerinde canlıya alınmıştır.
+BIST (162 hisse) ve ABD borsası hisselerini 6 teknik gösterge ile tarayan ve **0-10** arası puanlayan Flask + Vanilla JS uygulaması. Puanlama **sürekli ve durum bazlıdır**; tek günlük "kesişim olayına" değil sürdürülen trendin gücüne dayanır ve gün-gün ani zıplamaları önlemek için hafifçe yumuşatılır. Railway üzerinde canlıya alınmıştır.
 
-## Puanlama Motoru (0-10)
+## Puanlama Motoru (0-10) — sürekli, durum bazlı
 
-| Gösterge | Max Puan | Sinyal Kriteri |
-|----------|----------|----------------|
-| **TREND** (EMA20/50/200) | 3 | Fiyat > EMA20 > EMA50 > EMA200 dizilimi |
-| **MOMENTUM** (MACD) | 3 | MACD sıfır çizgisi altından yukarı kesişi |
-| **RSI (14)** | 2 | RSI 30'u yukarı keser (aşırı satımdan çıkış); >70 ise -1 ceza |
-| **VOLATİLİTE** (Bollinger 20,2) | 2 | Alt banda dokunup yeşil kapanış |
-| **Hacim Onayı** (filtre) | -1 | MACD/BB tam puan + hacim ortalamanın altındaysa -1 |
+Tek vektörize motor (`backend/scoring.py` → `compute_score_frame`) hem canlı tarama hem backtest tarafından kullanılır (tek kaynak, sapma yok).
+
+| Gösterge | Max Puan | Ne Ölçer? |
+|----------|----------|-----------|
+| **TREND** (EMA20/50/200) | 3.0 | EMA dizilimi + ortalamaların eğimi (kademeli kısmi puan) |
+| **MOMENTUM** (MACD) | 2.0 | Sinyal/sıfır çizgisine göre konum + 3 barlık histogram eğilimi |
+| **TREND GÜCÜ** (ADX 14) | 1.5 | Trend gücü ve yönü; yatay/zayıf trendleri eler |
+| **GÖRECELİ GÜÇ** (endekse karşı) | 1.5 | Hissenin endekse (XU100 / ^GSPC) göre 20/60 günlük performansı |
+| **RSI (14)** | 1.0 | Sağlıklı momentum bölgesi (50-65) zirve; aşırı alımda kademeli azalır |
+| **BOLLINGER + HACİM** | 1.0 | %B konumu × hacim teyidi (sürekli çarpan) |
+
+Bileşik puan `EMA(span=2)` ile yumuşatılır ve 0-10'a clamp edilir.
 
 ## Mimari
 

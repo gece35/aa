@@ -114,6 +114,7 @@ MARKETS = {
         "flag": "TR",
         "currency": "TRY",
         "tickers": BIST_TICKERS,
+        "index": "XU100.IS",
     },
     "us": {
         "code": "us",
@@ -121,8 +122,12 @@ MARKETS = {
         "flag": "US",
         "currency": "USD",
         "tickers": US_TICKERS,
+        "index": "^GSPC",
     },
 }
+
+# Goreceli guc gostergesi icin market endeksleri
+MARKET_INDICES = {m: cfg["index"] for m, cfg in MARKETS.items()}
 
 
 def get_tickers(market: str):
@@ -130,6 +135,17 @@ def get_tickers(market: str):
     if market not in MARKETS:
         return []
     return list(MARKETS[market]["tickers"])
+
+
+def get_index_symbol(market: str) -> str | None:
+    """Market icin endeks sembolu (goreceli guc icin)."""
+    market = (market or "").lower()
+    return MARKETS.get(market, {}).get("index")
+
+
+def market_of_symbol(symbol: str) -> str:
+    """Sembolden marketi cikarir (.IS -> bist, aksi -> us)."""
+    return "bist" if str(symbol).upper().endswith(".IS") else "us"
 
 
 def strip_suffix(symbol: str) -> str:
