@@ -14,6 +14,7 @@ Strateji üç katmanlı:
    - Aşama 2 (%4 → %6 kâr): break-even taşıma (entry × 1.005)
    - Aşama 3 (%6+ kâr): Chandelier trailing = max(highest_high(10), prev_stop) − 3 × ATR
    - Kısmi TP: %8'de pozisyonun %50'si satılır
+   - Genişleme kısmi çıkış: ext_penalty < -2.0 AND kâr varsa → %50 sat (breakout muafiyetli)
    - Skor crash: tek günde -3 puan → kısmi (sadece partial alınmadıysa)
    - 3-bar düşük skor: 3 ardışık gün skor ≤ 4 → tam çıkış
    - Dead money: 20. günde getiri < +%1 ve skor ≤ 5 → tam çıkış
@@ -68,6 +69,9 @@ ATR_INITIAL_MULT       = 2.5
 ATR_TRAIL_MULT         = 3.0
 TRAIL_LOOKBACK_DAYS    = 10
 TRAILING_TRIGGER       = 0.06
+
+# Genişleme riski çıkışı
+EXT_PEAK_EXIT          = -2.0   # ext_penalty bu eşiğin altında ve kâr varsa kısmi çıkış
 
 # Kar realizasyonu
 PARTIAL_TP_PCT         = 0.08
@@ -159,18 +163,6 @@ def _regime_short_series(index_df: pd.DataFrame) -> pd.Series:
     return above_ema50 | not_falling
 
 
-def _score_series(df: pd.DataFrame, index_close: Optional[pd.Series] = None) -> Tuple[pd.Series, pd.Series]:
-    """Birlesik puanlama motorundan (toplam_int, trend_sub) serilerini doner.
-
-    Canli tarayici ile ayni `compute_score_frame` motorunu kullanir — backtest
-    ekranda gosterilen puandan farkli bir sistemi test etmez.
-    """
-    frame = compute_score_frame(df, index_close)
-    total = frame["total"].round().clip(0, 10).fillna(0).astype(int)
-    trend = frame["trend"].fillna(0)
-    return total, trend
-
-
 # ── Sembol başına sinyal verisi inşası ──────────────────────────────────────
 
 def _build_signals(symbol: str, df: pd.DataFrame, atr_period: int,
@@ -180,27 +172,30 @@ def _build_signals(symbol: str, df: pd.DataFrame, atr_period: int,
     if df is None or df.empty or len(df) < MIN_HISTORY:
         return None
     try:
-        total, trend = _score_series(df, index_close)
-        atr = _atr_series(df, atr_period)
-        high52w = df["Close"].rolling(252, min_periods=60).max()
-        vol_sma20 = df["Volume"].rolling(20).mean() if "Volume" in df.columns else pd.Series(0.0, index=df.index)
+        frame       = compute_score_frame(df, index_close)
+        total       = frame["total"].round().clip(0, 10).fillna(0).astype(int)
+        trend       = frame["trend"].fillna(0)
+        ext_penalty = frame["ext_penalty"].fillna(0)
+        atr         = _atr_series(df, atr_period)
+        high52w     = df["Close"].rolling(252, min_periods=60).max()
+        vol_sma20   = df["Volume"].rolling(20).mean() if "Volume" in df.columns else pd.Series(0.0, index=df.index)
     except Exception:
         logger.exception("Sinyal hesabı başarısız: %s", symbol)
         return None
 
-    out = {
-        "score":     total.reindex(master_timeline),
-        "trend_sub": trend.reindex(master_timeline),
-        "atr":       atr.reindex(master_timeline),
-        "high52w":   high52w.reindex(master_timeline),
-        "volume":    df["Volume"].reindex(master_timeline) if "Volume" in df.columns else pd.Series(0.0, index=master_timeline),
-        "vol_sma20": vol_sma20.reindex(master_timeline),
-        "open":      df["Open"].reindex(master_timeline),
-        "high":      df["High"].reindex(master_timeline),
-        "low":       df["Low"].reindex(master_timeline),
-        "close":     df["Close"].reindex(master_timeline),
+    return {
+        "score":       total.reindex(master_timeline),
+        "trend_sub":   trend.reindex(master_timeline),
+        "ext_penalty": ext_penalty.reindex(master_timeline),
+        "atr":         atr.reindex(master_timeline),
+        "high52w":     high52w.reindex(master_timeline),
+        "volume":      df["Volume"].reindex(master_timeline) if "Volume" in df.columns else pd.Series(0.0, index=master_timeline),
+        "vol_sma20":   vol_sma20.reindex(master_timeline),
+        "open":        df["Open"].reindex(master_timeline),
+        "high":        df["High"].reindex(master_timeline),
+        "low":         df["Low"].reindex(master_timeline),
+        "close":       df["Close"].reindex(master_timeline),
     }
-    return out
 
 
 # ── İşlem kaydı yardımcıları ─────────────────────────────────────────────────
@@ -323,6 +318,15 @@ def _simulate_portfolio(market: str,
                 tp_price = max(float(open_today), pos.entry_price * (1 + PARTIAL_TP_PCT))
                 cash += _close_position_partial(pos, tp_price, today, "kismi_tp", PARTIAL_TP_RATIO, trades)
                 # Pozisyon devam eder
+
+            # 1b-bis. Genişleme riski → kısmi çıkış (kâr varken, bir kez)
+            # Breakout ile uzanan hisseler ext_penalty > -0.6 olduğundan bu kural tetiklenmez
+            if not pos.partial_taken:
+                ext_t = sd["ext_penalty"].iloc[d_idx]
+                if (not pd.isna(ext_t) and float(ext_t) < EXT_PEAK_EXIT
+                        and float(close_today) > pos.entry_price):
+                    cash += _close_position_partial(pos, float(close_today), today, "ext_partial",
+                                                    PARTIAL_TP_RATIO, trades)
 
             # 1c. Skor crash → kısmi (sadece daha önce partial alınmadıysa)
             if (not pos.partial_taken and not pd.isna(score_today) and not pd.isna(score_prev)
