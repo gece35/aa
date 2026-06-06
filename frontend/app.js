@@ -666,6 +666,9 @@
         if (rsi && rsi.value != null && rsi.value > 70) warnings.push('dikkat: RSI aşırı alım bölgesinde');
         const bb = byKey['bbands'];
         if (bb && bb.value != null && bb.value > 1) warnings.push('dikkat: Bollinger üst bandı dışında');
+        const ext = byKey['extension'];
+        if (ext && ext.score != null && ext.score < -1.5) warnings.push('dikkat: fiyat 52-haftalık zirvede — geri çekilme riski yüksek');
+        else if (ext && ext.score != null && ext.score < -0.5) warnings.push('dikkat: fiyat uzamış / 52-haftalık zirveye yakın');
         if (r.volume_spike) positives.push('hacim ortalamanın üzerinde');
         if (r.near_peak) warnings.push('dikkat: zirveye yakın');
 

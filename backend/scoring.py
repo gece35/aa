@@ -226,29 +226,45 @@ def _rel_strength_series(close: pd.Series, index_close: Optional[pd.Series]) -> 
 
 
 def _rsi_score_series(close: pd.Series) -> tuple[pd.Series, pd.Series]:
-    """RSI (0-1, plateau): 50-65 zirve, asiri alimda hafif negatif. (skor, rsi) doner."""
+    """RSI (0-1, plateau): 55-65 zirve, asiri alimda sert negatif. (skor, rsi) doner.
+
+    Eski formul RSI 80+'da sadece +0.1 veriyordu; yeni formul -1.5'e kadar iner.
+    Bu 'tepede alim' sorununu RSI boyutunda cozer.
+    """
     rsi = _rsi(close, 14)
     r = rsi.to_numpy(dtype=float)
     val = np.select(
-        [r <= 50, r <= 65, r <= 80],
+        [r <= 35, r <= 55, r <= 65, r <= 72, r <= 78, r <= 85],
         [
-            np.clip((r - 35) / 15.0, 0.0, 1.0),       # 35->50 : 0->1
-            1.0,                                       # 50-65 plateau
-            1.0 - 0.8 * ((r - 65) / 15.0),             # 65->80 : 1.0->0.2
+            0.0,                                            # <=35 : asiri satim, bekleme
+            np.clip((r - 35) / 20.0, 0.0, 1.0),           # 35->55 : 0->1 ramp
+            1.0,                                           # 55-65 : plateau
+            1.0 - (0.7 / 7.0) * (r - 65),                 # 65->72 : 1.0->0.3
+            0.3 - (0.3 / 6.0) * (r - 72),                 # 72->78 : 0.3->0.0
+            0.0 - (1.0 / 7.0) * (r - 78),                 # 78->85 : 0.0->-1.0
         ],
-        default=np.maximum(-0.3, 0.2 - 0.5 * ((r - 80) / 10.0)),  # >80 : 0.2->-0.3
+        default=-1.0 - 0.5 * ((r - 85) / 10.0),           # >85   : -1.0->-1.5
     )
     val = np.where(np.isnan(r), np.nan, val)
     return pd.Series(val, index=close.index), rsi
 
 
 def _bbands_score_series(close: pd.Series, volume: pd.Series) -> tuple[pd.Series, pd.Series]:
-    """BOLLINGER + HACIM (0-1): %B konumu x hacim teyidi. (skor, %B) doner."""
+    """BOLLINGER + HACIM (0-1): %B konumu x hacim teyidi. (skor, %B) doner.
+
+    Sol taraf (pctb<=0.8) simetrik; sag taraf (pctb>0.8) cok daha hizli dusuyor:
+    ust banda cok yakin konumlar eskiye gore belirgin sekilde daha az puan aliyor.
+    """
     upper, mid, lower = _bbands(close)
     width = (upper - lower).replace(0, np.nan)
     pctb = (close - lower) / width
-    # 0.8 civarinda zirve yapan ucgen: orta-ust yari saglikli, asiri uzanma cezali
-    loc = (1.0 - (pctb - 0.8).abs() / 0.8).clip(0, 1)
+
+    pctb_v = pctb.values.astype(float)
+    # Sol: %B=0 -> 0, %B=0.8 -> 1.0
+    loc_left = (1.0 - np.clip(0.8 - pctb_v, 0, None) / 0.8)
+    # Sag: %B=0.8 -> 1.0, %B=1.1 -> 0.0  (0.3 birimde sifira iner, eskiden 0.8 birimdi)
+    loc_right = np.clip(1.0 - (pctb_v - 0.8) / 0.30, 0, 1)
+    loc = pd.Series(np.where(pctb_v > 0.8, loc_right, loc_left), index=close.index)
 
     if volume is not None and not volume.empty:
         vol_sma = volume.rolling(20).mean()
@@ -259,6 +275,55 @@ def _bbands_score_series(close: pd.Series, volume: pd.Series) -> tuple[pd.Series
 
     score = (loc * vol_factor).clip(0, WEIGHTS["bbands"])
     return score, pctb
+
+
+def _extension_series(
+    close: pd.Series,
+    high: pd.Series,
+    low: pd.Series,
+    volume: pd.Series,
+) -> tuple[pd.Series, pd.Series]:
+    """GENISLEME CEZASI (0 ile -3.0 arasi, sadece negatif): 52-hft konum + EMA20 sapma.
+
+    Breakout muafiyeti: hacim > SMA20*1.5 VE fiyat >= 52-hft yuksek*0.98 ise
+    ceza %70 indirimli uygulanir — gercek kirilim firsatini engelleme.
+    (skor_serisi, rp_serisi [0=dip,1=tepe]) doner.
+    """
+    # 52-haftalik aralik icindeki konum (0=dip, 1=tepe)
+    high52 = close.rolling(252, min_periods=60).max()
+    low52  = close.rolling(252, min_periods=60).min()
+    rng52  = (high52 - low52).replace(0, np.nan)
+    rp     = ((close - low52) / rng52).clip(0, 1).fillna(0.5)
+
+    rv = rp.values.astype(float)
+    range_penalty = np.select(
+        [rv <= 0.75, rv <= 0.85, rv <= 0.95],
+        [
+            0.0,
+            -(rv - 0.75) / 0.10 * 0.8,                           # 0.75-0.85: 0 -> -0.8
+            -0.8 - (rv - 0.85) / 0.10 * 0.7,                     # 0.85-0.95: -0.8 -> -1.5
+        ],
+        default=-1.5 - (rv - 0.95) / 0.05 * 1.0,                 # 0.95-1.00: -1.5 -> -2.5
+    )
+
+    # EMA20 sapma cezasi (fiyat EMA20'nin cok uzagina cikmissa)
+    ema20 = _ema(close, 20)
+    dev = ((close - ema20) / ema20.replace(0, np.nan)).fillna(0)
+    dv = dev.values.astype(float)
+    ema_penalty = -np.clip((dv - 0.07) / 0.08, 0.0, 0.5)
+
+    total_penalty = (range_penalty + ema_penalty).clip(-3.0, 0.0)
+
+    # Breakout muafiyeti: gercek kirilimda cezayi %70 azalt
+    if volume is not None and not volume.empty and len(volume) >= 20:
+        vol_sma = volume.rolling(20).mean()
+        is_breakout = (
+            (volume > vol_sma * 1.5) & (close >= high52 * 0.98)
+        ).fillna(False)
+        total_penalty = np.where(is_breakout.values, total_penalty * 0.30, total_penalty)
+
+    score = pd.Series(np.clip(total_penalty, -3.0, 0.0), index=close.index)
+    return score, rp
 
 
 def compute_score_frame(df: pd.DataFrame, index_close: Optional[pd.Series] = None) -> Dict[str, pd.Series]:
@@ -279,10 +344,12 @@ def compute_score_frame(df: pd.DataFrame, index_close: Optional[pd.Series] = Non
     rel = _rel_strength_series(close, index_close)
     rsi_score, rsi_val = _rsi_score_series(close)
     bb_score, pctb = _bbands_score_series(close, volume)
+    ext_penalty, rp = _extension_series(close, high, low, volume)
 
     total_raw = (
         trend.fillna(0) + momentum.fillna(0) + adx_score.fillna(0)
         + rel.fillna(REL_NEUTRAL) + rsi_score.fillna(0) + bb_score.fillna(0)
+        + ext_penalty.fillna(0)
     )
     total = total_raw.ewm(span=SMOOTH_SPAN, adjust=False).mean().clip(0, 10)
 
@@ -293,6 +360,7 @@ def compute_score_frame(df: pd.DataFrame, index_close: Optional[pd.Series] = Non
         "rel_strength": rel,
         "rsi": rsi_score,
         "bbands": bb_score,
+        "ext_penalty": ext_penalty,
         "total_raw": total_raw,
         "total": total,
         # detay/yardimci degerler
@@ -301,6 +369,7 @@ def compute_score_frame(df: pd.DataFrame, index_close: Optional[pd.Series] = Non
         "adx_val": adx_val,
         "rsi_val": rsi_val,
         "pctb_val": pctb,
+        "rp_val": rp,
     }
 
 
@@ -321,12 +390,14 @@ def _build_indicators(frame: Dict[str, pd.Series], has_index: bool) -> List[Indi
     rel_s = last("rel_strength")
     rsi_s = last("rsi")
     bb_s = last("bbands")
+    ext_s = last("ext_penalty")
 
     adx_v = _safe_last(frame["adx_val"])
     rsi_v = _safe_last(frame["rsi_val"])
     macd_v = _safe_last(frame["macd_val"])
     pctb_v = _safe_last(frame["pctb_val"])
     ema50_v = _safe_last(frame["ema50_val"])
+    rp_v = _safe_last(frame["rp_val"])
 
     def trend_detail() -> str:
         if trend_s >= 2.5:
@@ -384,10 +455,22 @@ def _build_indicators(frame: Dict[str, pd.Series], has_index: bool) -> List[Indi
         if pctb_v is not None and pctb_v > 1.0:
             return "fiyat ust band disinda — asiri uzanma"
         if bb_s >= 0.7:
-            return "bant icinde saglikli ust-yari konum"
+            return "bant icinde saglikli konum"
         return "bant ici notr seyir"
 
-    return [
+    def ext_detail() -> str:
+        if ext_s >= -0.2:
+            return "52-hft araliginda rahat konum, giris riski dusuk"
+        if ext_s >= -0.8:
+            rp_pct = round(rp_v * 100) if rp_v is not None else "?"
+            return f"52-hft araliginin %{rp_pct}'inde — hafif uzamis"
+        if ext_s >= -1.8:
+            rp_pct = round(rp_v * 100) if rp_v is not None else "?"
+            return f"52-hft araliginin %{rp_pct}'inde — uzamis, dikkat"
+        rp_pct = round(rp_v * 100) if rp_v is not None else "?"
+        return f"52-hft araliginin %{rp_pct}'inde — zirveye yapisik / geri cekilme riski yuksek"
+
+    inds = [
         IndicatorResult("Trend (EMA)", "trend", _round1(trend_s), WEIGHTS["trend"],
                         value=_round1(ema50_v), detail=trend_detail()),
         IndicatorResult("Momentum (MACD)", "momentum", _round1(mom_s), WEIGHTS["momentum"],
@@ -400,7 +483,10 @@ def _build_indicators(frame: Dict[str, pd.Series], has_index: bool) -> List[Indi
                         value=_round1(rsi_v), detail=rsi_detail()),
         IndicatorResult("Bollinger", "bbands", _round1(bb_s), WEIGHTS["bbands"],
                         value=_round1(pctb_v), detail=bb_detail()),
+        IndicatorResult("Genisleme Riski", "extension", _round1(ext_s), 0.0,
+                        value=_round1(rp_v), detail=ext_detail()),
     ]
+    return inds
 
 
 # --- destek / direnc seviyeleri ---
