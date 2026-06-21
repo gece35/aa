@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 # ── Strateji sabitleri ────────────────────────────────────────────────────────
 
 # Giriş
-MIN_SCORE              = 7
+MIN_SCORE              = 6
 ENTRY_CONSEC_DAYS      = 2
 MIN_TREND_SUBSCORE     = 1.2  # ema_cross max 2.0; 1.2 = %60 doluluk esigi
 REQUIRE_VOLUME_ENTRY   = True
@@ -445,7 +445,7 @@ def _simulate_portfolio(market: str,
 
             if (int(score) >= MIN_SCORE
                     and int(score_prev) >= MIN_SCORE
-                    and int(trend_sub) >= MIN_TREND_SUBSCORE
+                    and float(trend_sub) >= MIN_TREND_SUBSCORE
                     and (not REQUIRE_VOLUME_ENTRY or float(volume_t) >= float(vol_sma))
                     and float(close_t) >= float(high52w) * HIGH52W_FLOOR):
                 sector = get_sector(sym)

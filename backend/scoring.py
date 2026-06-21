@@ -42,8 +42,8 @@ WEIGHTS = {
     "rsi_cross":    1.5,
     "rel_strength": 1.5,
 }
-DECAY_HALF  = 7    # barlarda yarim omur: 7. barda tazelik 0.5'e iner
-SMOOTH_SPAN = 2    # bilesik puan yumusatma (tepki oncelikli: kucuk = cevik)
+DECAY_HALF  = 14   # barlarda yarim omur: 14. barda tazelik 0.5'e iner (~3 hafta)
+SMOOTH_SPAN = 3    # bilesik puan yumusatma: 3 barlik EWM (ham skorun birikimine zaman tanir)
 REL_NEUTRAL = WEIGHTS["rel_strength"] * 0.5  # endeks yoksa notr goreceli guc
 
 
@@ -243,10 +243,10 @@ def _rel_strength_series(close: pd.Series, index_close: Optional[pd.Series]) -> 
     idx = index_close.reindex(close.index).ffill()
     out20 = close.pct_change(20) - idx.pct_change(20)
     out60 = close.pct_change(60) - idx.pct_change(60)
-    s20 = _clip01(out20 / 0.10)   # +%10 fark = tam
-    s60 = _clip01(out60 / 0.15)   # +%15 fark = tam
+    # Merkez 0: endekse esit performans notr (0.5), +%10/%15 = tam (1.0), -%10/%15 = sifir
+    s20 = _clip01(out20 / 0.10 + 0.5)
+    s60 = _clip01(out60 / 0.15 + 0.5)
     score = (0.6 * s20 + 0.9 * s60).clip(0, WEIGHTS["rel_strength"])
-    # ilk barlarda NaN -> notr
     return score.fillna(REL_NEUTRAL)
 
 
