@@ -52,7 +52,7 @@ logger = logging.getLogger(__name__)
 # Giriş
 MIN_SCORE              = 7
 ENTRY_CONSEC_DAYS      = 2
-MIN_TREND_SUBSCORE     = 2
+MIN_TREND_SUBSCORE     = 1.2  # ema_cross max 2.0; 1.2 = %60 doluluk esigi
 REQUIRE_VOLUME_ENTRY   = True
 HIGH52W_FLOOR          = 0.85
 
@@ -82,7 +82,7 @@ BREAK_EVEN_OFFSET      = 0.005
 # Skor bazlı çıkış
 EXIT_SCORE_THRESHOLD   = 4
 EXIT_SCORE_CONSEC      = 3
-SCORE_CRASH_DROP       = 3
+SCORE_CRASH_DROP       = 4  # decay dogal dususe yol actigi icin esik yukseltildi
 
 # Zaman
 MAX_HOLD_DAYS          = 60
