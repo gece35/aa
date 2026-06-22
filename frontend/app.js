@@ -2008,28 +2008,105 @@
         const trendLines = [];
         let _trendPending = null;
         let _trendHintEl = null;
+        let _mousePos = null;   // anl\u0131k mouse konumu (oran, 0-1)
 
         function redrawTrendOverlay() {
             const w = overlayCanvas.width;
             const h = overlayCanvas.height;
             const ctx = overlayCanvas.getContext('2d');
             ctx.clearRect(0, 0, w, h);
+
+            // Tamamlanm\u0131\u015F \u00E7izgiler
             ctx.strokeStyle = 'rgba(251,191,36,0.9)';
             ctx.lineWidth = 2;
             ctx.lineCap = 'round';
+            ctx.setLineDash([]);
             trendLines.forEach(({ x1r, y1r, x2r, y2r }) => {
                 ctx.beginPath();
                 ctx.moveTo(x1r * w, y1r * h);
                 ctx.lineTo(x2r * w, y2r * h);
                 ctx.stroke();
+                // U\u00E7 noktalar
+                [{ xr: x1r, yr: y1r }, { xr: x2r, yr: y2r }].forEach(({ xr, yr }) => {
+                    ctx.beginPath();
+                    ctx.arc(xr * w, yr * h, 3.5, 0, Math.PI * 2);
+                    ctx.fillStyle = 'rgba(251,191,36,0.85)';
+                    ctx.fill();
+                });
             });
+
             if (_trendPending) {
-                ctx.fillStyle = 'rgba(251,191,36,0.9)';
+                const px = _trendPending.xr * w;
+                const py = _trendPending.yr * h;
+
+                // Mouse'a uzanan kesik \u00F6nizleme \u00E7izgisi
+                if (_mousePos) {
+                    const mx = _mousePos.xr * w;
+                    const my = _mousePos.yr * h;
+                    ctx.save();
+                    ctx.setLineDash([7, 5]);
+                    ctx.strokeStyle = 'rgba(251,191,36,0.55)';
+                    ctx.lineWidth = 1.5;
+                    ctx.lineCap = 'round';
+                    ctx.beginPath();
+                    ctx.moveTo(px, py);
+                    ctx.lineTo(mx, my);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+
+                // \u0130lk nokta: parlayan halka + dolu nokta
+                ctx.save();
                 ctx.beginPath();
-                ctx.arc(_trendPending.xr * w, _trendPending.yr * h, 5, 0, Math.PI * 2);
+                ctx.arc(px, py, 11, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(251,191,36,0.12)';
                 ctx.fill();
+                ctx.beginPath();
+                ctx.arc(px, py, 6, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(251,191,36,0.85)';
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+                ctx.lineWidth = 1.5;
+                ctx.setLineDash([]);
+                ctx.stroke();
+                ctx.restore();
+            }
+
+            // Cursor crosshair + hedef noktas\u0131
+            if (_mousePos) {
+                const mx = _mousePos.xr * w;
+                const my = _mousePos.yr * h;
+                ctx.save();
+                ctx.setLineDash([3, 4]);
+                ctx.strokeStyle = 'rgba(251,191,36,0.3)';
+                ctx.lineWidth = 1;
+                ctx.beginPath(); ctx.moveTo(mx, 0); ctx.lineTo(mx, h); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, my); ctx.lineTo(w, my); ctx.stroke();
+                ctx.setLineDash([]);
+                ctx.beginPath();
+                ctx.arc(mx, my, _trendPending ? 5 : 4, 0, Math.PI * 2);
+                ctx.fillStyle = _trendPending ? 'rgba(251,191,36,0.75)' : 'rgba(251,191,36,0.5)';
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                ctx.restore();
             }
         }
+
+        overlayCanvas.addEventListener('mousemove', e => {
+            const rect = overlayCanvas.getBoundingClientRect();
+            _mousePos = {
+                xr: (e.clientX - rect.left) / rect.width,
+                yr: (e.clientY - rect.top) / rect.height,
+            };
+            redrawTrendOverlay();
+        });
+
+        overlayCanvas.addEventListener('mouseleave', () => {
+            _mousePos = null;
+            redrawTrendOverlay();
+        });
 
         overlayCanvas.addEventListener('click', e => {
             const rect = overlayCanvas.getBoundingClientRect();
@@ -2070,11 +2147,13 @@
             trendBtn.addEventListener('click', () => {
                 trendMode = !trendMode;
                 _trendPending = null;
+                _mousePos = null;
                 trendBtn.style.color = trendMode ? 'var(--neon)' : '';
+                trendBtn.textContent = trendMode ? '\u2715 Trend Modu' : '\uD83D\uDCC8 Trend \u00C7iz';
                 _trendHintEl.textContent = trendMode ? '1. noktas\u0131n\u0131 se\u00E7' : '';
                 overlayCanvas.style.pointerEvents = trendMode ? 'auto' : 'none';
-                overlayCanvas.style.cursor = trendMode ? 'crosshair' : '';
-                if (!trendMode) redrawTrendOverlay();
+                overlayCanvas.style.cursor = trendMode ? 'none' : '';
+                redrawTrendOverlay();
             });
 
             undoBtn.addEventListener('click', () => {
