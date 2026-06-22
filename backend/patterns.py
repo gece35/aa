@@ -335,3 +335,80 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 90) -> List[Dict[str, Any]
                     })
 
     return patterns
+
+
+# ── otomatik trend çizgileri ─────────────────────────────────────────────────
+
+def detect_auto_trendlines(df: pd.DataFrame) -> dict:
+    """Kısa ve uzun vadeli otomatik destek/direnç trend çizgilerini tespit eder.
+
+    Her timeframe için pivot dip/tepelerden doğru üretir ve günümüze uzatır.
+
+    Döner:
+      {
+        "short": {"support": [{t,v},{t,v}] | None, "resistance": [...] | None},
+        "long":  {"support": [...] | None,          "resistance": [...] | None},
+      }
+    """
+    if df is None or len(df) < 30:
+        return {"short": {"support": None, "resistance": None},
+                "long":  {"support": None, "resistance": None}}
+
+    high_v  = df["High"].astype(float).values
+    low_v   = df["Low"].astype(float).values
+    n_total = len(df)
+
+    def date_at(abs_i: int) -> str:
+        try:
+            ts = df.index[abs_i]
+            return str(ts.date()) if hasattr(ts, "date") else str(ts)[:10]
+        except Exception:
+            return ""
+
+    def _pivots_separated(indices: list[int], min_gap: int) -> list[int]:
+        if not indices:
+            return []
+        out = [indices[0]]
+        for idx in indices[1:]:
+            if idx - out[-1] >= min_gap:
+                out.append(idx)
+        return out
+
+    def _fit_line(i1: int, p1: float, i2: int, p2: float) -> list[dict] | None:
+        if i2 <= i1:
+            return None
+        slope = (p2 - p1) / (i2 - i1)
+        i_end = n_total - 1
+        p_end = p2 + slope * (i_end - i2)
+        if p_end <= 0:
+            return None
+        return [
+            {"t": date_at(i1), "v": round(float(p1), 4)},
+            {"t": date_at(i_end), "v": round(float(p_end), 4)},
+        ]
+
+    result = {"short": {"support": None, "resistance": None},
+              "long":  {"support": None, "resistance": None}}
+
+    for label, lookback, window, min_gap in [
+        ("short", 60,  3, 8),
+        ("long",  200, 7, 20),
+    ]:
+        n_use  = min(lookback, n_total)
+        offset = n_total - n_use
+
+        peaks_rel,   _            = _find_pivots(high_v[-n_use:], window=window)
+        _,           troughs_rel  = _find_pivots(low_v[-n_use:],  window=window)
+
+        peaks_abs   = _pivots_separated([i + offset for i in peaks_rel],   min_gap)
+        troughs_abs = _pivots_separated([i + offset for i in troughs_rel], min_gap)
+
+        if len(troughs_abs) >= 2:
+            i1, i2 = troughs_abs[-2], troughs_abs[-1]
+            result[label]["support"] = _fit_line(i1, low_v[i1], i2, low_v[i2])
+
+        if len(peaks_abs) >= 2:
+            i1, i2 = peaks_abs[-2], peaks_abs[-1]
+            result[label]["resistance"] = _fit_line(i1, high_v[i1], i2, high_v[i2])
+
+    return result

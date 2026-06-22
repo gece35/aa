@@ -1909,6 +1909,10 @@
                 <span class="chart-legend-item"><span class="chart-legend-line" style="background:#34f5a8;border-top:2px dashed #34f5a8;height:0;"></span>TP</span>
                 <span class="chart-legend-item"><span class="chart-legend-line" style="background:rgba(52,245,168,.4);"></span>Destek</span>
                 <span class="chart-legend-item"><span class="chart-legend-line" style="background:rgba(255,83,112,.4);"></span>Direnç</span>
+                <span class="chart-legend-item"><span class="chart-legend-line" style="background:rgba(52,245,168,.75);height:2px;"></span>K.Vadeli Destek</span>
+                <span class="chart-legend-item"><span class="chart-legend-line" style="background:rgba(255,83,112,.75);height:2px;"></span>K.Vadeli Direnç</span>
+                <span class="chart-legend-item"><span class="chart-legend-line" style="background:rgba(52,245,168,.4);height:1px;border-top:1px dashed rgba(52,245,168,.4);"></span>U.Vadeli Destek</span>
+                <span class="chart-legend-item"><span class="chart-legend-line" style="background:rgba(255,83,112,.4);height:1px;border-top:1px dashed rgba(255,83,112,.4);"></span>U.Vadeli Direnç</span>
             </div>`;
 
         if (!d || !d.ohlcv || !d.ohlcv.length) {
@@ -1974,6 +1978,35 @@
             candleSeries.createPriceLine({ price: r, color: 'rgba(255,83,112,.45)', lineWidth: 1, lineStyle: 4, axisLabelVisible: false, title: '' })
         );
 
+        // ── Otomatik trend çizgileri ──────────────────────────────────────────
+        // Kısa vadeli: solid çizgi  |  Uzun vadeli: kesik çizgi
+        const autoTL = d.auto_trendlines || {};
+        const autoTLDefs = [
+            // [timeframe_key, role_key, renk, lineStyle (0=solid,1=dotted,2=dashed), lineWidth, etiket]
+            ["short", "support",    "rgba(52,245,168,0.75)",  0, 1.5, "K.Destek"],
+            ["short", "resistance", "rgba(255,83,112,0.75)",  0, 1.5, "K.Direnç"],
+            ["long",  "support",    "rgba(52,245,168,0.40)",  2, 1.5, "U.Destek"],
+            ["long",  "resistance", "rgba(255,83,112,0.40)",  2, 1.5, "U.Direnç"],
+        ];
+        autoTLDefs.forEach(([tf, role, color, lineStyle, lineWidth, title]) => {
+            const line = (autoTL[tf] || {})[role];
+            if (!line || line.length < 2 || !line[0].t || !line[1].t) return;
+            try {
+                const ls = chart.addLineSeries({
+                    color, lineWidth, lineStyle,
+                    priceLineVisible: false,
+                    lastValueVisible: true,
+                    crosshairMarkerVisible: false,
+                    title,
+                });
+                ls.setData([
+                    { time: line[0].t, value: line[0].v },
+                    { time: line[1].t, value: line[1].v },
+                ]);
+            } catch (_) {}
+        });
+
+        // ── Formasyon pattern çizgileri & marker'lar ──────────────────────────
         const patterns = d.patterns || [];
         const allMarkers = [];
         patterns.forEach(pat => {
