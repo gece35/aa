@@ -1,25 +1,24 @@
-"""Kesisim (crossover) bazli erken kirılım puanlama motoru — 0-10.
+"""Kesisim (crossover) bazli saf sinyal puanlama motoru — 0-10.
 
-Her bileşen iki katman kullanır:
-  - TAZELIK: Kesisim aninda 1.0, her barda uste-ustel azalir (decay_half=7 barda 0.5).
-  - KALICI:  Hala uygun durumda (MACD sinyal ustunde vs.) kucuk sabit bonus.
+Her bileşen: son CROSS_LOOKBACK bar içinde kesişim olduysa aktif,
+lineer sönme ile ağırlığının tamamına iner → sıfıra döner.
+"Henüz kesti" = tam puan; "3 hafta önce kesti" = çok az puan.
 
-Boylece "az once MACD kesti → yuksek puan", "3 hafta once kesti → dusuk puan"
-davranisi saglanir; uzun suredir yukselen, tepede olan hisseler one cikmaz.
+Sinyaller ve maksimum katkıları:
+  1. MACD / sinyal hattı kesişimi   (macd_signal)   — 2.0 puan
+  2. MACD / 0 hattı kesişimi        (macd_zero)     — 1.0 puan
+  3. RSI / RSI-EMA9 sinyal hattı    (rsi_signal)    — 1.5 puan
+  4. Fiyat / EMA30 kesişimi         (ema30)         — 0.5 puan
+  5. Fiyat / EMA50 kesişimi         (ema50)         — 0.75 puan
+  6. Fiyat / EMA200 kesişimi        (ema200)        — 0.75 puan
+  7. DI+ / DI- kesişimi             (di_cross)      — 1.5 puan
+  8. Hacim onayı (kesişimle eş)     (volume)        — 1.0 puan  [bonus]
+  Genişleme cezası                  (ext_penalty)   — 0 / −2.0
 
-Toplam 0-10, agirliklar (max):
+Ham maks ≈ 9.0; ceza ile gerçekçi üst sınır ≈ 9.0 → clip(0, 10).
 
-  1. MACD KESISIMI  (macd_cross)   0-3.0
-  2. EMA KIRILIMI   (ema_cross)    0-2.0
-  3. DI/ADX KESISIMI (di_cross)   0-1.5
-  4. RSI TOPARLANMA  (rsi_cross)   0-1.5
-  5. GORECELI GUC   (rel_strength) 0-1.5
-  6. GENISLEME CEZASI (ext_penalty) 0 / -3.0
-
-Bilesik puan EWM(span=2) ile yumusatilir ve 0-10'a clamp edilir.
-
-`compute_score_frame` tum df boyunca vektorize seriler uretir; hem canli tarayici
-(`score_symbol`) hem backtest ayni motoru tuketir — tek kaynak, sapma yok.
+`compute_score_frame` tüm df boyunca vektörize seriler üretir; hem canlı
+tarayıcı (`score_symbol`) hem backtest aynı motoru tüketir — tek kaynak.
 """
 
 from __future__ import annotations
@@ -33,18 +32,22 @@ import pandas as pd
 from backend.patterns import detect_patterns
 
 
-# --- ayarlanabilir agirliklar / esikler (backtest ile ince ayara acik) ---
+# ── ayarlanabilir parametreler ───────────────────────────────────────────────
+
+CROSS_LOOKBACK = 20   # bar — kesişimden bu bar sonra sinyal tamamen söner (lineer)
+SMOOTH_SPAN    = 2    # son puan yumuşatma (EWM span)
 
 WEIGHTS = {
-    "macd_cross":   3.0,
-    "ema_cross":    2.0,
-    "di_cross":     1.5,
-    "rsi_cross":    1.5,
-    "rel_strength": 1.5,
+    "macd_signal": 2.0,   # MACD çizgisi sinyal hattını yukarı kesti
+    "macd_zero":   1.0,   # MACD çizgisi 0 hattını yukarı kesti
+    "rsi_signal":  1.5,   # RSI çizgisi kendi EMA-9 sinyal hattını yukarı kesti
+    "ema30":       0.5,   # Fiyat EMA30'u yukarı kesti
+    "ema50":       0.75,  # Fiyat EMA50'yi yukarı kesti
+    "ema200":      0.75,  # Fiyat EMA200'ü yukarı kesti
+    "di_cross":    1.5,   # +DI çizgisi −DI'yı yukarı kesti
+    "volume":      1.0,   # Kesişim sırasında hacim spike'ı (bonus)
 }
-DECAY_HALF  = 14   # barlarda yarim omur: 14. barda tazelik 0.5'e iner (~3 hafta)
-SMOOTH_SPAN = 3    # bilesik puan yumusatma: 3 barlik EWM (ham skorun birikimine zaman tanir)
-REL_NEUTRAL = WEIGHTS["rel_strength"] * 0.5  # endeks yoksa notr goreceli guc
+EXT_PENALTY_MAX = -2.0   # Zirve konumu cezası üst sınırı
 
 
 @dataclass
@@ -53,7 +56,7 @@ class IndicatorResult:
     key: str
     score: float
     max_score: float
-    signal: bool = False  # Geriye uyum: score > 0 ise True
+    signal: bool = False
     value: float | None = None
     detail: str = ""
 
@@ -95,7 +98,7 @@ class ScoreResult:
         }
 
 
-# --- saf pandas indikator hesaplamalari ---
+# ── temel indikatör hesapları ─────────────────────────────────────────────────
 
 def _ema(series: pd.Series, span: int) -> pd.Series:
     return series.ewm(span=span, adjust=False).mean()
@@ -123,33 +126,24 @@ def _macd(close: pd.Series, fast=12, slow=26, signal=9):
     return macd_line, signal_line
 
 
-def _bbands(close: pd.Series, length=20, std_mult=2.0):
-    mid = _sma(close, length)
-    std = close.rolling(window=length).std()
-    upper = mid + std_mult * std
-    lower = mid - std_mult * std
-    return upper, mid, lower
-
-
 def _adx(high: pd.Series, low: pd.Series, close: pd.Series, length: int = 14):
-    """Wilder ADX + yonlu gostergeler (+DI / -DI)."""
-    up = high.diff()
+    up   = high.diff()
     down = -low.diff()
-    plus_dm = ((up > down) & (up > 0)).astype(float) * up.clip(lower=0)
+    plus_dm  = ((up > down) & (up > 0)).astype(float) * up.clip(lower=0)
     minus_dm = ((down > up) & (down > 0)).astype(float) * down.clip(lower=0)
 
     prev_close = close.shift(1)
     tr = pd.concat([
         high - low,
         (high - prev_close).abs(),
-        (low - prev_close).abs(),
+        (low  - prev_close).abs(),
     ], axis=1).max(axis=1)
 
     alpha = 1.0 / length
-    atr = tr.ewm(alpha=alpha, adjust=False, min_periods=length).mean()
-    plus_di = 100 * plus_dm.ewm(alpha=alpha, adjust=False, min_periods=length).mean() / atr.replace(0, np.nan)
+    atr      = tr.ewm(alpha=alpha, adjust=False, min_periods=length).mean()
+    plus_di  = 100 * plus_dm.ewm(alpha=alpha, adjust=False, min_periods=length).mean() / atr.replace(0, np.nan)
     minus_di = 100 * minus_dm.ewm(alpha=alpha, adjust=False, min_periods=length).mean() / atr.replace(0, np.nan)
-    dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, np.nan)
+    dx  = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, np.nan)
     adx = dx.ewm(alpha=alpha, adjust=False, min_periods=length).mean()
     return adx, plus_di, minus_di
 
@@ -163,107 +157,92 @@ def _safe_last(series: pd.Series):
     return float(val)
 
 
-def _clip01(s: pd.Series) -> pd.Series:
-    return s.clip(lower=0.0, upper=1.0)
-
+# ── kesişim yardımcıları ──────────────────────────────────────────────────────
 
 def _bars_since_cross(condition: pd.Series) -> pd.Series:
-    """Her barda son True'dan bu yana gecen bar sayisini dondurur (0=o gun).
-    Ilk kesisimden once NaN. Pandas groupby.cumcount ile tam vektorize."""
-    cum = condition.cumsum()
+    """Her barda son True'dan bu yana geçen bar sayısını döndürür (0=o gün).
+    İlk kesişimden önce NaN."""
+    cum  = condition.cumsum()
     bars = condition.groupby(cum).cumcount()
     return bars.where(cum > 0, other=np.nan)
 
 
-def _freshness(bars_since: pd.Series, decay_half: float = DECAY_HALF) -> pd.Series:
-    """Ustel azalma: kesisim gununde 1.0, decay_half barda 0.5. Kesisim oncesi 0."""
-    rate = np.log(2) / decay_half
-    f = np.exp(-rate * bars_since.fillna(9999))
+def _freshness(bars_since: pd.Series, lookback: float = CROSS_LOOKBACK) -> pd.Series:
+    """Lineer sönme: kesişim gününde 1.0, CROSS_LOOKBACK'te 0.0. Önce/sonra 0."""
+    f = (1.0 - bars_since.fillna(lookback + 1) / lookback).clip(0.0, 1.0)
     return pd.Series(np.where(bars_since.notna(), f, 0.0), index=bars_since.index)
 
 
-# --- kesisim bazli alt-puan serileri ---
+def _cross_up(a: pd.Series, b: pd.Series) -> pd.Series:
+    """a, b'yi yukarı kestiği barlar True."""
+    return (a > b) & (a.shift(1) <= b.shift(1))
 
-def _ema_cross_series(close: pd.Series) -> tuple[pd.Series, pd.Series]:
-    """EMA KIRILIMI (0-2): Fiyatin EMA20/50/200 ustunu yeni kesmesi. (skor, ema50) doner."""
-    ema20  = _ema(close, 20)
+
+# ── sinyal serileri ───────────────────────────────────────────────────────────
+
+def _macd_series(close: pd.Series) -> tuple[pd.Series, pd.Series, pd.Series]:
+    """MACD sinyal + sıfır kesişimleri.
+    Döner: (macd_signal_score, macd_zero_score, macd_line)"""
+    macd_line, signal_line = _macd(close)
+
+    fresh_signal = _freshness(_bars_since_cross(_cross_up(macd_line, signal_line)))
+    fresh_zero   = _freshness(_bars_since_cross(_cross_up(macd_line, pd.Series(0.0, index=close.index))))
+
+    return (
+        fresh_signal * WEIGHTS["macd_signal"],
+        fresh_zero   * WEIGHTS["macd_zero"],
+        macd_line,
+    )
+
+
+def _rsi_signal_series(close: pd.Series) -> tuple[pd.Series, pd.Series, pd.Series]:
+    """RSI çizgisinin kendi EMA-9 sinyal hattını yukarı kesmesi.
+    Döner: (rsi_signal_score, rsi, rsi_signal_line)"""
+    rsi        = _rsi(close, 14)
+    rsi_signal = _ema(rsi, 9)          # RSI sinyal hattı
+
+    fresh = _freshness(_bars_since_cross(_cross_up(rsi, rsi_signal)))
+    return fresh * WEIGHTS["rsi_signal"], rsi, rsi_signal
+
+
+def _ema_cross_series(close: pd.Series) -> tuple[pd.Series, pd.Series, pd.Series, pd.Series, pd.Series]:
+    """Fiyatın EMA30 / EMA50 / EMA200'ü yukarı kesmesi.
+    Döner: (ema30_score, ema50_score, ema200_score, ema50, ema200)"""
+    ema30  = _ema(close, 30)
     ema50  = _ema(close, 50)
     ema200 = _ema(close, 200)
 
-    cross20  = (close > ema20)  & (close.shift(1) <= ema20.shift(1))
-    cross50  = (close > ema50)  & (close.shift(1) <= ema50.shift(1))
-    cross200 = (close > ema200) & (close.shift(1) <= ema200.shift(1))
+    s30  = _freshness(_bars_since_cross(_cross_up(close, ema30)))  * WEIGHTS["ema30"]
+    s50  = _freshness(_bars_since_cross(_cross_up(close, ema50)))  * WEIGHTS["ema50"]
+    s200 = _freshness(_bars_since_cross(_cross_up(close, ema200))) * WEIGHTS["ema200"]
 
-    taze = (
-        _freshness(_bars_since_cross(cross20))  * 0.4
-        + _freshness(_bars_since_cross(cross50))  * 0.5
-        + _freshness(_bars_since_cross(cross200)) * 0.7
-    )
-    kalan = (
-        (close > ema50).astype(float) * 0.3
-        + _clip01(ema50.pct_change(10) / 0.05) * 0.2
-    )
-    score = (taze + kalan).clip(0, WEIGHTS["ema_cross"])
-    return score, ema50
-
-
-def _macd_cross_series(close: pd.Series) -> tuple[pd.Series, pd.Series]:
-    """MACD KESISIMI (0-3): Taze MACD/sinyal kesisimi + ivme + sifir cizgisi. (skor, macd_line) doner."""
-    macd_line, signal_line = _macd(close)
-    hist = macd_line - signal_line
-
-    cross_up = (macd_line > signal_line) & (macd_line.shift(1) <= signal_line.shift(1))
-    taze = _freshness(_bars_since_cross(cross_up)) * 2.5
-
-    kalan  = (macd_line > signal_line).astype(float) * 0.25
-    hist_slope3 = (hist - hist.shift(3)) / 3.0
-    ivme   = _clip01(hist_slope3 / (close.replace(0, np.nan) * 0.003)) * 0.2
-    sifir  = (macd_line > 0).astype(float) * 0.15
-
-    score = (taze + kalan + ivme + sifir).clip(0, WEIGHTS["macd_cross"])
-    return score, macd_line
+    return s30, s50, s200, ema50, ema200
 
 
 def _di_cross_series(high: pd.Series, low: pd.Series, close: pd.Series) -> tuple[pd.Series, pd.Series]:
-    """DI/ADX KESISIMI (0-1.5): +DI/-DI taze kesisimi + ADX guc teyidi. (skor, adx) doner."""
+    """+DI çizgisinin −DI'yı yukarı kesmesi.
+    Döner: (di_score, adx)"""
     adx, plus_di, minus_di = _adx(high, low, close)
-
-    cross_up = (plus_di > minus_di) & (plus_di.shift(1) <= minus_di.shift(1))
-    taze  = _freshness(_bars_since_cross(cross_up)) * 1.0
-    kalan = (plus_di > minus_di).astype(float) * _clip01((adx - 15) / 15.0) * 0.5
-
-    score = (taze + kalan).clip(0, WEIGHTS["di_cross"])
-    return score, adx
+    fresh = _freshness(_bars_since_cross(_cross_up(plus_di, minus_di)))
+    return fresh * WEIGHTS["di_cross"], adx
 
 
-def _rel_strength_series(close: pd.Series, index_close: Optional[pd.Series]) -> pd.Series:
-    """GORECELI GUC (0-1.5): hissenin endekse gore 20/60 gun performansi."""
-    if index_close is None or index_close.dropna().empty:
-        return pd.Series(REL_NEUTRAL, index=close.index)
-    idx = index_close.reindex(close.index).ffill()
-    out20 = close.pct_change(20) - idx.pct_change(20)
-    out60 = close.pct_change(60) - idx.pct_change(60)
-    # Merkez 0: endekse esit performans notr (0.5), +%10/%15 = tam (1.0), -%10/%15 = sifir
-    s20 = _clip01(out20 / 0.10 + 0.5)
-    s60 = _clip01(out60 / 0.15 + 0.5)
-    score = (0.6 * s20 + 0.9 * s60).clip(0, WEIGHTS["rel_strength"])
-    return score.fillna(REL_NEUTRAL)
+def _volume_confirm_series(
+    close: pd.Series,
+    volume: pd.Series,
+    any_cross_today: pd.Series,
+) -> pd.Series:
+    """Herhangi bir kesişimle aynı barda hacim spike'ı varsa bonus puan.
+    Spike tanımı: hacim > SMA20 × 1.5"""
+    if volume is None or volume.empty or len(volume) < 20:
+        return pd.Series(0.0, index=close.index)
 
-
-def _rsi_cross_series(close: pd.Series) -> tuple[pd.Series, pd.Series]:
-    """RSI TOPARLANMA (0-1.5): RSI'in 40 ve 50'yi asagi-yukari kesmesi. (skor, rsi) doner.
-    RSI > 70 iken kalici bonus sifir — asiri alimda odul yok."""
-    rsi = _rsi(close, 14)
-
-    cross40 = (rsi > 40) & (rsi.shift(1) <= 40)
-    cross50 = (rsi > 50) & (rsi.shift(1) <= 50)
-    taze = (
-        _freshness(_bars_since_cross(cross40)) * 0.4
-        + _freshness(_bars_since_cross(cross50)) * 0.6
-    )
-    in_zone = ((rsi >= 40) & (rsi <= 65)).astype(float) * 0.5
-    score = (taze + in_zone).clip(0, WEIGHTS["rsi_cross"])
-    return score, rsi
+    vol_sma = _sma(volume, 20)
+    spike   = (volume > vol_sma * 1.5).fillna(False)
+    # Kesişimden bu yana CROSS_LOOKBACK bar içinde spike olan barlar puan alır
+    cross_with_spike = any_cross_today & spike
+    fresh = _freshness(_bars_since_cross(cross_with_spike))
+    return fresh * WEIGHTS["volume"]
 
 
 def _extension_series(
@@ -272,13 +251,9 @@ def _extension_series(
     low: pd.Series,
     volume: pd.Series,
 ) -> tuple[pd.Series, pd.Series]:
-    """GENISLEME CEZASI (0 ile -3.0 arasi, sadece negatif): 52-hft konum + EMA20 sapma.
-
-    Breakout muafiyeti: hacim > SMA20*1.5 VE fiyat >= 52-hft yuksek*0.98 ise
-    ceza %70 indirimli uygulanir — gercek kirilim firsatini engelleme.
-    (skor_serisi, rp_serisi [0=dip,1=tepe]) doner.
-    """
-    # 52-haftalik aralik icindeki konum (0=dip, 1=tepe)
+    """Zirve konumu + EMA20 sapma cezası (0 ile −2.0 arası).
+    Breakout muafiyeti: gerçek kırılımda ceza %70 azalır.
+    Döner: (penalty_series, range_position_series)"""
     high52 = close.rolling(252, min_periods=60).max()
     low52  = close.rolling(252, min_periods=60).min()
     rng52  = (high52 - low52).replace(0, np.nan)
@@ -289,188 +264,223 @@ def _extension_series(
         [rv <= 0.75, rv <= 0.85, rv <= 0.95],
         [
             0.0,
-            -(rv - 0.75) / 0.10 * 0.8,                           # 0.75-0.85: 0 -> -0.8
-            -0.8 - (rv - 0.85) / 0.10 * 0.7,                     # 0.85-0.95: -0.8 -> -1.5
+            -(rv - 0.75) / 0.10 * 0.8,
+            -0.8 - (rv - 0.85) / 0.10 * 0.7,
         ],
-        default=-1.5 - (rv - 0.95) / 0.05 * 1.0,                 # 0.95-1.00: -1.5 -> -2.5
+        default=-1.5 - (rv - 0.95) / 0.05 * 1.0,
     )
 
-    # EMA20 sapma cezasi (fiyat EMA20'nin cok uzagina cikmissa)
     ema20 = _ema(close, 20)
-    dev = ((close - ema20) / ema20.replace(0, np.nan)).fillna(0)
-    dv = dev.values.astype(float)
+    dev   = ((close - ema20) / ema20.replace(0, np.nan)).fillna(0)
+    dv    = dev.values.astype(float)
     ema_penalty = -np.clip((dv - 0.07) / 0.08, 0.0, 0.5)
 
-    total_penalty = (range_penalty + ema_penalty).clip(-3.0, 0.0)
+    total = (range_penalty + ema_penalty).clip(EXT_PENALTY_MAX, 0.0)
 
-    # Breakout muafiyeti: gercek kirilimda cezayi %70 azalt
     if volume is not None and not volume.empty and len(volume) >= 20:
-        vol_sma = volume.rolling(20).mean()
+        vol_sma    = volume.rolling(20).mean()
         is_breakout = (
             (volume > vol_sma * 1.5) & (close >= high52 * 0.98)
         ).fillna(False)
-        total_penalty = np.where(is_breakout.values, total_penalty * 0.30, total_penalty)
+        total = np.where(is_breakout.values, total * 0.30, total)
 
-    score = pd.Series(np.clip(total_penalty, -3.0, 0.0), index=close.index)
+    score = pd.Series(np.clip(total, EXT_PENALTY_MAX, 0.0), index=close.index)
     return score, rp
 
 
-def compute_score_frame(df: pd.DataFrame, index_close: Optional[pd.Series] = None) -> Dict[str, pd.Series]:
-    """Tum df boyunca vektorize alt-puanlari, ham ve yumusatilmis toplami uretir.
+# ── ana çerçeve ───────────────────────────────────────────────────────────────
 
-    Doner: macd_cross/ema_cross/di_cross/rsi_cross/rel_strength/ext_penalty alt-puan serileri,
-    total_raw, total (yumusatilmis+clamp), ve detay icin yardimci deger serileri.
-    Geri uyumluluk icin eski anahtarlar (trend/momentum/adx/rsi/bbands) alias olarak eklenir.
-    Canli tarayici ve backtest ayni fonksiyonu kullanir.
+def compute_score_frame(df: pd.DataFrame, index_close: Optional[pd.Series] = None) -> Dict[str, pd.Series]:
+    """Tüm df boyunca vektörize alt-puanları, ham ve yumuşatılmış toplamı üretir.
+
+    Döner: tüm sinyal serileri + total_raw + total + yardımcı değer serileri.
+    Geriye uyumluluk için eski anahtarlar alias olarak eklenir.
     """
-    close = df["Close"].astype(float)
-    high = df["High"].astype(float)
-    low = df["Low"].astype(float)
+    close  = df["Close"].astype(float)
+    high   = df["High"].astype(float)
+    low    = df["Low"].astype(float)
     volume = df["Volume"].astype(float) if "Volume" in df.columns else pd.Series(dtype=float)
 
-    macd_score, macd_line = _macd_cross_series(close)
-    ema_score,  ema50     = _ema_cross_series(close)
-    di_score,   adx_val   = _di_cross_series(high, low, close)
-    rsi_score,  rsi_val   = _rsi_cross_series(close)
-    rel                   = _rel_strength_series(close, index_close)
-    ext_penalty, rp       = _extension_series(close, high, low, volume)
+    # ── sinyal serileri ──
+    macd_sig_score, macd_zero_score, macd_line = _macd_series(close)
+    rsi_sig_score, rsi_val, rsi_signal_val     = _rsi_signal_series(close)
+    ema30_score, ema50_score, ema200_score, ema50, ema200 = _ema_cross_series(close)
+    di_score, adx_val                          = _di_cross_series(high, low, close)
 
+    # Herhangi bir kesişimin bugün gerçekleştiği barlar (hacim onayı için)
+    _, signal_line = _macd(close)
+    rsi_tmp        = _rsi(close, 14)
+    ema30_tmp      = _ema(close, 30)
+    _, plus_di, minus_di = _adx(high, low, close)
+
+    any_cross_today = (
+        _cross_up(macd_line, signal_line)
+        | _cross_up(macd_line, pd.Series(0.0, index=close.index))
+        | _cross_up(rsi_tmp, _ema(rsi_tmp, 9))
+        | _cross_up(close, ema30_tmp)
+        | _cross_up(close, ema50)
+        | _cross_up(close, ema200)
+        | _cross_up(plus_di, minus_di)
+    ).fillna(False)
+
+    vol_score   = _volume_confirm_series(close, volume, any_cross_today)
+    ext_penalty, rp = _extension_series(close, high, low, volume)
+
+    # ── toplam ──
     total_raw = (
-        macd_score.fillna(0) + ema_score.fillna(0) + di_score.fillna(0)
-        + rsi_score.fillna(0) + rel.fillna(REL_NEUTRAL) + ext_penalty.fillna(0)
+        macd_sig_score.fillna(0)
+        + macd_zero_score.fillna(0)
+        + rsi_sig_score.fillna(0)
+        + ema30_score.fillna(0)
+        + ema50_score.fillna(0)
+        + ema200_score.fillna(0)
+        + di_score.fillna(0)
+        + vol_score.fillna(0)
+        + ext_penalty.fillna(0)
     )
     total = total_raw.ewm(span=SMOOTH_SPAN, adjust=False).mean().clip(0, 10)
 
-    zero_series = pd.Series(0.0, index=close.index)
+    zero = pd.Series(0.0, index=close.index)
 
     return {
-        # birincil bilesenler
-        "macd_cross":   macd_score,
-        "ema_cross":    ema_score,
+        # yeni sinyal bileşenleri
+        "macd_signal":  macd_sig_score,
+        "macd_zero":    macd_zero_score,
+        "rsi_signal":   rsi_sig_score,
+        "ema30":        ema30_score,
+        "ema50":        ema50_score,
+        "ema200":       ema200_score,
         "di_cross":     di_score,
-        "rsi_cross":    rsi_score,
-        "rel_strength": rel,
+        "volume":       vol_score,
         "ext_penalty":  ext_penalty,
-        # geri uyumluluk alias'lari (backtest + alerts icin)
-        "trend":    ema_score,
-        "momentum": macd_score,
-        "adx":      di_score,
-        "rsi":      rsi_score,
-        "bbands":   zero_series,
+        # geriye uyumluluk alias'ları (backtest + alerts)
+        "macd_cross":   macd_sig_score + macd_zero_score,
+        "ema_cross":    ema30_score + ema50_score + ema200_score,
+        "rsi_cross":    rsi_sig_score,
+        "rel_strength": zero,
+        "trend":        ema30_score + ema50_score + ema200_score,
+        "momentum":     macd_sig_score + macd_zero_score,
+        "adx":          di_score,
+        "rsi":          rsi_sig_score,
+        "bbands":       zero,
         # toplam
         "total_raw": total_raw,
         "total":     total,
-        # detay/yardimci degerler
-        "ema50_val": ema50,
-        "macd_val":  macd_line,
-        "adx_val":   adx_val,
-        "rsi_val":   rsi_val,
-        "pctb_val":  zero_series,
-        "rp_val":    rp,
+        # yardımcı değerler (detay görüntü için)
+        "ema50_val":      ema50,
+        "ema200_val":     ema200,
+        "macd_val":       macd_line,
+        "rsi_val":        rsi_val,
+        "rsi_signal_val": rsi_signal_val,
+        "adx_val":        adx_val,
+        "pctb_val":       zero,
+        "rp_val":         rp,
     }
 
 
-# --- son bardan IndicatorResult uretimi (gosterim) ---
+# ── IndicatorResult üretimi ───────────────────────────────────────────────────
 
 def _round1(v: float | None) -> float | None:
     return round(float(v), 1) if v is not None and not pd.isna(v) else None
 
 
-def _build_indicators(frame: Dict[str, pd.Series], has_index: bool) -> List[IndicatorResult]:
+def _build_indicators(frame: Dict[str, pd.Series]) -> List[IndicatorResult]:
     def last(key: str) -> float:
         v = _safe_last(frame[key])
         return 0.0 if v is None else v
 
-    macd_s = last("macd_cross")
-    ema_s  = last("ema_cross")
-    di_s   = last("di_cross")
-    rsi_s  = last("rsi_cross")
-    rel_s  = last("rel_strength")
-    ext_s  = last("ext_penalty")
+    ms  = last("macd_signal")
+    mz  = last("macd_zero")
+    rs  = last("rsi_signal")
+    e30 = last("ema30")
+    e50 = last("ema50")
+    e200= last("ema200")
+    di  = last("di_cross")
+    vol = last("volume")
+    ext = last("ext_penalty")
 
-    adx_v   = _safe_last(frame["adx_val"])
-    rsi_v   = _safe_last(frame["rsi_val"])
-    macd_v  = _safe_last(frame["macd_val"])
-    ema50_v = _safe_last(frame["ema50_val"])
-    rp_v    = _safe_last(frame["rp_val"])
+    macd_v   = _safe_last(frame["macd_val"])
+    rsi_v    = _safe_last(frame["rsi_val"])
+    rsig_v   = _safe_last(frame["rsi_signal_val"])
+    ema50_v  = _safe_last(frame["ema50_val"])
+    ema200_v = _safe_last(frame["ema200_val"])
+    adx_v    = _safe_last(frame["adx_val"])
+    rp_v     = _safe_last(frame["rp_val"])
 
-    def macd_detail() -> str:
-        if macd_s >= 2.0:
-            return "taze MACD kesisimi — erken yukselis sinyali"
-        if macd_s >= 1.0:
-            return "MACD sinyal ustunde, kesisim yaklasik 1-2 hafta once"
-        if macd_s >= 0.3:
-            return "MACD sinyal ustunde, kesisim eski"
-        return "MACD sinyalin altinda — momentum negatif"
+    def macd_sig_detail() -> str:
+        if ms >= 1.5:  return "MACD sinyal hattını taze kesti — güçlü alım sinyali"
+        if ms >= 0.8:  return "MACD sinyal üstünde, kesişim görece yeni"
+        if ms >= 0.2:  return "MACD sinyal üstünde, kesişim eskimeye başladı"
+        return "MACD sinyal hattının altında — momentum negatif"
 
-    def ema_detail() -> str:
-        if ema_s >= 1.4:
-            return "fiyat taze EMA kirilimiyla yukari gecti"
-        if ema_s >= 0.7:
-            return "fiyat EMA50 uzerinde, kiriltim gorece yeni"
-        if ema_s >= 0.3:
-            return "fiyat EMA50 uzerinde, eski gecis"
-        return "fiyat ana ortalamalarin altinda"
+    def macd_zero_detail() -> str:
+        if mz >= 0.8:  return "MACD 0 hattını taze kesti — trend pozitif teyit"
+        if mz >= 0.4:  return "MACD 0 üstünde, sıfır kesişimi görece yeni"
+        if mz >= 0.1:  return "MACD 0 üstünde, kesişim eskiyor"
+        mv = f"MACD {macd_v:.3f}" if macd_v is not None else "MACD"
+        return f"{mv} — 0 hattının altında, trend henüz doğrulanmadı"
+
+    def rsi_sig_detail() -> str:
+        rv = f"RSI {rsi_v:.0f}" if rsi_v is not None else "RSI"
+        sv = f"/ sinyal {rsig_v:.0f}" if rsig_v is not None else ""
+        if rs >= 1.2:  return f"{rv}{sv} — RSI sinyal hattını taze kesti"
+        if rs >= 0.6:  return f"{rv}{sv} — RSI sinyal üstünde, kesişim yeni"
+        if rs >= 0.1:  return f"{rv}{sv} — RSI sinyal üstünde, eskiyor"
+        return f"{rv}{sv} — RSI sinyal hattının altında"
+
+    def ema_detail(score: float, period: int, val: float | None) -> str:
+        vstr = f"≈{val:.2f}" if val is not None else ""
+        if score >= 0.7 * (WEIGHTS[f"ema{period}"]):
+            return f"Fiyat EMA{period}'ü ({vstr}) taze kesti — yukarı geçiş"
+        if score >= 0.2 * (WEIGHTS[f"ema{period}"]):
+            return f"Fiyat EMA{period} ({vstr}) üstünde, kesişim eskiyor"
+        return f"Fiyat EMA{period} ({vstr}) altında"
 
     def di_detail() -> str:
         av = f"ADX {adx_v:.0f}" if adx_v is not None else "ADX"
-        if di_s >= 1.0:
-            return f"taze +DI/-DI kesisimi — {av} ile yeni yonlu trend basliyor"
-        if di_s >= 0.4:
-            return f"+DI, -DI uzerinde — {av} trend gucleniyor"
-        return f"+DI zayif veya -DI uzerinde — {av} yatay/dusus trendi"
+        if di >= 1.2:  return f"+DI/−DI kesişimi taze — {av} ile yeni trend başlıyor"
+        if di >= 0.6:  return f"+DI, −DI üstünde — {av} trend güçleniyor"
+        if di >= 0.1:  return f"+DI, −DI üstünde — {av} kesişim eskiyor"
+        return f"+DI zayıf veya −DI üstünde — {av} yatay/düşüş trendi"
 
-    def rsi_detail() -> str:
-        rv = f"RSI {rsi_v:.0f}" if rsi_v is not None else "RSI"
-        if rsi_v is None:
-            return rv
-        if rsi_s >= 1.0:
-            return f"{rv} — taze toparlanma: 40/50 ustu yeni gecis"
-        if rsi_v > 70:
-            return f"{rv} — asiri alim, yeni kesisim odul almaz"
-        if rsi_v >= 40:
-            return f"{rv} — toparlanma bolgesinde"
-        return f"{rv} — zayif/asiri satim bolgesi"
-
-    def rel_detail() -> str:
-        if not has_index:
-            return "endeks verisi yok — notr"
-        if rel_s >= 1.0:
-            return "endeksten belirgin guclu (lider)"
-        if rel_s >= 0.5:
-            return "endekse paralel/hafif guclu"
-        return "endeksten zayif"
+    def vol_detail() -> str:
+        if vol >= 0.8:  return "Kesişimle birlikte güçlü hacim spike'ı — sinyal güvenilir"
+        if vol >= 0.3:  return "Kesişim döneminde hacim artışı"
+        return "Kesişim sırasında belirgin hacim onayı yok"
 
     def ext_detail() -> str:
-        if ext_s >= -0.2:
-            return "52-hft araliginda rahat konum, giris riski dusuk"
-        if ext_s >= -0.8:
-            rp_pct = round(rp_v * 100) if rp_v is not None else "?"
-            return f"52-hft araliginin %{rp_pct}'inde — hafif uzamis"
-        if ext_s >= -1.8:
-            rp_pct = round(rp_v * 100) if rp_v is not None else "?"
-            return f"52-hft araliginin %{rp_pct}'inde — uzamis, dikkat"
+        if ext >= -0.2:
+            return "52-hft aralığında rahat konum, giriş riski düşük"
         rp_pct = round(rp_v * 100) if rp_v is not None else "?"
-        return f"52-hft araliginin %{rp_pct}'inde — zirveye yapisik / geri cekilme riski yuksek"
+        if ext >= -0.8:
+            return f"52-hft aralığının %{rp_pct}'inde — hafif uzamış"
+        if ext >= -1.8:
+            return f"52-hft aralığının %{rp_pct}'inde — uzamış, dikkat"
+        return f"52-hft aralığının %{rp_pct}'inde — zirveye yapışık / geri çekilme riski yüksek"
 
-    inds = [
-        IndicatorResult("MACD Kesisimi", "momentum", _round1(macd_s), WEIGHTS["macd_cross"],
-                        value=_round1(macd_v), detail=macd_detail()),
-        IndicatorResult("EMA Kirilimi", "trend", _round1(ema_s), WEIGHTS["ema_cross"],
-                        value=_round1(ema50_v), detail=ema_detail()),
-        IndicatorResult("DI/ADX Yonu", "adx", _round1(di_s), WEIGHTS["di_cross"],
-                        value=_round1(adx_v), detail=di_detail()),
-        IndicatorResult("RSI Toparlanma", "rsi", _round1(rsi_s), WEIGHTS["rsi_cross"],
-                        value=_round1(rsi_v), detail=rsi_detail()),
-        IndicatorResult("Goreceli Guc", "rel_strength", _round1(rel_s), WEIGHTS["rel_strength"],
-                        value=None, detail=rel_detail()),
-        IndicatorResult("Genisleme Riski", "extension", _round1(ext_s), 0.0,
-                        value=_round1(rp_v), detail=ext_detail()),
+    return [
+        IndicatorResult("MACD × Sinyal",  "momentum", _round1(ms),  WEIGHTS["macd_signal"],
+                        value=_round1(macd_v),   detail=macd_sig_detail()),
+        IndicatorResult("MACD × Sıfır",   "macd_zero", _round1(mz), WEIGHTS["macd_zero"],
+                        value=_round1(macd_v),   detail=macd_zero_detail()),
+        IndicatorResult("RSI × Sinyal",   "rsi",      _round1(rs),  WEIGHTS["rsi_signal"],
+                        value=_round1(rsi_v),    detail=rsi_sig_detail()),
+        IndicatorResult("Fiyat × EMA30",  "ema30",    _round1(e30), WEIGHTS["ema30"],
+                        value=_round1(ema50_v),  detail=ema_detail(e30, 30, _safe_last(frame["ema50_val"]))),
+        IndicatorResult("Fiyat × EMA50",  "trend",    _round1(e50), WEIGHTS["ema50"],
+                        value=_round1(ema50_v),  detail=ema_detail(e50, 50, ema50_v)),
+        IndicatorResult("Fiyat × EMA200", "ema200",   _round1(e200),WEIGHTS["ema200"],
+                        value=_round1(ema200_v), detail=ema_detail(e200, 200, ema200_v)),
+        IndicatorResult("DI+ × DI−",      "adx",      _round1(di),  WEIGHTS["di_cross"],
+                        value=_round1(adx_v),    detail=di_detail()),
+        IndicatorResult("Hacim Onayı",    "volume",   _round1(vol), WEIGHTS["volume"],
+                        value=None,              detail=vol_detail()),
+        IndicatorResult("Genişleme Riski","extension",_round1(ext), 0.0,
+                        value=_round1(rp_v),     detail=ext_detail()),
     ]
-    return inds
 
 
-# --- destek / direnc seviyeleri ---
+# ── destek / direnç ───────────────────────────────────────────────────────────
 
 def _find_sr_levels(
     high: pd.Series,
@@ -480,7 +490,6 @@ def _find_sr_levels(
     window: int = 5,
     cluster_pct: float = 0.015,
 ) -> dict:
-    """Pivot noktalariyla destek ve direnc seviyelerini tespit eder."""
     if len(close) < window * 2 + 1:
         return {"supports": [], "resistances": []}
 
@@ -497,19 +506,13 @@ def _find_sr_levels(
         if pd.isna(lo) or pd.isna(hi):
             continue
 
-        neighbors_l = [
-            float(l.iloc[i + j])
-            for j in range(-window, window + 1)
-            if j != 0 and not pd.isna(l.iloc[i + j])
-        ]
+        neighbors_l = [float(l.iloc[i + j]) for j in range(-window, window + 1)
+                       if j != 0 and not pd.isna(l.iloc[i + j])]
         if neighbors_l and lo <= min(neighbors_l):
             raw_sups.append(lo)
 
-        neighbors_h = [
-            float(h.iloc[i + j])
-            for j in range(-window, window + 1)
-            if j != 0 and not pd.isna(h.iloc[i + j])
-        ]
+        neighbors_h = [float(h.iloc[i + j]) for j in range(-window, window + 1)
+                       if j != 0 and not pd.isna(h.iloc[i + j])]
         if neighbors_h and hi >= max(neighbors_h):
             raw_ress.append(hi)
 
@@ -525,28 +528,18 @@ def _find_sr_levels(
                 clusters.append([v])
         return [round(sum(c) / len(c), 4) for c in clusters]
 
-    return {
-        "supports": cluster(raw_sups),
-        "resistances": cluster(raw_ress),
-    }
+    return {"supports": cluster(raw_sups), "resistances": cluster(raw_ress)}
 
 
 def _calc_sl_tp(price: float, supports: list, resistances: list) -> tuple:
-    """Destek/direnc noktalarindan stop-loss ve kar-al hedefleri hesaplar."""
     sups_below = [s for s in supports if s < price * 0.995]
     ress_above = [r for r in resistances if r > price * 1.005]
-
-    if sups_below:
-        nearest_sup = max(sups_below)
-        stop_loss = round(nearest_sup * 0.985, 4)
-    else:
-        stop_loss = None
-
-    take_profit = round(min(ress_above), 4) if ress_above else None
+    stop_loss   = round(max(sups_below) * 0.985, 4) if sups_below else None
+    take_profit = round(min(ress_above), 4)          if ress_above else None
     return stop_loss, take_profit
 
 
-# --- yardimci ---
+# ── yardımcılar ───────────────────────────────────────────────────────────────
 
 def _pct_change_back(close: pd.Series, n: int) -> float:
     if len(close) <= n:
@@ -567,47 +560,41 @@ def _index_close_of(index_df) -> Optional[pd.Series]:
     return None
 
 
-# --- ana puanlama ---
+# ── ana puanlama ──────────────────────────────────────────────────────────────
 
 def score_symbol(symbol: str, df: pd.DataFrame, index_df=None) -> ScoreResult | None:
     if df is None or df.empty or len(df) < 60:
         return None
 
-    close = df["Close"].astype(float)
-    high = df["High"].astype(float)
-    low = df["Low"].astype(float)
+    close  = df["Close"].astype(float)
+    high   = df["High"].astype(float)
+    low    = df["Low"].astype(float)
     volume = df["Volume"].astype(float) if "Volume" in df.columns else pd.Series(dtype=float)
 
     index_close = _index_close_of(index_df)
     frame = compute_score_frame(df, index_close)
 
     last_close = float(close.iloc[-1])
+    change_pct = 0.0
     if len(close) >= 2 and not pd.isna(close.iloc[-2]) and close.iloc[-2] != 0:
         change_pct = (last_close - float(close.iloc[-2])) / float(close.iloc[-2]) * 100.0
-    else:
-        change_pct = 0.0
 
-    high_series = high.tail(252).dropna()
-    low_series = low.tail(252).dropna()
-    high_52 = float(high_series.max()) if not high_series.empty else None
-    low_52 = float(low_series.min()) if not low_series.empty else None
+    high_52 = float(high.tail(252).dropna().max()) if not high.tail(252).dropna().empty else None
+    low_52  = float(low.tail(252).dropna().min())  if not low.tail(252).dropna().empty else None
 
-    indicators = _build_indicators(frame, has_index=index_close is not None)
-
-    total_last = _safe_last(frame["total"])
-    score = int(round(max(0.0, min(10.0, total_last)))) if total_last is not None else 0
-
-    sparkline_raw = close.tail(30).dropna().tolist()
-    week_change = _pct_change_back(close, 5)
+    indicators   = _build_indicators(frame)
+    total_last   = _safe_last(frame["total"])
+    score        = int(round(max(0.0, min(10.0, total_last)))) if total_last is not None else 0
+    sparkline    = close.tail(30).dropna().tolist()
+    week_change  = _pct_change_back(close, 5)
     month_change = _pct_change_back(close, 21)
 
     last_volume = float(volume.iloc[-1]) if not volume.empty and not pd.isna(volume.iloc[-1]) else 0.0
-
     volume_spike = False
     if last_volume > 0 and len(volume) >= 12:
-        avg_vol_10d = float(volume.iloc[-11:-1].dropna().mean())
-        if avg_vol_10d > 0:
-            volume_spike = last_volume > 1.5 * avg_vol_10d
+        avg_vol = float(volume.iloc[-11:-1].dropna().mean())
+        if avg_vol > 0:
+            volume_spike = last_volume > 1.5 * avg_vol
 
     near_peak = bool(high_52 and high_52 > 0 and last_close >= high_52 * 0.97)
 
@@ -621,7 +608,7 @@ def score_symbol(symbol: str, df: pd.DataFrame, index_df=None) -> ScoreResult | 
         volume=last_volume,
         high_52w=high_52,
         low_52w=low_52,
-        sparkline=sparkline_raw,
+        sparkline=sparkline,
         indicators=indicators,
         volume_spike=volume_spike,
         near_peak=near_peak,
@@ -633,9 +620,9 @@ def score_symbol_detailed(symbol: str, df: pd.DataFrame, index_df=None) -> dict 
     if base is None:
         return None
 
-    close = df["Close"].astype(float)
-    high = df["High"].astype(float)
-    low = df["Low"].astype(float)
+    close  = df["Close"].astype(float)
+    high   = df["High"].astype(float)
+    low    = df["Low"].astype(float)
     volume = df["Volume"].astype(float) if "Volume" in df.columns else pd.Series(dtype=float)
 
     hist = [
@@ -647,17 +634,16 @@ def score_symbol_detailed(symbol: str, df: pd.DataFrame, index_df=None) -> dict 
         if not pd.isna(val)
     ]
 
-    # Tam OHLCV — grafik icin son 500 bar (~2 yil)
     ohlcv = []
     for idx, row in df.tail(500).iterrows():
         try:
             date_str = str(idx.date()) if hasattr(idx, "date") else str(idx)[:10]
-            vol_val = row.get("Volume", 0)
+            vol_val  = row.get("Volume", 0)
             ohlcv.append({
                 "t": date_str,
-                "o": round(float(row["Open"]), 4),
-                "h": round(float(row["High"]), 4),
-                "l": round(float(row["Low"]), 4),
+                "o": round(float(row["Open"]),  4),
+                "h": round(float(row["High"]),  4),
+                "l": round(float(row["Low"]),   4),
                 "c": round(float(row["Close"]), 4),
                 "v": int(float(vol_val)) if not pd.isna(vol_val) else 0,
             })
@@ -665,35 +651,29 @@ def score_symbol_detailed(symbol: str, df: pd.DataFrame, index_df=None) -> dict 
             continue
 
     avg_vol = float(volume.tail(20).mean()) if not volume.empty else 0.0
-
-    sr = _find_sr_levels(high, low, close)
-    stop_loss, take_profit = _calc_sl_tp(
-        float(close.iloc[-1]),
-        sr["supports"],
-        sr["resistances"],
-    )
+    sr      = _find_sr_levels(high, low, close)
+    stop_loss, take_profit = _calc_sl_tp(float(close.iloc[-1]), sr["supports"], sr["resistances"])
 
     risk_reward = None
     price = float(close.iloc[-1])
     if stop_loss and take_profit and price > stop_loss:
         risk = price - stop_loss
-        reward = take_profit - price
         if risk > 0:
-            risk_reward = round(reward / risk, 2)
+            risk_reward = round((take_profit - price) / risk, 2)
 
     patterns = detect_patterns(df)
 
     out = base.to_dict()
     out.update({
-        "history": hist,
-        "ohlcv": ohlcv,
-        "patterns": patterns,
+        "history":       hist,
+        "ohlcv":         ohlcv,
+        "patterns":      patterns,
         "avg_volume_20d": round(avg_vol, 2),
-        "data_points": int(len(close)),
-        "supports": sr["supports"],
-        "resistances": sr["resistances"],
-        "stop_loss": stop_loss,
-        "take_profit": take_profit,
-        "risk_reward": risk_reward,
+        "data_points":   int(len(close)),
+        "supports":      sr["supports"],
+        "resistances":   sr["resistances"],
+        "stop_loss":     stop_loss,
+        "take_profit":   take_profit,
+        "risk_reward":   risk_reward,
     })
     return out

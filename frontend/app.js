@@ -637,15 +637,16 @@
             .replace(/>/g, '&gt;');
     }
 
-    // Sürekli puanlamada her gösterge 0..max_score arası float verir; en güçlü
-    // katkıları (normalize oran ≥ 0.6) doğal bir cümleye çeviririz.
+    // Her sinyal kesişim bazlı; normalize oran ≥ 0.5 ise aktif sayılır.
     const REASON_PHRASE = {
-        trend: 'güçlü yükseliş trendi',
-        momentum: 'MACD momentumu pozitif',
-        adx: 'güçlü yönlü trend',
-        rel_strength: 'endekse göre güçlü (piyasa lideri)',
-        rsi: 'RSI sağlıklı bölgede',
-        bbands: 'Bollinger bandında sağlıklı konum',
+        momentum: 'MACD sinyal hattını kesti',
+        macd_zero: 'MACD sıfır hattını geçti',
+        rsi: 'RSI sinyal hattını kesti',
+        ema30: 'fiyat EMA30\'u kırdı',
+        trend: 'fiyat EMA50\'yi kırdı',
+        ema200: 'fiyat EMA200\'ü kırdı',
+        adx: 'DI+ yönlü kesişim yaptı',
+        volume: 'kesişimde hacim onayı var',
     };
 
     function buildScoreReason(r) {
@@ -653,10 +654,10 @@
         const byKey = {};
         r.indicators.forEach((ind) => { byKey[ind.key] = ind; });
 
-        // Pozitif katkılar: normalize orana göre güçlüden zayıfa sırala
+        // Aktif kesişim sinyalleri: normalize oran ≥ 0.5
         const positives = r.indicators
             .filter((ind) => ind.max_score > 0 && REASON_PHRASE[ind.key]
-                && (ind.score / ind.max_score) >= 0.6)
+                && (ind.score / ind.max_score) >= 0.5)
             .sort((a, b) => (b.score / b.max_score) - (a.score / a.max_score))
             .map((ind) => REASON_PHRASE[ind.key]);
 
@@ -664,16 +665,13 @@
         const warnings = [];
         const rsi = byKey['rsi'];
         if (rsi && rsi.value != null && rsi.value > 70) warnings.push('dikkat: RSI aşırı alım bölgesinde');
-        const bb = byKey['bbands'];
-        if (bb && bb.value != null && bb.value > 1) warnings.push('dikkat: Bollinger üst bandı dışında');
         const ext = byKey['extension'];
         if (ext && ext.score != null && ext.score < -1.5) warnings.push('dikkat: fiyat 52-haftalık zirvede — geri çekilme riski yüksek');
         else if (ext && ext.score != null && ext.score < -0.5) warnings.push('dikkat: fiyat uzamış / 52-haftalık zirveye yakın');
-        if (r.volume_spike) positives.push('hacim ortalamanın üzerinde');
         if (r.near_peak) warnings.push('dikkat: zirveye yakın');
 
         const parts = positives.concat(warnings);
-        if (!parts.length) return r.score === 0 ? 'Aktif teknik gösterge bulunmuyor.' : '';
+        if (!parts.length) return r.score === 0 ? 'Aktif kesişim sinyali bulunmuyor.' : '';
         const sentence = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
         const rest = parts.slice(1);
         if (!rest.length) return sentence + '.';
