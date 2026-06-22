@@ -1962,42 +1962,49 @@
         })));
 
         if (pos) {
-            candleSeries.createPriceLine({ price: pos.buyPrice, color: 'rgba(167,139,250,.9)', lineWidth: 1, lineStyle: 1, axisLabelVisible: true, title: 'Alış' });
-            if (d.stop_loss)   candleSeries.createPriceLine({ price: d.stop_loss,   color: '#ff5370', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'KD' });
-            if (d.take_profit) candleSeries.createPriceLine({ price: d.take_profit, color: '#34f5a8', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TP' });
+            candleSeries.createPriceLine({ price: pos.buyPrice, color: 'rgba(167,139,250,.9)', lineWidth: 1, lineStyle: 1, axisLabelVisible: false, title: '' });
+            if (d.stop_loss)   candleSeries.createPriceLine({ price: d.stop_loss,   color: '#ff5370', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '' });
+            if (d.take_profit) candleSeries.createPriceLine({ price: d.take_profit, color: '#34f5a8', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '' });
         } else {
-            if (d.stop_loss)   candleSeries.createPriceLine({ price: d.stop_loss,   color: 'rgba(255,83,112,.7)', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'KD' });
-            if (d.take_profit) candleSeries.createPriceLine({ price: d.take_profit, color: 'rgba(52,245,168,.7)', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TP' });
+            if (d.stop_loss)   candleSeries.createPriceLine({ price: d.stop_loss,   color: 'rgba(255,83,112,.7)', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '' });
+            if (d.take_profit) candleSeries.createPriceLine({ price: d.take_profit, color: 'rgba(52,245,168,.7)', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '' });
         }
 
         const curPrice = d.price;
-        (d.supports || []).filter(s => s < curPrice).slice(-3).forEach(s =>
-            candleSeries.createPriceLine({ price: s, color: 'rgba(52,245,168,.45)', lineWidth: 1, lineStyle: 4, axisLabelVisible: false, title: '' })
-        );
-        (d.resistances || []).filter(r => r > curPrice).slice(0, 3).forEach(r =>
-            candleSeries.createPriceLine({ price: r, color: 'rgba(255,83,112,.45)', lineWidth: 1, lineStyle: 4, axisLabelVisible: false, title: '' })
-        );
+        const supsBelow = (d.supports    || []).filter(s => s < curPrice);
+        const ressAbove = (d.resistances || []).filter(r => r > curPrice);
+        const critSup = supsBelow.length ? supsBelow[supsBelow.length - 1] : null; // en yakın destek
+        const critRes = ressAbove.length ? ressAbove[0] : null;                    // en yakın direnç
+
+        supsBelow.slice(-3).forEach(s => {
+            const isCrit = s === critSup;
+            candleSeries.createPriceLine({ price: s, color: 'rgba(52,245,168,.45)', lineWidth: isCrit ? 1.5 : 1, lineStyle: 4, axisLabelVisible: isCrit, title: isCrit ? 'Kritik Destek' : '' });
+        });
+        ressAbove.slice(0, 3).forEach(r => {
+            const isCrit = r === critRes;
+            candleSeries.createPriceLine({ price: r, color: 'rgba(255,83,112,.45)', lineWidth: isCrit ? 1.5 : 1, lineStyle: 4, axisLabelVisible: isCrit, title: isCrit ? 'Kritik Direnç' : '' });
+        });
 
         // ── Otomatik trend çizgileri ──────────────────────────────────────────
         // Kısa vadeli: solid çizgi  |  Uzun vadeli: kesik çizgi
         const autoTL = d.auto_trendlines || {};
         const autoTLDefs = [
-            // [timeframe_key, role_key, renk, lineStyle (0=solid,1=dotted,2=dashed), lineWidth, etiket]
-            ["short", "support",    "rgba(52,245,168,0.75)",  0, 1.5, "K.Destek"],
-            ["short", "resistance", "rgba(255,83,112,0.75)",  0, 1.5, "K.Direnç"],
-            ["long",  "support",    "rgba(52,245,168,0.40)",  2, 1.5, "U.Destek"],
-            ["long",  "resistance", "rgba(255,83,112,0.40)",  2, 1.5, "U.Direnç"],
+            // [timeframe_key, role_key, renk, lineStyle (0=solid,2=dashed), lineWidth]
+            ["short", "support",    "rgba(52,245,168,0.75)",  0, 1.5],
+            ["short", "resistance", "rgba(255,83,112,0.75)",  0, 1.5],
+            ["long",  "support",    "rgba(52,245,168,0.40)",  2, 1.5],
+            ["long",  "resistance", "rgba(255,83,112,0.40)",  2, 1.5],
         ];
-        autoTLDefs.forEach(([tf, role, color, lineStyle, lineWidth, title]) => {
+        autoTLDefs.forEach(([tf, role, color, lineStyle, lineWidth]) => {
             const line = (autoTL[tf] || {})[role];
             if (!line || line.length < 2 || !line[0].t || !line[1].t) return;
             try {
                 const ls = chart.addLineSeries({
                     color, lineWidth, lineStyle,
                     priceLineVisible: false,
-                    lastValueVisible: true,
+                    lastValueVisible: false,
                     crosshairMarkerVisible: false,
-                    title,
+                    title: '',
                 });
                 ls.setData([
                     { time: line[0].t, value: line[0].v },
