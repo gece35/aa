@@ -293,8 +293,8 @@
   <div class="hero">
     <div class="hero-tag">Kullanım Rehberi</div>
     <h1>Puan Sistemi Nasıl Çalışır?</h1>
-    <p class="meta">Her hisse 0-10 arasında bir trend sağlığı skoru alır. Bu sayfa skorun ne anlama geldiğini, nasıl yorumlanabileceğini ve geçmiş verilere dayalı backtest sinyal kriterlerini açıklar.</p>
-    <p>Nebula Scanner altı teknik göstergeyi birleştirerek bir hissenin mevcut trend gücünü ölçer. Skor, alım ya da satım kararı vermek için değil, <strong>"bu trendin sağlığı ne durumda?"</strong> sorusuna yanıt vermek için tasarlanmıştır. Bu sayfada anlatılan kriterler — <strong>TDO v2 (Trend Devamlılığı Onayı)</strong> — son 1 yıllık tarihsel veriyle backtest edilmiş çoklu filtre modelidir.</p>
+    <p class="meta">Her hisse 0-10 arasında bir kesişim sinyali skoru alır. Bu sayfa skorun ne anlama geldiğini, nasıl yorumlanabileceğini ve geçmiş verilere dayalı backtest sinyal kriterlerini açıklar.</p>
+    <p>Nebula Scanner, sekiz teknik sinyal kanalını <strong>kesişim (crossover) bazlı</strong> bir motorla birleştirir. Her sinyal, ilgili iki çizginin birbirini yukarı doğru kestiği anda tam puanla aktive olur; kesişimden sonra her geçen bar için puan lineer olarak solar ve 20 bar sonra sıfıra iner. Böylece skor "trendin sağlığı" değil <strong>"taze sinyal yoğunluğu"</strong>nu ölçer. Bu sayfada anlatılan kriterler — <strong>TDO v2 (Trend Devamlılığı Onayı)</strong> — son 1 yıllık tarihsel veriyle backtest edilmiş çoklu filtre modelidir.</p>
   </div>
 
   <div class="warning-box">
@@ -308,29 +308,29 @@
   <div class="band-grid">
     <div class="band-card band-green">
       <div class="band-score">7–10</div>
-      <div class="band-title">Yüksek Sinyal Bölgesi — TDO v2 Eşiği</div>
-      <p class="band-desc">Göstergelerin büyük çoğunluğu pozitif. Fiyat kısa ve orta vadeli ortalamaların üzerinde, momentum aktif. <strong>TDO v2 backtest modelinin koşullarını karşılayan bant</strong>: 2 gün üst üste skor 7+, trend alt-skoru en az 2 ve hacim ortalamanın üzerinde olmalıdır. Skor 8-10 arasında gösterge güvenilirliği en yüksek seviyesindedir.</p>
+      <div class="band-title">Yüksek Sinyal Yoğunluğu — TDO v2 Eşiği</div>
+      <p class="band-desc">Birden fazla sinyal kanalı yakın zamanda aktive olmuş ve henüz solmamış. MACD, RSI ve EMA kesişimleri taze. <strong>TDO v2 backtest modelinin koşullarını karşılayan bant</strong>: 2 gün üst üste skor 7+, EMA kanallarında aktif kesişim ve hacim onayı olmalıdır. Skor 8-10 arasında sinyal yoğunluğu en yüksek seviyededir.</p>
       <div class="band-profile">Backtest referans bölgesi — çoklu filtre kapısı</div>
     </div>
 
     <div class="band-card band-blue">
       <div class="band-score">5–6</div>
-      <div class="band-title">Trend Oluşumu</div>
-      <p class="band-desc">Göstergelerin önemli bir kısmı pozitife dönmüş, ancak sinyal eşiğine henüz ulaşılmamıştır. Bu seviye izleme niteliğindedir; skor 4'e veya altına 3 ardışık gün düşmesi TDO v2 backtest modelinde zayıflama göstergesi olarak değerlendirilir.</p>
+      <div class="band-title">Sinyal Sönüyor</div>
+      <p class="band-desc">Kesişim sinyalleri oluşmuş ancak aradan birkaç hafta geçmiş, puanlar lineer olarak solmuş. Yeni bir kesişim olmadıkça bu bant izleme niteliğindedir. 3 ardışık gün skor 4'e veya altına düşmesi TDO v2 backtest modelinde zayıflama göstergesi olarak değerlendirilir.</p>
       <div class="band-profile">İzleme — sinyal eşiğinin hemen altında</div>
     </div>
 
     <div class="band-card band-yellow">
       <div class="band-score">3–4</div>
-      <div class="band-title">Karışık Sinyaller</div>
-      <p class="band-desc">Göstergeler ne net pozitif ne de net negatif. Bu bantta 3 ardışık gün kalan hisseler TDO v2 backtest kurallarında tam sonlandırma koşulunu karşılar. Yön belirsiz; trendin tersine dönmesi olası.</p>
+      <div class="band-title">Sinyaller Büyük Ölçüde Söndü</div>
+      <p class="band-desc">Aktif kesişim yok ya da çok az; var olanlar 15-20 bar önce oluşmuş. Bu bantta 3 ardışık gün kalan hisseler TDO v2 backtest kurallarında tam sonlandırma koşulunu karşılar. Yön belirsiz; yeni kesişim olmaksızın tekrar 7+ bandına dönmesi güçtür.</p>
       <div class="band-profile">Zayıflama uyarı bandı — TDO v2 skor filtresi</div>
     </div>
 
     <div class="band-card band-gray">
       <div class="band-score">0–2</div>
-      <div class="band-title">Zayıf Trend</div>
-      <p class="band-desc">Göstergelerin çoğunluğu negatif. Fiyat ortalamaların altında, momentum aşağı yönlü ya da nötr. Bu aralıktaki hisseler genellikle aktif düşüş trendindedir ya da trend henüz oluşmamıştır.</p>
+      <div class="band-title">Aktif Sinyal Yok</div>
+      <p class="band-desc">Son 20 barda anlamlı bir yükseliş kesişimi gerçekleşmemiş ya da genişleme cezası puanları sıfıra yaklaştırmış. Bu aralıktaki hisseler genellikle aktif düşüş trendindedir, düz seyrediyor ya da henüz trend oluşturmamıştır.</p>
       <div class="band-profile">İzleme listesi — bekleme</div>
     </div>
   </div>
@@ -391,89 +391,122 @@
   </div>
 
   <!-- Indicators -->
-  <h2>Göstergeler</h2>
-  <p>Toplam 10 puan altı göstergeye dağıtılır. Her gösterge <strong>sürekli (kademeli)</strong> puan üretir:
-     bir koşul zayıfladığında puan uçurum gibi düşmek yerine yavaşça azalır. Puanlar tek günlük "kesişim olayına"
-     değil, <strong>sürdürülen trendin gücüne</strong> dayanır ve bileşik puan gün-gün ani zıplamaları önlemek için
-     hafifçe yumuşatılır. Böylece sağlıklı bir hisse bir günde 7'den 0'a düşmez.</p>
+  <h2>Sinyal Kanalları — Kesişim Motoru</h2>
+  <p>Toplam <strong>8 sinyal kanalı</strong> yaklaşık 9 puanlık ham skora katkı sağlar; zirve cezası en fazla −2.0 puan düşürebilir. Her kanal <strong>tam kesişim olayında</strong> aktive olur ve son <strong>20 bar</strong> içinde lineer olarak solar. "Az önce kesti" = tam puan; "3 hafta önce kesti" = neredeyse sıfır puan.</p>
 
   <div class="indicator-grid">
     <div class="ind-card">
       <div class="ind-header">
-        <span class="ind-badge max3">Maks +3</span>
-        <span class="ind-title">Trend / EMA</span>
+        <span class="ind-badge max3">Maks +2.0</span>
+        <span class="ind-title">MACD × Sinyal Hattı</span>
       </div>
-      <p>Fiyatın EMA20/50/200 dizilimini <em>ve</em> ortalamaların eğimini (yükseliş yönünü) ölçer.</p>
+      <p>En ağırlıklı sinyal. Momentum dönüşünün taze teyidi.</p>
       <ul>
-        <li>Fiyat EMA20 / EMA50 üzerinde, EMA50 &gt; EMA200 — her koşul kısmi puan ekler</li>
-        <li>EMA50 ve EMA200 eğimi pozitif (yükseliyor) — ek kademeli puan</li>
-        <li>Koşullar bozuldukça puan kademeli düşer, sıfırlanmaz</li>
+        <li>MACD çizgisi sinyal hattını yukarı kestiğinde aktive olur</li>
+        <li>Kesişimden her geçen bar için puan lineer solar</li>
+        <li>20 bar sonra puan sıfıra iner</li>
       </ul>
     </div>
 
     <div class="ind-card">
       <div class="ind-header">
-        <span class="ind-badge max2">Maks +2</span>
-        <span class="ind-title">Momentum / MACD</span>
+        <span class="ind-badge max3">Maks +1.5</span>
+        <span class="ind-title">RSI × RSI-EMA9</span>
       </div>
-      <p>MACD'nin sinyal ve sıfır çizgisine göre konumu ile histogramın <strong>3 barlık</strong> eğilimi (tek günlük gürültü değil).</p>
+      <p>RSI'nın kendi 9-periyotluk EMA sinyalini yukarı kesmesi — momentum ivmesinin teyidi.</p>
       <ul>
-        <li>MACD &gt; sinyal — histogram büyüklüğüyle ölçekli puan</li>
-        <li>3 barlık histogram eğimi pozitif — ek puan</li>
-        <li>MACD &gt; 0 (sıfır üzerinde, teyitli yükseliş) — ek puan</li>
+        <li>RSI'nın sinyal hattını yukarı kestiği anda tam puan</li>
+        <li>20 bar lineer sönme penceresi</li>
+        <li>MACD sinyalinden bağımsız; her ikisi aynı anda aktifse toplam etki +3.5</li>
       </ul>
     </div>
 
     <div class="ind-card">
       <div class="ind-header">
-        <span class="ind-badge max2">Maks +1.5</span>
-        <span class="ind-title">Trend Gücü / ADX</span>
+        <span class="ind-badge max3">Maks +1.5</span>
+        <span class="ind-title">DI+ × DI− Kesişimi</span>
       </div>
-      <p>Trendin gücünü ve yönünü ölçer; yatay/zayıf seyreden hisseleri eler.</p>
+      <p>ADX bileşeninden türetilen yön kesişimi — trendin yukarı döndüğünün yapısal teyidi.</p>
       <ul>
-        <li>ADX 15 → 30 arası kademeli artan puan</li>
-        <li>+DI &gt; -DI (yukarı yönlü) ise tam kredi</li>
-        <li>Yön aşağıysa puan büyük ölçüde kısılır</li>
+        <li>+DI çizgisi −DI'yı yukarı kestiğinde aktive olur</li>
+        <li>Trend yönünü ölçer, güç değil; ADX seviyesinden bağımsız</li>
+        <li>20 bar sönme penceresi</li>
       </ul>
     </div>
 
     <div class="ind-card">
       <div class="ind-header">
-        <span class="ind-badge max2">Maks +1.5</span>
-        <span class="ind-title">Göreceli Güç</span>
+        <span class="ind-badge max2">Maks +1.0</span>
+        <span class="ind-title">MACD × Sıfır Hattı</span>
       </div>
-      <p>Hissenin endekse (BIST100 / S&amp;P 500) göre 20 ve 60 günlük performansı — piyasa <strong>liderlerini</strong> ayırt eder.</p>
+      <p>MACD'nin negatiften pozitife geçişi — kısa vadeli momentumun uzun vadeli momentumu geçtiği an.</p>
       <ul>
-        <li>Endeksten ne kadar güçlü, o kadar yüksek puan</li>
-        <li>60 günlük üstünlüğe daha fazla ağırlık verilir</li>
-        <li>Endeksten zayıf hisseler düşük puan alır</li>
+        <li>MACD çizgisi 0 hattını yukarı kestiğinde aktive olur</li>
+        <li>Sinyal hattı kesişiminden farklı ve geç gelen onay sinyali</li>
+        <li>İkisi birlikte aktifse toplam MACD katkısı +3.0</li>
       </ul>
     </div>
 
     <div class="ind-card">
       <div class="ind-header">
-        <span class="ind-badge max2">Maks +1</span>
-        <span class="ind-title">RSI</span>
+        <span class="ind-badge max2">Maks +1.0</span>
+        <span class="ind-title">Hacim Onayı (Bonus)</span>
       </div>
-      <p>Momentumun sağlığını ölçer; sert eşikler yerine yumuşak bir eğri kullanır.</p>
+      <p>Herhangi bir kesişim sırasında hacimin ortalamanın üzerinde olup olmadığını ölçer.</p>
       <ul>
-        <li>50-65 bandı (sağlıklı momentum) — zirve puan</li>
-        <li>70 üzeri (aşırı alım) — puan kademeli azalır</li>
-        <li>80 üzeri — hafif negatif (geri çekilme riski)</li>
+        <li>Kesişim gününde hacim spike'ı varsa +1.0 bonus aktive olur</li>
+        <li>Sönme penceresi kesişimin kendi sönmesiyle eşleşir</li>
+        <li>Düşük hacimli sahte kırılımları etkili biçimde filtreler</li>
       </ul>
     </div>
 
     <div class="ind-card">
       <div class="ind-header">
-        <span class="ind-badge max2">Maks +1</span>
-        <span class="ind-title">Bollinger + Hacim</span>
+        <span class="ind-badge max2">Maks +0.75</span>
+        <span class="ind-title">Fiyat × EMA50</span>
       </div>
-      <p>Fiyatın bant içindeki konumunu ölçer, hacim teyidiyle ölçeklenir.</p>
+      <p>Orta vadeli ortalamanın üzerine çıkış. EMA200 ile birlikte yapısal destek teyidi sağlar.</p>
       <ul>
-        <li>Bandın orta-üst yarısı (sağlıklı) — yüksek puan</li>
-        <li>Üst bandın dışı (aşırı uzanma) — puan azalır</li>
-        <li>Hacim ortalamanın altındaysa puan kademeli kısılır (sahte kırılım filtresi)</li>
+        <li>Fiyat EMA50'yi yukarı kestiğinde aktive olur</li>
+        <li>Orta vadeli trendde yapısal dönüşün erken işareti</li>
+        <li>20 bar lineer sönme</li>
       </ul>
+    </div>
+
+    <div class="ind-card">
+      <div class="ind-header">
+        <span class="ind-badge max2">Maks +0.75</span>
+        <span class="ind-title">Fiyat × EMA200</span>
+      </div>
+      <p>Uzun vadeli ortalamanın üzerine çıkış. Güçlü yapısal sinyal; nadir ateşlenir ama güvenilirliği yüksektir.</p>
+      <ul>
+        <li>Fiyat EMA200'ü yukarı kestiğinde aktive olur</li>
+        <li>Uzun vadeli trend değişiminin teyidi</li>
+        <li>EMA50 kesişimiyle birlikte +1.5 puan ekler</li>
+      </ul>
+    </div>
+
+    <div class="ind-card">
+      <div class="ind-header">
+        <span class="ind-badge max2">Maks +0.5</span>
+        <span class="ind-title">Fiyat × EMA30</span>
+      </div>
+      <p>Kısa vadeli ortalama üzerinde kalış — kısa vadeli geri dönüşlerin erken habercisi.</p>
+      <ul>
+        <li>Fiyat EMA30'u yukarı kestiğinde aktive olur</li>
+        <li>En hızlı solan sinyal; diğer kanallarla teyit olmadan düşük güvenilirlik</li>
+        <li>20 bar sönme penceresi</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="checklist-box" style="margin-bottom: 40px;">
+    <div class="check-item">
+      <span class="check-icon check-gray" style="font-size:11px;">−2</span>
+      <div>
+        <strong>Genişleme Cezası — Zirve Konumu</strong>
+        <p>Fiyat 52-haftalık zirvesine çok yaklaştığında ve aşırı alım koşulları oluştuğunda sistem en fazla −2.0 puan ceza uygular. Bu mekanizma tepede alımı önler; yeni zirvelere yakın olmak tek başına olumlu değil, cezalandırıcıdır.</p>
+      </div>
     </div>
   </div>
 
@@ -492,8 +525,8 @@
     <div class="check-item">
       <span class="check-icon check-blue">2</span>
       <div>
-        <strong>Trend Alt-Skoru ≥ 2</strong>
-        <p>Toplam skor 7 olsa bile, sadece Bollinger ve RSI'dan toplanmışsa (trend bileşeni 0) sinyal koşulu <em>karşılanmaz</em>. Fiyat EMA50 ve EMA200 üzerinde olmalı. Bu filtre "yapısal trendi olmayan ama göstergelerden puan toplamış" sahte adayları eler.</p>
+        <strong>EMA Kanallarında Aktif Kesişim</strong>
+        <p>Toplam skor 7 olsa bile yalnızca MACD ve RSI kanallarından geliyorsa (EMA kesişim kanalları sıfırda) sinyal koşulu <em>karşılanmaz</em>. Fiyat/EMA50 veya Fiyat/EMA200 kesişim kanallarından en az birinin aktif olması beklenir. Bu filtre "yapısal hareket olmaksızın göstergeden puan toplamış" sahte adayları eler.</p>
       </div>
     </div>
     <div class="check-item">
@@ -623,6 +656,95 @@
     <strong>Hatırlatma:</strong> Backtest geçmiş performansı ölçer, gelecek getirileri garanti etmez. Bu kriterler yatırım tavsiyesi değil; sistemin tarihsel olarak ne zaman daha iyi çalıştığının bir özetidir.
   </div>
 
+  <!-- Pattern detection -->
+  <h2>Formasyon Tespiti — Grafik Analizi</h2>
+  <p>Herhangi bir hissenin <strong>Grafik</strong> butonuna tıklayarak son 120 barda otomatik olarak tespit edilen klasik grafik formasyonlarını görebilirsiniz. Her formasyon için <strong>güven skoru</strong> (Yüksek / Orta / Düşük) ve yön etiketleri sunulur.</p>
+
+  <div class="indicator-grid">
+    <div class="ind-card">
+      <div class="ind-header">
+        <span class="ind-badge max3" style="background:#0a2218;color:#4ade80;border-color:#22c55e;">Yükseliş</span>
+        <span class="ind-title">Boğa Formasyonları</span>
+      </div>
+      <p>Devam ya da dönüş sinyali olarak değerlendirilen yükseliş yönlü formasyonlar:</p>
+      <ul>
+        <li><strong>İkili Dip</strong> — iki eşit dip, kırılım sonrası dönüş sinyali</li>
+        <li><strong>Ters Omuz-Baş-Omuz</strong> — ters H&S, güçlü dönüş formasyonu</li>
+        <li><strong>Yükselen Üçgen</strong> — yatay direnç + yükselen dip, kırılım beklentisi</li>
+        <li><strong>Düşen Kama</strong> — düşüşte daralan kama, yükseliş kırılımı öncesi sıkışma</li>
+        <li><strong>Boğa Bayrağı</strong> — güçlü yükselişin ardından dar konsolidasyon</li>
+      </ul>
+    </div>
+
+    <div class="ind-card">
+      <div class="ind-header">
+        <span class="ind-badge max2" style="background:#2a0a0a;color:#f87171;border-color:#ef4444;">Düşüş</span>
+        <span class="ind-title">Ayı Formasyonları</span>
+      </div>
+      <p>Tersine dönüş ya da devam sinyali olarak değerlendirilen düşüş yönlü formasyonlar:</p>
+      <ul>
+        <li><strong>İkili Tepe</strong> — iki eşit tepe, kırılım sonrası dönüş sinyali</li>
+        <li><strong>Omuz-Baş-Omuz</strong> — klasik H&S, en güvenilir tersine dönüş formasyonu</li>
+        <li><strong>Düşen Üçgen</strong> — yatay destek + düşen tepe, kırılım beklentisi</li>
+        <li><strong>Yükselen Kama</strong> — yükselişte daralan kama, düşüş kırılımı öncesi sıkışma</li>
+        <li><strong>Ayı Bayrağı</strong> — güçlü düşüşün ardından dar konsolidasyon</li>
+      </ul>
+    </div>
+
+    <div class="ind-card">
+      <div class="ind-header">
+        <span class="ind-badge max2">Nötr</span>
+        <span class="ind-title">Simetrik Üçgen</span>
+      </div>
+      <p>Yön belirsiz sıkışma formasyonu. Kırılım yönü belirleyicidir.</p>
+      <ul>
+        <li>Hem yükseliş hem düşüş kırılımı mümkündür</li>
+        <li>Kırılım gününde hacim onayı kritik önem taşır</li>
+        <li>Diğer sinyallerle birlikte değerlendirilmesi önerilir</li>
+      </ul>
+    </div>
+
+    <div class="ind-card">
+      <div class="ind-header">
+        <span class="ind-badge max2">Güven Skoru</span>
+        <span class="ind-title">Formasyon Güvenilirliği</span>
+      </div>
+      <p>Her formasyon için ayrı bir güven skoru hesaplanır:</p>
+      <ul>
+        <li><strong>Yüksek</strong> — pivot simetrisi ve hacim onayı güçlü</li>
+        <li><strong>Orta</strong> — koşulların bir kısmı karşılanmış</li>
+        <li><strong>Düşük</strong> — formasyon henüz oluşmakta veya belirsiz</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>Otomatik Trend Çizgileri</h2>
+  <p>Grafik ekranında her hisse için sistem otomatik olarak iki zaman ufkunda destek ve direnç trend çizgileri hesaplar ve çizer:</p>
+
+  <div class="checklist-box" style="margin-bottom: 40px;">
+    <div class="check-item">
+      <span class="check-icon check-green">K</span>
+      <div>
+        <strong>Kısa Vadeli Çizgiler — Son 60 Bar</strong>
+        <p>Pivot penceresi 3 bar; en az 8 bar aralıklı pivotlar kullanılır. Yakın vadeli destek ve direnç dinamiklerini yansıtır; günlük trader'lar için referans noktası sağlar.</p>
+      </div>
+    </div>
+    <div class="check-item">
+      <span class="check-icon check-blue">U</span>
+      <div>
+        <strong>Uzun Vadeli Çizgiler — Son 200 Bar</strong>
+        <p>Pivot penceresi 7 bar; en az 20 bar aralıklı majör pivotlar kullanılır. Yapısal destek ve direnç seviyelerini gösterir; büyük resmi ortaya koyar. Kısa vadeli çizgiden daha güçlü sinyal taşır.</p>
+      </div>
+    </div>
+    <div class="check-item">
+      <span class="check-icon check-yellow">!</span>
+      <div>
+        <strong>Dikkat: Projeksiyon Çizgileri</strong>
+        <p>Trend çizgileri iki pivota göre çizilir ve mevcut gün ötesine doğrusal olarak uzatılır. Bu bir projeksiyon değil, geçmiş veriden elde edilmiş eğilimdir; fiyatın bu seviyelere geleceğini garanti etmez.</p>
+      </div>
+    </div>
+  </div>
+
   <!-- How to use -->
   <h2>Nasıl Kullanılır?</h2>
 
@@ -658,15 +780,22 @@
     <li class="step-item">
       <div class="step-num">5</div>
       <div class="step-body">
-        <strong>ATR Parametrelerini İncele</strong>
-        <p>TDO v2 modelinde ATR-bazlı stop hesaplaması: <strong>başlangıç fiyatı − 2.5 × ATR</strong>. Sabit %5 değil; her hisse kendi volatilitesiyle ölçülür. Backtest parametrelerine göre %8 getiri eşiğinde kısmi sonlandırma kriteri oluşur; kalan bölüm için stop başlangıç fiyatına taşınır ve trailing moda geçer.</p>
+        <strong>Grafik ile Formasyon ve Trend Çizgisi Analizi Yap</strong>
+        <p>Tarama listesindeki herhangi bir hissenin <strong>Grafik</strong> butonuna tıklayarak mum grafiğini açın. Grafik; otomatik kısa/uzun vadeli destek-direnç trend çizgilerini ve son 120 barda tespit edilen formasyonları (İkili Tepe, Omuz-Baş-Omuz, Boğa Bayrağı vb.) gösterir. Skor 7+ gören ama formasyon çizgisine yaklaşan hisseleri dikkatle izleyin.</p>
       </div>
     </li>
     <li class="step-item">
       <div class="step-num">6</div>
       <div class="step-body">
+        <strong>ATR Parametrelerini İncele</strong>
+        <p>TDO v2 modelinde ATR-bazlı stop hesaplaması: <strong>başlangıç fiyatı − 2.5 × ATR</strong>. Sabit %5 değil; her hisse kendi volatilitesiyle ölçülür. Backtest parametrelerine göre %8 getiri eşiğinde kısmi sonlandırma kriteri oluşur; kalan bölüm için stop başlangıç fiyatına taşınır ve trailing moda geçer.</p>
+      </div>
+    </li>
+    <li class="step-item">
+      <div class="step-num">7</div>
+      <div class="step-body">
         <strong>Portföy Uyarılarını Yorumla</strong>
-        <p>Portföy sekmesi rozet sistemiyle pozisyon sağlığını gösterir. "Trend Sağlıklı" → skor 7+, göstergeler pozitif. "Zayıflama Belirtileri" → skor düşmekte, izleme önerilir. "Yüksek Risk" → stop bölgesine yaklaşıldı veya skor 0-2. 3 ardışık gün skor 4 veya altına düşmesi TDO v2 backtest modelinde tam sonlandırma koşulu olarak değerlendirilir.</p>
+        <p>Portföy sekmesi rozet sistemiyle pozisyon sağlığını gösterir. "Trend Sağlıklı" → skor 7+, sinyaller aktif. "Zayıflama Belirtileri" → skor düşmekte, izleme önerilir. "Yüksek Risk" → stop bölgesine yaklaşıldı veya skor 0-2. 3 ardışık gün skor 4 veya altına düşmesi TDO v2 backtest modelinde tam sonlandırma koşulu olarak değerlendirilir.</p>
       </div>
     </li>
   </ol>
