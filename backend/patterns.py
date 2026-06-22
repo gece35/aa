@@ -154,30 +154,32 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
             )
             strength = "çok güçlü" if confidence == "yüksek" else "güçlü" if confidence == "orta" else "zayıf"
             neckline = round(valley, 4)
-            patterns.append({
-                "type": "double_top",
-                "name": "İkili Tepe",
-                "emoji": "🔴",
-                "description": (
-                    f"Fiyat iki kez ~{round(max(v1,v2),2)} direnç seviyesini test etti ve geri döndü. "
-                    f"Tepeler arası benzerlik: %{round(sim*100,1)}. "
-                    f"Boyun çizgisi: {neckline}."
-                ),
-                "signal": (
-                    "Düşüş sinyali — boyun çizgisi kırılırsa satış hızlanabilir."
-                    + (" Hacim T2'de azalmış, sinyal güvenilir." if vol_ok else "")
-                ),
-                "direction": "bearish",
-                "strength": strength,
-                "confidence": confidence,
-                "markers": [
-                    {"t": date_at(p1), "v": float(high_v[p1]), "pos": "aboveBar", "shape": "arrowDown", "color": "#ff5370", "label": "T1"},
-                    {"t": date_at(p2), "v": float(high_v[p2]), "pos": "aboveBar", "shape": "arrowDown", "color": "#ff5370", "label": "T2"},
-                ],
-                "trendlines": [
-                    [{"t": date_at(p1), "v": neckline}, {"t": date_at(n-1), "v": neckline}],
-                ],
-            })
+            # Sinyal tükendi mi? Fiyat neckline'dan >%7 aşağıdaysa formasyon geçersiz.
+            if float(close_v[-1]) >= neckline * 0.93:
+                patterns.append({
+                    "type": "double_top",
+                    "name": "İkili Tepe",
+                    "emoji": "🔴",
+                    "description": (
+                        f"Fiyat iki kez ~{round(max(v1,v2),2)} direnç seviyesini test etti ve geri döndü. "
+                        f"Tepeler arası benzerlik: %{round(sim*100,1)}. "
+                        f"Boyun çizgisi: {neckline}."
+                    ),
+                    "signal": (
+                        "Düşüş sinyali — boyun çizgisi kırılırsa satış hızlanabilir."
+                        + (" Hacim T2'de azalmış, sinyal güvenilir." if vol_ok else "")
+                    ),
+                    "direction": "bearish",
+                    "strength": strength,
+                    "confidence": confidence,
+                    "markers": [
+                        {"t": date_at(p1), "v": float(high_v[p1]), "pos": "aboveBar", "shape": "arrowDown", "color": "#ff5370", "label": "T1"},
+                        {"t": date_at(p2), "v": float(high_v[p2]), "pos": "aboveBar", "shape": "arrowDown", "color": "#ff5370", "label": "T2"},
+                    ],
+                    "trendlines": [
+                        [{"t": date_at(p1), "v": neckline}, {"t": date_at(n-1), "v": neckline}],
+                    ],
+                })
 
     # ── İkili Dip ─────────────────────────────────────────────────────────────
     if len(troughs) >= 2:
@@ -203,30 +205,32 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
             )
             strength  = "çok güçlü" if confidence == "yüksek" else "güçlü" if confidence == "orta" else "zayıf"
             neckline  = round(peak_m, 4)
-            patterns.append({
-                "type": "double_bottom",
-                "name": "İkili Dip",
-                "emoji": "🟢",
-                "description": (
-                    f"Fiyat iki kez ~{round(min(v1,v2),2)} destek seviyesinde dip yaptı. "
-                    f"Dipler arası benzerlik: %{round(sim*100,1)}. "
-                    f"Boyun çizgisi (direnç): {neckline}."
-                ),
-                "signal": (
-                    "Yükseliş sinyali — boyun çizgisi kırılırsa alım hızlanabilir."
-                    + (" Hacim D2'de azalmış, dip oluşumu güvenilir." if vol_ok else "")
-                ),
-                "direction": "bullish",
-                "strength": strength,
-                "confidence": confidence,
-                "markers": [
-                    {"t": date_at(t1), "v": float(low_v[t1]), "pos": "belowBar", "shape": "arrowUp", "color": "#34f5a8", "label": "D1"},
-                    {"t": date_at(t2), "v": float(low_v[t2]), "pos": "belowBar", "shape": "arrowUp", "color": "#34f5a8", "label": "D2"},
-                ],
-                "trendlines": [
-                    [{"t": date_at(t1), "v": neckline}, {"t": date_at(n-1), "v": neckline}],
-                ],
-            })
+            # Sinyal tükendi mi? Fiyat neckline'dan >%7 yukarıdaysa formasyon geçersiz.
+            if float(close_v[-1]) <= neckline * 1.07:
+                patterns.append({
+                    "type": "double_bottom",
+                    "name": "İkili Dip",
+                    "emoji": "🟢",
+                    "description": (
+                        f"Fiyat iki kez ~{round(min(v1,v2),2)} destek seviyesinde dip yaptı. "
+                        f"Dipler arası benzerlik: %{round(sim*100,1)}. "
+                        f"Boyun çizgisi (direnç): {neckline}."
+                    ),
+                    "signal": (
+                        "Yükseliş sinyali — boyun çizgisi kırılırsa alım hızlanabilir."
+                        + (" Hacim D2'de azalmış, dip oluşumu güvenilir." if vol_ok else "")
+                    ),
+                    "direction": "bullish",
+                    "strength": strength,
+                    "confidence": confidence,
+                    "markers": [
+                        {"t": date_at(t1), "v": float(low_v[t1]), "pos": "belowBar", "shape": "arrowUp", "color": "#34f5a8", "label": "D1"},
+                        {"t": date_at(t2), "v": float(low_v[t2]), "pos": "belowBar", "shape": "arrowUp", "color": "#34f5a8", "label": "D2"},
+                    ],
+                    "trendlines": [
+                        [{"t": date_at(t1), "v": neckline}, {"t": date_at(n-1), "v": neckline}],
+                    ],
+                })
 
     # ── Omuz-Baş-Omuz ────────────────────────────────────────────────────────
     if len(peaks) >= 3:
@@ -255,32 +259,34 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
                 "düşük"
             )
             strength = "çok güçlü" if confidence == "yüksek" else "güçlü"
-            patterns.append({
-                "type": "head_shoulders",
-                "name": "Omuz-Baş-Omuz",
-                "emoji": "🔴",
-                "description": (
-                    f"Sol omuz: {round(vl,2)}, Baş: {round(vh,2)}, Sağ omuz: {round(vr,2)}. "
-                    f"Boyun çizgisi: ~{neckline}."
-                    + (" ⚠️ Boyun kırıldı." if broken else "")
-                ),
-                "signal": (
-                    "Çok güçlü düşüş sinyali — boyun kırılmışsa satış baskısı güçlü."
-                    if broken else
-                    "Güçlü düşüş sinyali — boyun kırılması bekleniyor."
-                ),
-                "direction": "bearish",
-                "strength": strength,
-                "confidence": confidence,
-                "markers": [
-                    {"t": date_at(sl), "v": vl, "pos": "aboveBar", "shape": "arrowDown", "color": "#ff5370", "label": "Sol"},
-                    {"t": date_at(sh), "v": vh, "pos": "aboveBar", "shape": "arrowDown", "color": "#ff0000", "label": "Baş"},
-                    {"t": date_at(sr), "v": vr, "pos": "aboveBar", "shape": "arrowDown", "color": "#ff5370", "label": "Sağ"},
-                ],
-                "trendlines": [
-                    [{"t": date_at(sl), "v": neckline}, {"t": date_at(n-1), "v": neckline}],
-                ],
-            })
+            # Sinyal tükendi mi? Boyun kırılmış VE fiyat >%7 aşağıdaysa formasyon geçersiz.
+            if not (broken and float(close_v[-1]) < neckline * 0.93):
+                patterns.append({
+                    "type": "head_shoulders",
+                    "name": "Omuz-Baş-Omuz",
+                    "emoji": "🔴",
+                    "description": (
+                        f"Sol omuz: {round(vl,2)}, Baş: {round(vh,2)}, Sağ omuz: {round(vr,2)}. "
+                        f"Boyun çizgisi: ~{neckline}."
+                        + (" ⚠️ Boyun kırıldı." if broken else "")
+                    ),
+                    "signal": (
+                        "Çok güçlü düşüş sinyali — boyun kırılmışsa satış baskısı güçlü."
+                        if broken else
+                        "Güçlü düşüş sinyali — boyun kırılması bekleniyor."
+                    ),
+                    "direction": "bearish",
+                    "strength": strength,
+                    "confidence": confidence,
+                    "markers": [
+                        {"t": date_at(sl), "v": vl, "pos": "aboveBar", "shape": "arrowDown", "color": "#ff5370", "label": "Sol"},
+                        {"t": date_at(sh), "v": vh, "pos": "aboveBar", "shape": "arrowDown", "color": "#ff0000", "label": "Baş"},
+                        {"t": date_at(sr), "v": vr, "pos": "aboveBar", "shape": "arrowDown", "color": "#ff5370", "label": "Sağ"},
+                    ],
+                    "trendlines": [
+                        [{"t": date_at(sl), "v": neckline}, {"t": date_at(n-1), "v": neckline}],
+                    ],
+                })
 
     # ── Ters Omuz-Baş-Omuz ───────────────────────────────────────────────────
     if len(troughs) >= 3:
@@ -306,32 +312,34 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
                 "düşük"
             )
             strength = "çok güçlü" if confidence == "yüksek" else "güçlü"
-            patterns.append({
-                "type": "inv_head_shoulders",
-                "name": "Ters Omuz-Baş-Omuz",
-                "emoji": "🟢",
-                "description": (
-                    f"Sol omuz: {round(vl,2)}, Baş: {round(vh,2)}, Sağ omuz: {round(vr,2)}. "
-                    f"Boyun çizgisi: ~{neckline}."
-                    + (" ✅ Boyun kırıldı." if broken else "")
-                ),
-                "signal": (
-                    "Çok güçlü yükseliş sinyali — boyun kırılmışsa momentum güçlü."
-                    if broken else
-                    "Güçlü yükseliş sinyali — boyun kırılması bekleniyor."
-                ),
-                "direction": "bullish",
-                "strength": strength,
-                "confidence": confidence,
-                "markers": [
-                    {"t": date_at(sl), "v": vl, "pos": "belowBar", "shape": "arrowUp", "color": "#34f5a8", "label": "Sol"},
-                    {"t": date_at(sh), "v": vh, "pos": "belowBar", "shape": "arrowUp", "color": "#00ff88", "label": "Baş"},
-                    {"t": date_at(sr), "v": vr, "pos": "belowBar", "shape": "arrowUp", "color": "#34f5a8", "label": "Sağ"},
-                ],
-                "trendlines": [
-                    [{"t": date_at(sl), "v": neckline}, {"t": date_at(n-1), "v": neckline}],
-                ],
-            })
+            # Sinyal tükendi mi? Boyun kırılmış VE fiyat >%7 yukarıdaysa formasyon geçersiz.
+            if not (broken and float(close_v[-1]) > neckline * 1.07):
+                patterns.append({
+                    "type": "inv_head_shoulders",
+                    "name": "Ters Omuz-Baş-Omuz",
+                    "emoji": "🟢",
+                    "description": (
+                        f"Sol omuz: {round(vl,2)}, Baş: {round(vh,2)}, Sağ omuz: {round(vr,2)}. "
+                        f"Boyun çizgisi: ~{neckline}."
+                        + (" ✅ Boyun kırıldı." if broken else "")
+                    ),
+                    "signal": (
+                        "Çok güçlü yükseliş sinyali — boyun kırılmışsa momentum güçlü."
+                        if broken else
+                        "Güçlü yükseliş sinyali — boyun kırılması bekleniyor."
+                    ),
+                    "direction": "bullish",
+                    "strength": strength,
+                    "confidence": confidence,
+                    "markers": [
+                        {"t": date_at(sl), "v": vl, "pos": "belowBar", "shape": "arrowUp", "color": "#34f5a8", "label": "Sol"},
+                        {"t": date_at(sh), "v": vh, "pos": "belowBar", "shape": "arrowUp", "color": "#00ff88", "label": "Baş"},
+                        {"t": date_at(sr), "v": vr, "pos": "belowBar", "shape": "arrowUp", "color": "#34f5a8", "label": "Sağ"},
+                    ],
+                    "trendlines": [
+                        [{"t": date_at(sl), "v": neckline}, {"t": date_at(n-1), "v": neckline}],
+                    ],
+                })
 
     # ── Üçgen & Kama — çoklu pencere boyutu ─────────────────────────────────
     # 4 farklı pencere dener, en iyi R² uyumunu seçer
@@ -436,6 +444,16 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
                 "direction": "bullish", "strength": "orta", "confidence": confidence,
                 "markers": [], "trendlines": [tl(h_slope, h_int), tl(l_slope, l_int)],
             }
+
+        # Geçerlilik: fiyat hâlâ formasyon sınırları içinde mi?
+        # Kırılım zaten gerçekleştiyse formasyon geçersizdir.
+        if candidate is not None:
+            upper_at_end = h_int + h_slope * (w - 1)
+            lower_at_end = l_int + l_slope * (w - 1)
+            cur = float(close_v[-1])
+            BREAK_MARGIN = 0.025  # %2.5 dışarıya çıkmış = kırılım olmuş
+            if cur > upper_at_end * (1 + BREAK_MARGIN) or cur < lower_at_end * (1 - BREAK_MARGIN):
+                candidate = None
 
         if candidate is not None and r2_sum > best_r2_sum:
             best_wedge  = candidate
