@@ -2216,22 +2216,28 @@
                 patternEl.innerHTML = `
                     <div class="pattern-empty">
                         <span>Aktif formasyon tespit edilmedi</span>
-                        <small>Son 90 barda bilinen bir grafik formasyonu bulunamadı.</small>
+                        <small>Son 120 barda bilinen bir grafik formasyonu bulunamadı.</small>
                     </div>`;
             } else {
+                const confIcon = { yüksek: '●●●', orta: '●●○', düşük: '●○○' };
+                const confColor = { yüksek: 'var(--neon)', orta: '#fbbf24', düşük: 'var(--text-3)' };
                 patternEl.innerHTML = `
                     <div class="pattern-section-title">Tespit Edilen Formasyonlar &mdash; ${patterns.length} adet</div>
                     <div class="pattern-grid">
-                        ${patterns.map(p => `
+                        ${patterns.map(p => {
+                            const conf = p.confidence || 'orta';
+                            return `
                             <div class="pattern-card ${escapeHtml(p.direction)}">
                                 <div class="pattern-card-hdr">
                                     <span class="pattern-emoji">${p.emoji || '📊'}</span>
                                     <span class="pattern-name">${escapeHtml(p.name)}</span>
                                     <span class="pattern-strength">${escapeHtml(p.strength)}</span>
+                                    <span style="margin-left:auto;font-size:10px;letter-spacing:1px;color:${confColor[conf] || 'var(--text-3)'};" title="Güvenilirlik: ${conf}">${confIcon[conf] || '●○○'}</span>
                                 </div>
                                 <div class="pattern-desc">${escapeHtml(p.description)}</div>
                                 <div class="pattern-signal">${escapeHtml(p.signal)}</div>
-                            </div>`).join('')}
+                            </div>`;
+                        }).join('')}
                     </div>`;
             }
         }
