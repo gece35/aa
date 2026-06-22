@@ -1907,8 +1907,6 @@
                 ${pos ? `<span class="chart-legend-item"><span class="chart-legend-line" style="background:#a78bfa;"></span>Alış</span>
                 <span class="chart-legend-item"><span class="chart-legend-line" style="background:#ff5370;border-top:2px dashed #ff5370;height:0;"></span>SL</span>` : ''}
                 <span class="chart-legend-item"><span class="chart-legend-line" style="background:#34f5a8;border-top:2px dashed #34f5a8;height:0;"></span>TP</span>
-                <span class="chart-legend-item"><span class="chart-legend-line" style="background:rgba(52,245,168,.4);"></span>Destek</span>
-                <span class="chart-legend-item"><span class="chart-legend-line" style="background:rgba(255,83,112,.4);"></span>Direnç</span>
                 <span class="chart-legend-item"><span class="chart-legend-line" style="background:rgba(52,245,168,.75);height:2px;"></span>K.Vadeli Destek</span>
                 <span class="chart-legend-item"><span class="chart-legend-line" style="background:rgba(255,83,112,.75);height:2px;"></span>K.Vadeli Direnç</span>
                 <span class="chart-legend-item"><span class="chart-legend-line" style="background:rgba(52,245,168,.4);height:1px;border-top:1px dashed rgba(52,245,168,.4);"></span>U.Vadeli Destek</span>
@@ -1971,19 +1969,6 @@
         }
 
         const curPrice = d.price;
-        const supsBelow = (d.supports    || []).filter(s => s < curPrice);
-        const ressAbove = (d.resistances || []).filter(r => r > curPrice);
-        const critSup = supsBelow.length ? supsBelow[supsBelow.length - 1] : null; // en yakın destek
-        const critRes = ressAbove.length ? ressAbove[0] : null;                    // en yakın direnç
-
-        supsBelow.slice(-3).forEach(s => {
-            const isCrit = s === critSup;
-            candleSeries.createPriceLine({ price: s, color: 'rgba(52,245,168,.45)', lineWidth: isCrit ? 1.5 : 1, lineStyle: 4, axisLabelVisible: isCrit, title: isCrit ? 'Kritik Destek' : '' });
-        });
-        ressAbove.slice(0, 3).forEach(r => {
-            const isCrit = r === critRes;
-            candleSeries.createPriceLine({ price: r, color: 'rgba(255,83,112,.45)', lineWidth: isCrit ? 1.5 : 1, lineStyle: 4, axisLabelVisible: isCrit, title: isCrit ? 'Kritik Direnç' : '' });
-        });
 
         // ── Otomatik trend çizgileri ──────────────────────────────────────────
         // Kısa vadeli: solid çizgi  |  Uzun vadeli: kesik çizgi
