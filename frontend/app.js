@@ -1883,10 +1883,9 @@
         } else {
             const reason = d ? buildScoreReason(d) : '';
             const spikeHtml = d && d.volume_spike ? `<span class="badge volume-spike">&#128640; Hacim Patlamasi</span>` : '';
-            const nearPeakHtml = d && d.near_peak ? `<span class="badge near-peak">&#9650; Tepe</span>` : '';
             contextHtml = `
                 <div class="chart-pos-context" style="align-items:center;gap:8px;">
-                    ${spikeHtml}${nearPeakHtml}
+                    ${spikeHtml}
                     ${reason ? `<span style="font-size:12px;color:var(--text-2);font-style:italic;">${escapeHtml(reason)}</span>` : ''}
                 </div>`;
         }
@@ -1904,9 +1903,6 @@
                 ${recHtml}
             </div>
             <div class="chart-legend">
-                ${pos ? `<span class="chart-legend-item"><span class="chart-legend-line" style="background:#a78bfa;"></span>Alış</span>
-                <span class="chart-legend-item"><span class="chart-legend-line" style="background:#ff5370;border-top:2px dashed #ff5370;height:0;"></span>SL</span>` : ''}
-                <span class="chart-legend-item"><span class="chart-legend-line" style="background:#34f5a8;border-top:2px dashed #34f5a8;height:0;"></span>TP</span>
                 <span class="chart-legend-item"><span class="chart-legend-line" style="background:rgba(52,245,168,.75);height:2px;"></span>K.Vadeli Destek</span>
                 <span class="chart-legend-item"><span class="chart-legend-line" style="background:rgba(255,83,112,.75);height:2px;"></span>K.Vadeli Direnç</span>
                 <span class="chart-legend-item"><span class="chart-legend-line" style="background:rgba(52,245,168,.4);height:1px;border-top:1px dashed rgba(52,245,168,.4);"></span>U.Vadeli Destek</span>
@@ -1959,14 +1955,6 @@
             color: b.c >= b.o ? 'rgba(52,245,168,.28)' : 'rgba(255,83,112,.28)',
         })));
 
-        if (pos) {
-            candleSeries.createPriceLine({ price: pos.buyPrice, color: 'rgba(167,139,250,.9)', lineWidth: 1, lineStyle: 1, axisLabelVisible: false, title: '' });
-            if (d.stop_loss)   candleSeries.createPriceLine({ price: d.stop_loss,   color: '#ff5370', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '' });
-            if (d.take_profit) candleSeries.createPriceLine({ price: d.take_profit, color: '#34f5a8', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '' });
-        } else {
-            if (d.stop_loss)   candleSeries.createPriceLine({ price: d.stop_loss,   color: 'rgba(255,83,112,.7)', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '' });
-            if (d.take_profit) candleSeries.createPriceLine({ price: d.take_profit, color: 'rgba(52,245,168,.7)', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '' });
-        }
 
         const curPrice = d.price;
 
