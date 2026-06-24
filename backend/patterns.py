@@ -13,6 +13,7 @@ Temel iyileştirmeler:
 
 from __future__ import annotations
 
+import math
 from typing import Any, Dict, List
 
 import numpy as np
@@ -537,7 +538,8 @@ def _line_violates_candles(
 ) -> bool:
     """Çizgi [a, end] aralığında herhangi bir mumun içinden geçiyor mu?
 
-    support  → çizgi tüm Low'ların altında/değmeli kalmalı (Low ≥ çizgi)
+    Referans tutarlıdır — çizgi her zaman mum *fitillerini* baz alır:
+    support    → çizgi tüm Low'ların altında/değmeli kalmalı (Low ≥ çizgi)
     resistance → çizgi tüm High'ların üstünde/değmeli kalmalı (High ≤ çizgi)
 
     `tol_pct` kadar küçük fitil gürültüsüne izin verilir; bunun ötesinde mum
@@ -557,24 +559,76 @@ def _line_violates_candles(
     return False
 
 
+# İdeal trend açısı: ~45°. Bu değerden uzaklaştıkça (dik = FOMO, yatık =
+# momentumsuz) çizgi cazibesini kaybeder.
+_IDEAL_ANGLE_DEG = 45.0
+_MIN_TOUCHES = 3
+
+
+def _angle_score(slope: float, x_scale: float, y_scale: float) -> float:
+    """Eğimi normalize edip ideal 45°'ye yakınlığını [0,1] puanlar.
+
+    x ekseni `x_scale` bar, y ekseni `y_scale` fiyat aralığına göre [0,1]
+    karesine ölçeklenir; böylece açı grafik en-boy oranından bağımsız,
+    anlamlı bir "diklik" ölçüsü olur. 45°'de 1, 0° (yatay) ve 90° (dik)
+    yaklaştıkça 0'a iner.
+    """
+    if y_scale <= 0 or x_scale <= 0:
+        return 0.5
+    norm_slope = abs(slope) * x_scale / y_scale
+    angle = math.degrees(math.atan(norm_slope))
+    return max(0.0, 1.0 - abs(angle - _IDEAL_ANGLE_DEG) / _IDEAL_ANGLE_DEG)
+
+
+def _spacing_balance(touch_idx: list[int]) -> float:
+    """Temas noktaları arası zaman aralığının dengesi [0,1].
+
+    Ardışık temaslar arasındaki boşlukların değişim katsayısı (CoV) düşükse
+    (eşit aralıklı temas) puan 1'e, düzensizse 0'a yaklaşır.
+    """
+    if len(touch_idx) < 3:
+        return 0.0
+    gaps = np.diff(sorted(touch_idx)).astype(float)
+    mean = gaps.mean()
+    if mean <= 0:
+        return 0.0
+    cov = gaps.std() / mean
+    return max(0.0, 1.0 - cov)
+
+
 def _best_trendline(
     pivots: list[int],
     prices: np.ndarray,
     n_total: int,
     kind: str,
     min_span: int,
+    x_scale: float,
+    y_scale: float,
     tol_pct: float = 0.003,
     touch_tol: float = 0.006,
+    min_touches: int = _MIN_TOUCHES,
 ) -> tuple[int, float, float] | None:
     """Mumların içinden geçmeyen en iyi trend çizgisini seçer.
 
-    Tüm pivot çiftlerini dener; yalnızca [a, son bar] boyunca hiçbir mumu
-    delmeyen çizgileri kabul eder. Aralarından en çok pivota değen, en güncel
-    ve en uzun olanı seçer. Döner: (anchor_index, anchor_price, slope) | None.
+    Kabul kriterleri:
+      • Hiçbir mum gövdesini delmez ([a, son bar] boyunca gövdeleri baz alır).
+      • En az `min_touches` (varsayılan 3) pivota değer.
+    Skorlama (hepsi [0,1] aralığına normalize, ağırlıklı toplam):
+      • temas sayısı (güç)        → çok temas = sağlam trend
+      • açı ~45° yakınlığı        → dik/yatay çizgi cezalandırılır
+      • temas aralığı dengesi     → eşit zaman aralıklı temas tercih edilir
+      • güncellik + span          → daha yeni ve uzun çizgi tercih edilir
+    Döner: (anchor_index, anchor_price, slope) | None.
+
+    Not: İhlal toleransı temas toleransıyla aynı tutulur — çizgiye `touch_tol`
+    kadar yakın bir pivot "temas" sayılır, dolayısıyla aynı miktar "delme"
+    olarak elenmez (üç dip nadiren tam doğrusaldır; ortadaki temas noktasının
+    çizgiyi milimetrik aşması çizgiyi geçersiz kılmamalı).
     """
     best: tuple[int, float, float] | None = None
     best_score = -1.0
     end = n_total - 1
+    pierce_tol = max(tol_pct, touch_tol)
 
     for ai in range(len(pivots)):
         a  = pivots[ai]
@@ -586,19 +640,32 @@ def _best_trendline(
             pb    = float(prices[b])
             slope = (pb - pa) / (b - a)
 
-            if _line_violates_candles(prices, a, pa, slope, end, kind, tol_pct):
+            if _line_violates_candles(prices, a, pa, slope, end, kind, pierce_tol):
                 continue
 
-            # Çizgiye değen pivot sayısı (çok değen çizgi = daha güçlü trend)
-            touches = 0
+            # Çizgiye değen pivotlar (çok değen çizgi = daha güçlü trend)
+            touch_idx = []
             for p in pivots:
                 lv = pa + slope * (p - a)
                 if lv > 0 and abs(float(prices[p]) - lv) <= lv * touch_tol:
-                    touches += 1
+                    touch_idx.append(p)
+            touches = len(touch_idx)
 
-            span  = b - a
-            # Öncelik: çok değme > güncellik (büyük b) > uzun span
-            score = touches * 1000.0 + b * 2.0 + span
+            if touches < min_touches:
+                continue
+
+            span = b - a
+            touch_norm   = min(touches, 6) / 6.0
+            angle_norm   = _angle_score(slope, x_scale, y_scale)
+            balance_norm = _spacing_balance(touch_idx)
+            recency_norm = b / max(1, n_total - 1)
+            span_norm    = span / max(1.0, x_scale)
+
+            score = (3.0 * touch_norm
+                     + 2.2 * angle_norm
+                     + 1.6 * balance_norm
+                     + 0.8 * recency_norm
+                     + 0.4 * span_norm)
             if score > best_score:
                 best_score = score
                 best = (a, pa, slope)
@@ -609,17 +676,23 @@ def _best_trendline(
 def detect_auto_trendlines(df: pd.DataFrame) -> dict:
     """Kısa ve uzun vadeli otomatik destek/direnç trend çizgilerini tespit eder.
 
-    Çizgiler gerçek pivotlara dayanır ve hiçbir mumun içinden geçmeyecek şekilde
-    doğrulanır (destek tüm dip'lerin altında, direnç tüm tepe'lerin üstünde).
-    Geçerli temiz bir çizgi bulunamazsa o rol için None döner — yanlış/mumu
-    delen çizgi çizilmez.
+    Tutarlı referans: çizgiler mum *gövdelerini* baz alır (fitil gürültüsü göz
+    ardı edilir) — destek her barın gövde dibinin (min(Açılış,Kapanış)) altında,
+    direnç gövde tepesinin (max(Açılış,Kapanış)) üstünde kalır. Pivot tespiti,
+    ihlal kontrolü ve temas sayımı aynı gövde dizisini kullanır.
+
+    Bir çizginin geçerli olması için en az 3 pivota değmesi, hiçbir gövdeyi
+    delmemesi gerekir; seçimde ideal ~45° eğim ve dengeli temas aralığı tercih
+    edilir. Geçerli temiz bir çizgi yoksa o rol için None döner.
     """
     if df is None or len(df) < 30:
         return {"short": {"support": None, "resistance": None},
                 "long":  {"support": None, "resistance": None}}
 
-    high_v  = df["High"].astype(float).values
-    low_v   = df["Low"].astype(float).values
+    open_v  = df["Open"].astype(float).values
+    close_v = df["Close"].astype(float).values
+    body_hi = np.maximum(open_v, close_v)   # gövde tepesi → direnç referansı
+    body_lo = np.minimum(open_v, close_v)   # gövde dibi   → destek referansı
     n_total = len(df)
 
     def date_at(abs_i: int) -> str:
@@ -642,25 +715,36 @@ def detect_auto_trendlines(df: pd.DataFrame) -> dict:
     result = {"short": {"support": None, "resistance": None},
               "long":  {"support": None, "resistance": None}}
 
-    # (etiket, lookback, pivot penceresi, min anchor mesafesi, fitil toleransı)
-    for label, lookback, window, min_span, tol_pct in [
-        ("short", 60,  3, 5,  0.0025),
-        ("long",  200, 6, 15, 0.0040),
+    # (etiket, lookback, pivot penceresi, min anchor mesafesi, gövde tol, temas tol)
+    # İhlal toleransı = max(gövde, temas); küçük tutulur ki çizgi gövdeleri
+    # görünür biçimde delmesin (≤%0.5-0.6).
+    for label, lookback, window, min_span, tol_pct, touch_tol in [
+        ("short", 60,  3, 5,  0.0030, 0.005),
+        ("long",  200, 6, 15, 0.0040, 0.006),
     ]:
         n_use  = min(lookback, n_total)
         offset = n_total - n_use
 
-        trough_rel = _find_pivot_lows(low_v[-n_use:],  window=window)
-        peak_rel   = _find_pivot_highs(high_v[-n_use:], window=window)
+        # Açı normalizasyonu için pencere ölçekleri: x = bar sayısı,
+        # y = pencerenin gövde aralığı (her iki rol için ortak).
+        x_scale = float(max(1, n_use - 1))
+        win_hi  = float(np.max(body_hi[offset:]))
+        win_lo  = float(np.min(body_lo[offset:]))
+        y_scale = max(win_hi - win_lo, 1e-9)
+
+        trough_rel = _find_pivot_lows(body_lo[-n_use:],  window=window)
+        peak_rel   = _find_pivot_highs(body_hi[-n_use:], window=window)
 
         troughs = [i + offset for i in trough_rel]
         peaks   = [i + offset for i in peak_rel]
 
-        sup = _best_trendline(troughs, low_v,  n_total, "support",    min_span, tol_pct)
+        sup = _best_trendline(troughs, body_lo, n_total, "support",
+                              min_span, x_scale, y_scale, tol_pct, touch_tol)
         if sup is not None:
             result[label]["support"] = _project(*sup)
 
-        res = _best_trendline(peaks, high_v, n_total, "resistance", min_span, tol_pct)
+        res = _best_trendline(peaks, body_hi, n_total, "resistance",
+                              min_span, x_scale, y_scale, tol_pct, touch_tol)
         if res is not None:
             result[label]["resistance"] = _project(*res)
 
