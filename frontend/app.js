@@ -1994,15 +1994,6 @@
                 if (!m.t) return;
                 allMarkers.push({ time: m.t, position: m.pos, color: m.color, shape: m.shape, text: m.label || '' });
             });
-            (pat.trendlines || []).forEach(line => {
-                if (!line || line.length < 2 || !line[0].t || !line[1].t) return;
-                const col = pat.direction === 'bullish' ? 'rgba(52,245,168,.55)' :
-                            pat.direction === 'bearish' ? 'rgba(255,83,112,.55)' : 'rgba(251,191,36,.55)';
-                try {
-                    const ls = chart.addLineSeries({ color: col, lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
-                    ls.setData([{ time: line[0].t, value: line[0].v }, { time: line[1].t, value: line[1].v }]);
-                } catch (_) {}
-            });
         });
         if (allMarkers.length) {
             try { candleSeries.setMarkers(allMarkers.sort((a, b) => (a.time < b.time ? -1 : 1))); } catch (_) {}
