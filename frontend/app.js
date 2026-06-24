@@ -2221,16 +2221,39 @@
             } else {
                 const confIcon = { yüksek: '●●●', orta: '●●○', düşük: '●○○' };
                 const confColor = { yüksek: 'var(--neon)', orta: '#fbbf24', düşük: 'var(--text-3)' };
+                const multiple = patterns.length > 1;
+
+                // Baskınlık analizi banner'ı (≥2 formasyon veya tek formasyon özeti)
+                const an = d.pattern_analysis;
+                const analysisHtml = (an && an.summary) ? `
+                    <div style="display:flex;gap:9px;align-items:flex-start;padding:11px 13px;margin-bottom:11px;border-radius:10px;
+                                background:${an.conflict ? 'rgba(251,191,36,.09)' : 'rgba(52,245,168,.08)'};
+                                border:1px solid ${an.conflict ? 'rgba(251,191,36,.30)' : 'rgba(52,245,168,.25)'};">
+                        <span style="font-size:15px;line-height:1.2;">${an.conflict ? '⚖️' : '🎯'}</span>
+                        <div style="font-size:12.5px;line-height:1.5;color:var(--text-2);">
+                            <strong style="color:${an.conflict ? '#fbbf24' : 'var(--neon)'};">
+                                ${an.conflict ? 'Çelişen formasyonlar' : 'Baskınlık analizi'}</strong><br>
+                            ${escapeHtml(an.summary)}
+                        </div>
+                    </div>` : '';
+
                 patternEl.innerHTML = `
                     <div class="pattern-section-title">Tespit Edilen Formasyonlar &mdash; ${patterns.length} adet</div>
+                    ${analysisHtml}
                     <div class="pattern-grid">
                         ${patterns.map(p => {
                             const conf = p.confidence || 'orta';
+                            const isDom = multiple && p.dominant;
+                            const domBadge = isDom
+                                ? `<span style="font-size:9px;font-weight:700;letter-spacing:.5px;padding:2px 6px;border-radius:999px;background:rgba(52,245,168,.18);color:var(--neon);border:1px solid rgba(52,245,168,.4);">BASKIN</span>`
+                                : '';
+                            const domStyle = isDom ? 'box-shadow:0 0 0 1px rgba(52,245,168,.45);' : '';
                             return `
-                            <div class="pattern-card ${escapeHtml(p.direction)}">
+                            <div class="pattern-card ${escapeHtml(p.direction)}" style="${domStyle}">
                                 <div class="pattern-card-hdr">
                                     <span class="pattern-emoji">${p.emoji || '📊'}</span>
                                     <span class="pattern-name">${escapeHtml(p.name)}</span>
+                                    ${domBadge}
                                     <span class="pattern-strength">${escapeHtml(p.strength)}</span>
                                     <span style="margin-left:auto;font-size:10px;letter-spacing:1px;color:${confColor[conf] || 'var(--text-3)'};" title="Güvenilirlik: ${conf}">${confIcon[conf] || '●○○'}</span>
                                 </div>

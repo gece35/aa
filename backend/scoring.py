@@ -29,7 +29,7 @@ from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
 
-from backend.patterns import detect_patterns, detect_auto_trendlines
+from backend.patterns import detect_patterns, detect_auto_trendlines, summarize_patterns
 
 
 # ── ayarlanabilir parametreler ───────────────────────────────────────────────
@@ -661,15 +661,17 @@ def score_symbol_detailed(symbol: str, df: pd.DataFrame, index_df=None) -> dict 
         if risk > 0:
             risk_reward = round((take_profit - price) / risk, 2)
 
-    patterns        = detect_patterns(df)
-    auto_trendlines = detect_auto_trendlines(df)
+    patterns         = detect_patterns(df)
+    auto_trendlines  = detect_auto_trendlines(df)
+    pattern_analysis = summarize_patterns(patterns)
 
     out = base.to_dict()
     out.update({
-        "history":         hist,
-        "ohlcv":           ohlcv,
-        "patterns":        patterns,
-        "auto_trendlines": auto_trendlines,
+        "history":          hist,
+        "ohlcv":            ohlcv,
+        "patterns":         patterns,
+        "pattern_analysis": pattern_analysis,
+        "auto_trendlines":  auto_trendlines,
         "avg_volume_20d": round(avg_vol, 2),
         "data_points":   int(len(close)),
         "supports":      sr["supports"],

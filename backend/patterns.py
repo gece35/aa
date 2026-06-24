@@ -519,13 +519,101 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
                         "markers": [], "trendlines": [],
                     })
 
+    # Baskınlık skoruna göre sırala + en olası formasyonu işaretle
+    _rank_patterns(patterns)
     return patterns
 
 
 # ── otomatik trend çizgileri ─────────────────────────────────────────────────
 
+def _line_violates_candles(
+    prices: np.ndarray,
+    a: int,
+    pa: float,
+    slope: float,
+    end: int,
+    kind: str,
+    tol_pct: float,
+) -> bool:
+    """Çizgi [a, end] aralığında herhangi bir mumun içinden geçiyor mu?
+
+    support  → çizgi tüm Low'ların altında/değmeli kalmalı (Low ≥ çizgi)
+    resistance → çizgi tüm High'ların üstünde/değmeli kalmalı (High ≤ çizgi)
+
+    `tol_pct` kadar küçük fitil gürültüsüne izin verilir; bunun ötesinde mum
+    gövdesini delerse çizgi geçersizdir.
+    """
+    for i in range(a, end + 1):
+        lv = pa + slope * (i - a)
+        if lv <= 0:
+            return True
+        tol = lv * tol_pct
+        if kind == "support":
+            if prices[i] < lv - tol:
+                return True
+        else:
+            if prices[i] > lv + tol:
+                return True
+    return False
+
+
+def _best_trendline(
+    pivots: list[int],
+    prices: np.ndarray,
+    n_total: int,
+    kind: str,
+    min_span: int,
+    tol_pct: float = 0.003,
+    touch_tol: float = 0.006,
+) -> tuple[int, float, float] | None:
+    """Mumların içinden geçmeyen en iyi trend çizgisini seçer.
+
+    Tüm pivot çiftlerini dener; yalnızca [a, son bar] boyunca hiçbir mumu
+    delmeyen çizgileri kabul eder. Aralarından en çok pivota değen, en güncel
+    ve en uzun olanı seçer. Döner: (anchor_index, anchor_price, slope) | None.
+    """
+    best: tuple[int, float, float] | None = None
+    best_score = -1.0
+    end = n_total - 1
+
+    for ai in range(len(pivots)):
+        a  = pivots[ai]
+        pa = float(prices[a])
+        for bi in range(ai + 1, len(pivots)):
+            b = pivots[bi]
+            if b - a < min_span:
+                continue
+            pb    = float(prices[b])
+            slope = (pb - pa) / (b - a)
+
+            if _line_violates_candles(prices, a, pa, slope, end, kind, tol_pct):
+                continue
+
+            # Çizgiye değen pivot sayısı (çok değen çizgi = daha güçlü trend)
+            touches = 0
+            for p in pivots:
+                lv = pa + slope * (p - a)
+                if lv > 0 and abs(float(prices[p]) - lv) <= lv * touch_tol:
+                    touches += 1
+
+            span  = b - a
+            # Öncelik: çok değme > güncellik (büyük b) > uzun span
+            score = touches * 1000.0 + b * 2.0 + span
+            if score > best_score:
+                best_score = score
+                best = (a, pa, slope)
+
+    return best
+
+
 def detect_auto_trendlines(df: pd.DataFrame) -> dict:
-    """Kısa ve uzun vadeli otomatik destek/direnç trend çizgilerini tespit eder."""
+    """Kısa ve uzun vadeli otomatik destek/direnç trend çizgilerini tespit eder.
+
+    Çizgiler gerçek pivotlara dayanır ve hiçbir mumun içinden geçmeyecek şekilde
+    doğrulanır (destek tüm dip'lerin altında, direnç tüm tepe'lerin üstünde).
+    Geçerli temiz bir çizgi bulunamazsa o rol için None döner — yanlış/mumu
+    delen çizgi çizilmez.
+    """
     if df is None or len(df) < 30:
         return {"short": {"support": None, "resistance": None},
                 "long":  {"support": None, "resistance": None}}
@@ -541,50 +629,121 @@ def detect_auto_trendlines(df: pd.DataFrame) -> dict:
         except Exception:
             return ""
 
-    def _pivots_separated(indices: list[int], min_gap: int) -> list[int]:
-        if not indices:
-            return []
-        out = [indices[0]]
-        for idx in indices[1:]:
-            if idx - out[-1] >= min_gap:
-                out.append(idx)
-        return out
-
-    def _fit_line(i1: int, p1: float, i2: int, p2: float) -> list[dict] | None:
-        if i2 <= i1:
-            return None
-        slope = (p2 - p1) / (i2 - i1)
+    def _project(anchor: int, p_anchor: float, slope: float) -> list[dict] | None:
         i_end = n_total - 1
-        p_end = p2 + slope * (i_end - i2)
+        p_end = p_anchor + slope * (i_end - anchor)
         if p_end <= 0:
             return None
         return [
-            {"t": date_at(i1),    "v": round(float(p1), 4)},
-            {"t": date_at(i_end), "v": round(float(p_end), 4)},
+            {"t": date_at(anchor), "v": round(float(p_anchor), 4)},
+            {"t": date_at(i_end),  "v": round(float(p_end),    4)},
         ]
 
     result = {"short": {"support": None, "resistance": None},
               "long":  {"support": None, "resistance": None}}
 
-    for label, lookback, window, min_gap in [
-        ("short", 60,  3, 8),
-        ("long",  200, 7, 20),
+    # (etiket, lookback, pivot penceresi, min anchor mesafesi, fitil toleransı)
+    for label, lookback, window, min_span, tol_pct in [
+        ("short", 60,  3, 5,  0.0025),
+        ("long",  200, 6, 15, 0.0040),
     ]:
         n_use  = min(lookback, n_total)
         offset = n_total - n_use
 
-        peaks_rel,   _ = _find_pivots(high_v[-n_use:], window=window)
-        _,  troughs_rel = _find_pivots(low_v[-n_use:],  window=window)
+        trough_rel = _find_pivot_lows(low_v[-n_use:],  window=window)
+        peak_rel   = _find_pivot_highs(high_v[-n_use:], window=window)
 
-        peaks_abs   = _pivots_separated([i + offset for i in peaks_rel],   min_gap)
-        troughs_abs = _pivots_separated([i + offset for i in troughs_rel], min_gap)
+        troughs = [i + offset for i in trough_rel]
+        peaks   = [i + offset for i in peak_rel]
 
-        if len(troughs_abs) >= 2:
-            i1, i2 = troughs_abs[-2], troughs_abs[-1]
-            result[label]["support"] = _fit_line(i1, low_v[i1], i2, low_v[i2])
+        sup = _best_trendline(troughs, low_v,  n_total, "support",    min_span, tol_pct)
+        if sup is not None:
+            result[label]["support"] = _project(*sup)
 
-        if len(peaks_abs) >= 2:
-            i1, i2 = peaks_abs[-2], peaks_abs[-1]
-            result[label]["resistance"] = _fit_line(i1, high_v[i1], i2, high_v[i2])
+        res = _best_trendline(peaks, high_v, n_total, "resistance", min_span, tol_pct)
+        if res is not None:
+            result[label]["resistance"] = _project(*res)
 
     return result
+
+
+# ── formasyon baskınlık analizi ──────────────────────────────────────────────
+
+_CONF_WEIGHT = {"yüksek": 3.0, "orta": 2.0, "düşük": 1.0}
+_STR_WEIGHT  = {"çok güçlü": 3.0, "güçlü": 2.0, "orta": 1.5, "zayıf": 1.0}
+_DIR_TR      = {"bullish": "yükseliş", "bearish": "düşüş", "neutral": "nötr"}
+
+
+def _pattern_dominance_score(p: Dict[str, Any]) -> float:
+    """Bir formasyonun ne kadar baskın/olası olduğunu sayısallaştırır.
+
+    Güven (en ağırlıklı) + formasyon gücü + kırılım/teyit bonusu. Boyun çizgisi
+    kırılmış veya teyitlenmiş formasyonlar daha imminent kabul edilir."""
+    conf  = _CONF_WEIGHT.get(p.get("confidence", "orta"), 2.0)
+    stren = _STR_WEIGHT.get(p.get("strength", "orta"),   1.5)
+    score = conf * 2.5 + stren
+
+    blob = f"{p.get('description', '')} {p.get('signal', '')}"
+    if "kırıldı" in blob or "✅" in blob or "⚠️" in blob:
+        score += 1.5   # kırılım/teyit gerçekleşmiş → öncelikli
+
+    return round(score, 2)
+
+
+def _rank_patterns(patterns: List[Dict[str, Any]]) -> None:
+    """Formasyonları baskınlık skoruna göre yerinde sıralar ve işaretler."""
+    if not patterns:
+        return
+    for p in patterns:
+        p["dominance_score"] = _pattern_dominance_score(p)
+    patterns.sort(key=lambda x: x.get("dominance_score", 0.0), reverse=True)
+    for i, p in enumerate(patterns):
+        p["dominant"] = (i == 0)
+
+
+def summarize_patterns(patterns: List[Dict[str, Any]]) -> Dict[str, Any] | None:
+    """Birden fazla formasyon varsa hangisinin baskın/olası olduğunu analiz eder.
+
+    Aynı yöndeki formasyonların birbirini güçlendirdiğini, ters yöndekilerin
+    çeliştiğini açıklayan bir özet üretir."""
+    if not patterns:
+        return None
+
+    lead = patterns[0]
+    lead_dir = _DIR_TR.get(lead.get("direction", "neutral"), "nötr")
+    lead_conf = lead.get("confidence", "orta")
+
+    if len(patterns) == 1:
+        return {
+            "leader":   lead.get("type"),
+            "conflict": False,
+            "summary": (
+                f"Tek aktif formasyon: {lead.get('name')} "
+                f"({lead_conf} güven, {lead_dir} yönlü). {lead.get('signal', '')}"
+            ),
+        }
+
+    second = patterns[1]
+    second_dir = _DIR_TR.get(second.get("direction", "neutral"), "nötr")
+    diff   = lead.get("dominance_score", 0.0) - second.get("dominance_score", 0.0)
+    margin = "belirgin biçimde" if diff >= 2.0 else "az farkla"
+    same_dir = lead.get("direction") == second.get("direction")
+
+    if same_dir:
+        summary = (
+            f"{lead.get('name')} baskın formasyon ({lead_conf} güven) ve "
+            f"{second.get('name')} ile aynı {lead_dir} yönünde — iki sinyal "
+            f"birbirini güçlendiriyor, senaryo {margin} daha olası. "
+            f"{lead.get('signal', '')}"
+        )
+        conflict = False
+    else:
+        summary = (
+            f"Çelişen sinyaller: {lead.get('name')} ({lead_dir}) {margin} daha "
+            f"baskın ({lead_conf} güven), ancak {second.get('name')} "
+            f"({second_dir}) ters yönde. Net kırılım teyidi gelene kadar "
+            f"temkinli olun — baskın senaryo: {lead.get('signal', '')}"
+        )
+        conflict = True
+
+    return {"leader": lead.get("type"), "conflict": conflict, "summary": summary}
