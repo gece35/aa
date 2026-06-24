@@ -715,12 +715,14 @@ def detect_auto_trendlines(df: pd.DataFrame) -> dict:
     result = {"short": {"support": None, "resistance": None},
               "long":  {"support": None, "resistance": None}}
 
-    # (etiket, lookback, pivot penceresi, min anchor mesafesi, gövde tol, temas tol)
+    # (etiket, lookback, pivot penceresi, min anchor mesafesi, gövde tol, temas tol, min temas)
     # İhlal toleransı = max(gövde, temas); küçük tutulur ki çizgi gövdeleri
     # görünür biçimde delmesin (≤%0.5-0.6).
-    for label, lookback, window, min_span, tol_pct, touch_tol in [
-        ("short", 60,  3, 5,  0.0030, 0.005),
-        ("long",  200, 6, 15, 0.0040, 0.006),
+    # Kısa vade: 2 temas yeterli (yeni oluşan trend; 2 nokta çizgiyi tanımlar).
+    # Uzun vade: 3 temas zorunlu (teyit edilmiş, gürültüden arınmış trend).
+    for label, lookback, window, min_span, tol_pct, touch_tol, min_touches in [
+        ("short", 60,  3, 5,  0.0030, 0.005, 2),
+        ("long",  200, 6, 15, 0.0040, 0.006, 3),
     ]:
         n_use  = min(lookback, n_total)
         offset = n_total - n_use
@@ -738,13 +740,13 @@ def detect_auto_trendlines(df: pd.DataFrame) -> dict:
         troughs = [i + offset for i in trough_rel]
         peaks   = [i + offset for i in peak_rel]
 
-        sup = _best_trendline(troughs, body_lo, n_total, "support",
-                              min_span, x_scale, y_scale, tol_pct, touch_tol)
+        sup = _best_trendline(troughs, body_lo, n_total, "support", min_span,
+                              x_scale, y_scale, tol_pct, touch_tol, min_touches)
         if sup is not None:
             result[label]["support"] = _project(*sup)
 
-        res = _best_trendline(peaks, body_hi, n_total, "resistance",
-                              min_span, x_scale, y_scale, tol_pct, touch_tol)
+        res = _best_trendline(peaks, body_hi, n_total, "resistance", min_span,
+                              x_scale, y_scale, tol_pct, touch_tol, min_touches)
         if res is not None:
             result[label]["resistance"] = _project(*res)
 
