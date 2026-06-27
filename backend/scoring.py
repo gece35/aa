@@ -22,6 +22,7 @@ tarayıcı (`score_symbol`) hem backtest aynı motoru tüketir — tek kaynak.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, asdict
 from typing import Dict, List, Optional
 
@@ -76,18 +77,26 @@ class ScoreResult:
     volume_spike: bool = False
     near_peak: bool = False
 
+    @staticmethod
+    def _sf(v: float, ndigits: int = 2) -> float:
+        """NaN/Inf değerlerini 0.0'a çevirir (JSON uyumluluğu için)."""
+        if v is None or (isinstance(v, float) and (math.isnan(v) or math.isinf(v))):
+            return 0.0
+        return round(v, ndigits)
+
     def to_dict(self) -> dict:
+        sf = self._sf
         return {
             "symbol": self.symbol,
             "score": self.score,
-            "price": round(self.price, 4),
-            "change_pct": round(self.change_pct, 2),
-            "change_week_pct": round(self.change_week_pct, 2),
-            "change_month_pct": round(self.change_month_pct, 2),
+            "price": sf(self.price, 4),
+            "change_pct": sf(self.change_pct, 2),
+            "change_week_pct": sf(self.change_week_pct, 2),
+            "change_month_pct": sf(self.change_month_pct, 2),
             "volume": int(self.volume),
-            "high_52w": round(self.high_52w, 4) if self.high_52w else None,
-            "low_52w": round(self.low_52w, 4) if self.low_52w else None,
-            "sparkline": [round(float(v), 4) for v in self.sparkline],
+            "high_52w": sf(self.high_52w, 4) if self.high_52w else None,
+            "low_52w": sf(self.low_52w, 4) if self.low_52w else None,
+            "sparkline": [sf(float(v), 4) for v in self.sparkline],
             "indicators": [asdict(ind) for ind in self.indicators],
             "volume_spike": self.volume_spike,
             "near_peak": self.near_peak,
@@ -632,10 +641,11 @@ def _calc_sl_tp(price: float, supports: list, resistances: list) -> tuple:
 def _pct_change_back(close: pd.Series, n: int) -> float:
     if len(close) <= n:
         return 0.0
+    last = float(close.iloc[-1])
     prev = float(close.iloc[-(n + 1)])
-    if prev == 0 or pd.isna(prev):
+    if prev == 0 or pd.isna(prev) or pd.isna(last):
         return 0.0
-    return (float(close.iloc[-1]) - prev) / prev * 100.0
+    return (last - prev) / prev * 100.0
 
 
 def _index_close_of(index_df) -> Optional[pd.Series]:
