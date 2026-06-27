@@ -157,9 +157,13 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
                 "düşük"
             )
             strength = "çok güçlü" if confidence == "yüksek" else "güçlü" if confidence == "orta" else "zayıf"
-            neckline = round(valley, 4)
-            # Sinyal tükendi mi? Fiyat neckline'dan >%7 aşağıdaysa formasyon geçersiz.
-            if last_close >= neckline * 0.93:
+            neckline   = round(valley, 4)
+            resistance = max(v1, v2)  # tepelerin direnç seviyesi
+            # Formasyon başarısız mı? Fiyat direncin üstüne kırıldıysa ikili tepe iptal
+            # (düşüş beklenirken yukarı kırılım = ters yön, formasyon çökmüş).
+            failed = last_close > resistance * 1.01
+            # Sinyal tükendi mi? Fiyat neckline'dan >%7 aşağıdaysa (kırılım fazlasıyla gerçekleşti).
+            if not failed and last_close >= neckline * 0.93:
                 patterns.append({
                     "type": "double_top",
                     "name": "İkili Tepe",
@@ -208,9 +212,13 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
                 "düşük"
             )
             strength  = "çok güçlü" if confidence == "yüksek" else "güçlü" if confidence == "orta" else "zayıf"
-            neckline  = round(peak_m, 4)
-            # Sinyal tükendi mi? Fiyat neckline'dan >%7 yukarıdaysa formasyon geçersiz.
-            if last_close <= neckline * 1.07:
+            neckline = round(peak_m, 4)
+            support  = min(v1, v2)  # diplerin destek seviyesi
+            # Formasyon başarısız mı? Fiyat desteğin altına kırıldıysa ikili dip iptal
+            # (yükseliş beklenirken aşağı kırılım = ters yön, formasyon çökmüş).
+            failed = last_close < support * 0.99
+            # Sinyal tükendi mi? Fiyat neckline'dan >%7 yukarıdaysa (kırılım fazlasıyla gerçekleşti).
+            if not failed and last_close <= neckline * 1.07:
                 patterns.append({
                     "type": "double_bottom",
                     "name": "İkili Dip",
@@ -263,8 +271,11 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
                 "düşük"
             )
             strength = "çok güçlü" if confidence == "yüksek" else "güçlü"
+            # Formasyon başarısız mı? Fiyat başın üstüne çıktıysa O-B-O iptal
+            # (düşüş beklenirken yeni zirve = ters yön, formasyon çökmüş).
+            failed = last_close > vh
             # Sinyal tükendi mi? Boyun kırılmış VE fiyat >%7 aşağıdaysa formasyon geçersiz.
-            if not (broken and last_close < neckline * 0.93):
+            if not failed and not (broken and last_close < neckline * 0.93):
                 patterns.append({
                     "type": "head_shoulders",
                     "name": "Omuz-Baş-Omuz",
@@ -316,8 +327,11 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
                 "düşük"
             )
             strength = "çok güçlü" if confidence == "yüksek" else "güçlü"
+            # Formasyon başarısız mı? Fiyat başın altına indiyse ters O-B-O iptal
+            # (yükseliş beklenirken yeni dip = ters yön, formasyon çökmüş).
+            failed = last_close < vh
             # Sinyal tükendi mi? Boyun kırılmış VE fiyat >%7 yukarıdaysa formasyon geçersiz.
-            if not (broken and last_close > neckline * 1.07):
+            if not failed and not (broken and last_close > neckline * 1.07):
                 patterns.append({
                     "type": "inv_head_shoulders",
                     "name": "Ters Omuz-Baş-Omuz",
