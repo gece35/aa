@@ -1,21 +1,20 @@
-"""Kesisim (crossover) bazli saf sinyal puanlama motoru — 0-10.
+"""Hibrit durum + kesişim puanlama motoru — 0-10.
 
-Her bileşen: son CROSS_LOOKBACK bar içinde kesişim olduysa aktif,
-lineer sönme ile ağırlığının tamamına iner → sıfıra döner.
-"Henüz kesti" = tam puan; "3 hafta önce kesti" = çok az puan.
+Her bileşen mevcut piyasa durumunu (state) sürekli olarak ölçer;
+kesişimler küçük tazelik bonusu verir ama zorunlu değildir.
+Böylece hisseler aktif kesişim olmadan da yüksek skor alabilir.
 
-Sinyaller ve maksimum katkıları:
-  1. MACD / sinyal hattı kesişimi   (macd_signal)   — 2.0 puan
-  2. MACD / 0 hattı kesişimi        (macd_zero)     — 1.0 puan
-  3. RSI / RSI-EMA9 sinyal hattı    (rsi_signal)    — 1.5 puan
-  4. Fiyat / EMA30 kesişimi         (ema30)         — 0.5 puan
-  5. Fiyat / EMA50 kesişimi         (ema50)         — 0.75 puan
-  6. Fiyat / EMA200 kesişimi        (ema200)        — 0.75 puan
-  7. DI+ / DI- kesişimi             (di_cross)      — 1.5 puan
-  8. Hacim onayı (kesişimle eş)     (volume)        — 1.0 puan  [bonus]
-  Genişleme cezası                  (ext_penalty)   — 0 / −2.0
+Bileşenler ve maksimum katkıları:
+  1. EMA Hizalama       (trend)     — 2.0  price>EMA30>EMA50>EMA200 hiyerarşisi
+  2. MACD Pozisyon      (momentum)  — 1.5  MACD > sinyal + MACD > 0
+  3. RSI Durumu         (rsi)       — 2.0  bölge skoru + oversold recovery
+  4. BB Giriş           (bbands)    — 1.5  Bollinger alt banda yakınlık
+  5. MACD Histogram     (macd_zero) — 1.0  histogram yönü + yön değişimi
+  6. ADX Güç            (adx)       — 1.5  trend gücü + DI yönü
+  7. Hacim Onayı        (volume)    — 1.0  bağımsız hacim spike
+  Genişleme cezası      (extension) — 0 / −2.0
 
-Ham maks ≈ 9.0; ceza ile gerçekçi üst sınır ≈ 9.0 → clip(0, 10).
+Ham maks ≈ 10.5 → clip(0, 10).
 
 `compute_score_frame` tüm df boyunca vektörize seriler üretir; hem canlı
 tarayıcı (`score_symbol`) hem backtest aynı motoru tüketir — tek kaynak.
@@ -34,20 +33,17 @@ from backend.patterns import detect_patterns, detect_auto_trendlines, summarize_
 
 # ── ayarlanabilir parametreler ───────────────────────────────────────────────
 
-CROSS_LOOKBACK = 20   # bar — kesişimden bu bar sonra sinyal tamamen söner (lineer)
-SMOOTH_SPAN    = 2    # son puan yumuşatma (EWM span)
+SMOOTH_SPAN = 2   # son puan yumuşatma (EWM span)
 
-WEIGHTS = {
-    "macd_signal": 2.0,   # MACD çizgisi sinyal hattını yukarı kesti
-    "macd_zero":   1.0,   # MACD çizgisi 0 hattını yukarı kesti
-    "rsi_signal":  1.5,   # RSI çizgisi kendi EMA-9 sinyal hattını yukarı kesti
-    "ema30":       0.5,   # Fiyat EMA30'u yukarı kesti
-    "ema50":       0.75,  # Fiyat EMA50'yi yukarı kesti
-    "ema200":      0.75,  # Fiyat EMA200'ü yukarı kesti
-    "di_cross":    1.5,   # +DI çizgisi −DI'yı yukarı kesti
-    "volume":      1.0,   # Kesişim sırasında hacim spike'ı (bonus)
-}
-EXT_PENALTY_MAX = -2.0   # Zirve konumu cezası üst sınırı
+# Bileşen ağırlıkları (max puanlar)
+W_TREND    = 2.0   # EMA hizalama
+W_MOMENTUM = 1.5   # MACD pozisyon
+W_RSI      = 2.0   # RSI durum + recovery
+W_BBANDS   = 1.5   # Bollinger giriş
+W_MACD_H   = 1.0   # MACD histogram
+W_ADX      = 1.5   # ADX güç
+W_VOLUME   = 1.0   # Hacim onayı
+EXT_PENALTY_MAX = -2.0   # Genişleme cezası üst sınırı
 
 
 @dataclass
@@ -167,8 +163,8 @@ def _bars_since_cross(condition: pd.Series) -> pd.Series:
     return bars.where(cum > 0, other=np.nan)
 
 
-def _freshness(bars_since: pd.Series, lookback: float = CROSS_LOOKBACK) -> pd.Series:
-    """Lineer sönme: kesişim gününde 1.0, CROSS_LOOKBACK'te 0.0. Önce/sonra 0."""
+def _freshness(bars_since: pd.Series, lookback: float = 20) -> pd.Series:
+    """Lineer sönme: kesişim gününde 1.0, lookback'te 0.0. Önce/sonra 0."""
     f = (1.0 - bars_since.fillna(lookback + 1) / lookback).clip(0.0, 1.0)
     return pd.Series(np.where(bars_since.notna(), f, 0.0), index=bars_since.index)
 
@@ -178,71 +174,145 @@ def _cross_up(a: pd.Series, b: pd.Series) -> pd.Series:
     return (a > b) & (a.shift(1) <= b.shift(1))
 
 
-# ── sinyal serileri ───────────────────────────────────────────────────────────
+# ── yeni state-based sinyal fonksiyonları ────────────────────────────────────
 
-def _macd_series(close: pd.Series) -> tuple[pd.Series, pd.Series, pd.Series]:
-    """MACD sinyal + sıfır kesişimleri.
-    Döner: (macd_signal_score, macd_zero_score, macd_line)"""
-    macd_line, signal_line = _macd(close)
-
-    fresh_signal = _freshness(_bars_since_cross(_cross_up(macd_line, signal_line)))
-    fresh_zero   = _freshness(_bars_since_cross(_cross_up(macd_line, pd.Series(0.0, index=close.index))))
-
-    return (
-        fresh_signal * WEIGHTS["macd_signal"],
-        fresh_zero   * WEIGHTS["macd_zero"],
-        macd_line,
-    )
+def _bollinger(close: pd.Series, window: int = 20, num_std: float = 2.0):
+    """BB middle, upper, lower, bandwidth, %B.
+    %B = 0 → alt bant, 1 → üst bant, <0 → alt bandın altı."""
+    mid   = _sma(close, window)
+    std   = close.rolling(window).std(ddof=0)
+    upper = mid + num_std * std
+    lower = mid - num_std * std
+    bw    = (upper - lower) / mid.replace(0, np.nan)
+    pctb  = (close - lower) / (upper - lower).replace(0, np.nan)
+    return mid, upper, lower, bw, pctb.fillna(0.5)
 
 
-def _rsi_signal_series(close: pd.Series) -> tuple[pd.Series, pd.Series, pd.Series]:
-    """RSI çizgisinin kendi EMA-9 sinyal hattını yukarı kesmesi.
-    Döner: (rsi_signal_score, rsi, rsi_signal_line)"""
-    rsi        = _rsi(close, 14)
-    rsi_signal = _ema(rsi, 9)          # RSI sinyal hattı
-
-    fresh = _freshness(_bars_since_cross(_cross_up(rsi, rsi_signal)))
-    return fresh * WEIGHTS["rsi_signal"], rsi, rsi_signal
-
-
-def _ema_cross_series(close: pd.Series) -> tuple[pd.Series, pd.Series, pd.Series, pd.Series, pd.Series]:
-    """Fiyatın EMA30 / EMA50 / EMA200'ü yukarı kesmesi.
-    Döner: (ema30_score, ema50_score, ema200_score, ema50, ema200)"""
+def _ema_align_score(close: pd.Series):
+    """EMA hizalama skoru (0 – W_TREND). State-based, kesişimsiz.
+    Döner: (score_series, ema30, ema50, ema200)"""
     ema30  = _ema(close, 30)
     ema50  = _ema(close, 50)
     ema200 = _ema(close, 200)
-
-    s30  = _freshness(_bars_since_cross(_cross_up(close, ema30)))  * WEIGHTS["ema30"]
-    s50  = _freshness(_bars_since_cross(_cross_up(close, ema50)))  * WEIGHTS["ema50"]
-    s200 = _freshness(_bars_since_cross(_cross_up(close, ema200))) * WEIGHTS["ema200"]
-
-    return s30, s50, s200, ema50, ema200
-
-
-def _di_cross_series(high: pd.Series, low: pd.Series, close: pd.Series) -> tuple[pd.Series, pd.Series]:
-    """+DI çizgisinin −DI'yı yukarı kesmesi.
-    Döner: (di_score, adx)"""
-    adx, plus_di, minus_di = _adx(high, low, close)
-    fresh = _freshness(_bars_since_cross(_cross_up(plus_di, minus_di)))
-    return fresh * WEIGHTS["di_cross"], adx
+    # 3 kademeli hiyerarşi, her biri eşit ağırlık
+    s = (
+        (close > ema30 ).astype(float) * (W_TREND / 3)
+      + (ema30  > ema50 ).astype(float) * (W_TREND / 3)
+      + (ema50  > ema200).astype(float) * (W_TREND / 3)
+    )
+    return s, ema30, ema50, ema200
 
 
-def _volume_confirm_series(
+def _macd_position_score(close: pd.Series):
+    """MACD pozisyon skoru (0 – W_MOMENTUM). State + taze kesişim bonusu.
+    Döner: (score_series, macd_line, signal_line)"""
+    macd_line, signal_line = _macd(close)
+    above_sig  = (macd_line > signal_line).astype(float) * 0.5
+    above_zero = (macd_line > 0).astype(float)            * 0.4
+    cross      = _cross_up(macd_line, signal_line)
+    fresh      = _freshness(_bars_since_cross(cross), lookback=5)
+    score      = (above_sig + above_zero + fresh * 0.1).clip(0.0, 1.0)
+    return score * W_MOMENTUM, macd_line, signal_line
+
+
+def _rsi_state_score(close: pd.Series):
+    """RSI bölge + recovery skoru (0 – W_RSI).
+    Döner: (score_series, rsi_series)"""
+    rsi = _rsi(close, 14)
+    rv  = rsi.fillna(50).values.astype(float)
+
+    # Bölge skoru: 50-65 tam puan, aşırı uçlar düşük
+    zone = np.select(
+        [rv < 30, rv < 40, rv < 50, rv < 65, rv < 75],
+        [0.0,      0.2,    0.5,     1.0,      0.7],
+        default=0.1,
+    )
+    zone_s = pd.Series(zone, index=rsi.index)
+
+    # Recovery: son 14 barda RSI < 35 görmüş + şu an toparlandı mı?
+    rsi_min = rsi.rolling(14, min_periods=5).min()
+    was_os  = (rsi_min < 35).fillna(False)
+    denom   = (55.0 - rsi_min).replace(0, np.nan)
+    recov   = ((rsi - rsi_min) / denom).clip(0.0, 1.0).fillna(0.0)
+    cross50 = _cross_up(rsi, pd.Series(50.0, index=rsi.index))
+    fresh50 = _freshness(_bars_since_cross(cross50), lookback=10)
+    recov_s = (recov + fresh50 * 0.3).clip(0.0, 1.0)
+    # Oversold görülmediyse recovery katkısını küçük tut
+    recov_s = pd.Series(
+        np.where(was_os.values, recov_s.values, recov_s.values * 0.2),
+        index=rsi.index,
+    )
+
+    combined = (zone_s * 0.6 + recov_s * 0.4).clip(0.0, 1.0)
+    return combined * W_RSI, rsi
+
+
+def _bb_entry_score(
     close: pd.Series,
-    volume: pd.Series,
-    any_cross_today: pd.Series,
+    bb_lower: pd.Series,
+    bb_mid: pd.Series,
+    bb_upper: pd.Series,
+    pctb: pd.Series,
 ) -> pd.Series:
-    """Herhangi bir kesişimle aynı barda hacim spike'ı varsa bonus puan.
-    Spike tanımı: hacim > SMA20 × 1.5"""
+    """Bollinger giriş skoru (0 – W_BBANDS).
+    Pozitif skor yalnızca pctb < 0.40 bölgesinde → bb_lower_touch alert uyumlu."""
+    pv = pctb.fillna(0.5).values.astype(float)
+    base = np.select(
+        [pv < 0.10, pv < 0.20, pv < 0.40],
+        [1.0,        0.7,       0.35],
+        default=0.0,
+    )
+    base_s    = pd.Series(base, index=close.index)
+    cross_mid = _cross_up(close, bb_mid)
+    fresh_mid = _freshness(_bars_since_cross(cross_mid), lookback=8)
+    score     = (base_s + fresh_mid * 0.3).clip(0.0, 1.0)
+    return score * W_BBANDS
+
+
+def _macd_histogram_score(macd_line: pd.Series, signal_line: pd.Series) -> pd.Series:
+    """MACD histogram yön + momentum skoru (0 – W_MACD_H)."""
+    hist     = macd_line - signal_line
+    positive = (hist > 0).astype(float)            * 0.5
+    growing  = (hist > hist.shift(1)).astype(float) * 0.3
+    flip     = _cross_up(hist, pd.Series(0.0, index=hist.index))
+    fresh_f  = _freshness(_bars_since_cross(flip), lookback=6)
+    score    = (positive + growing + fresh_f * 0.2).clip(0.0, 1.0)
+    return score * W_MACD_H
+
+
+def _adx_strength_score(high: pd.Series, low: pd.Series, close: pd.Series):
+    """ADX güç + DI yön skoru (0 – W_ADX).
+    Döner: (score_series, adx_series)"""
+    adx, plus_di, minus_di = _adx(high, low, close)
+    av   = adx.fillna(0).values.astype(float)
+    dpos = (plus_di > minus_di).astype(float).values
+
+    base = np.select(
+        [
+            (av < 15) & (dpos == 0),
+            (av < 15) & (dpos == 1),
+            (av < 25) & (dpos == 1),
+            (av < 40) & (dpos == 1),
+        ],
+        [0.0, 0.15, 0.5, 1.0],
+        default=np.where(dpos == 1, 0.8, 0.0),
+    )
+    base_s   = pd.Series(base, index=close.index)
+    di_cross = _cross_up(plus_di, minus_di)
+    fresh_c  = _freshness(_bars_since_cross(di_cross), lookback=10)
+    score    = (base_s + fresh_c * 0.2).clip(0.0, 1.0)
+    return score * W_ADX, adx
+
+
+def _volume_score(close: pd.Series, volume: pd.Series) -> pd.Series:
+    """Bağımsız hacim spike skoru (0 – W_VOLUME). Son 3 bar max alır."""
     if volume is None or volume.empty or len(volume) < 20:
         return pd.Series(0.0, index=close.index)
-
-    vol_sma = _sma(volume, 20)
-    spike   = (volume > vol_sma * 1.5).fillna(False)
-    # Kesişimden bu yana CROSS_LOOKBACK bar içinde spike olan barlar puan alır
-    cross_with_spike = any_cross_today & spike
-    fresh = _freshness(_bars_since_cross(cross_with_spike))
-    return fresh * WEIGHTS["volume"]
+    sma20 = _sma(volume, 20)
+    ratio = (volume / sma20.replace(0, np.nan)).fillna(0.0)
+    rv    = ratio.values.astype(float)
+    spike = np.select([rv >= 2.0, rv >= 1.5, rv >= 1.2], [1.0, 0.7, 0.4], default=0.0)
+    return pd.Series(spike, index=close.index).rolling(3, min_periods=1).max() * W_VOLUME
 
 
 def _extension_series(
@@ -302,78 +372,65 @@ def compute_score_frame(df: pd.DataFrame, index_close: Optional[pd.Series] = Non
     volume = df["Volume"].astype(float) if "Volume" in df.columns else pd.Series(dtype=float)
 
     # ── sinyal serileri ──
-    macd_sig_score, macd_zero_score, macd_line = _macd_series(close)
-    rsi_sig_score, rsi_val, rsi_signal_val     = _rsi_signal_series(close)
-    ema30_score, ema50_score, ema200_score, ema50, ema200 = _ema_cross_series(close)
-    di_score, adx_val                          = _di_cross_series(high, low, close)
-
-    # Herhangi bir kesişimin bugün gerçekleştiği barlar (hacim onayı için)
-    _, signal_line = _macd(close)
-    rsi_tmp        = _rsi(close, 14)
-    ema30_tmp      = _ema(close, 30)
-    _, plus_di, minus_di = _adx(high, low, close)
-
-    any_cross_today = (
-        _cross_up(macd_line, signal_line)
-        | _cross_up(macd_line, pd.Series(0.0, index=close.index))
-        | _cross_up(rsi_tmp, _ema(rsi_tmp, 9))
-        | _cross_up(close, ema30_tmp)
-        | _cross_up(close, ema50)
-        | _cross_up(close, ema200)
-        | _cross_up(plus_di, minus_di)
-    ).fillna(False)
-
-    vol_score   = _volume_confirm_series(close, volume, any_cross_today)
-    ext_penalty, rp = _extension_series(close, high, low, volume)
+    trend_s, ema30, ema50, ema200       = _ema_align_score(close)
+    mom_s, macd_line, signal_line       = _macd_position_score(close)
+    rsi_s, rsi_val                      = _rsi_state_score(close)
+    bb_mid, bb_upper, bb_lower, bb_bw, pctb = _bollinger(close)
+    bb_s                                = _bb_entry_score(close, bb_lower, bb_mid, bb_upper, pctb)
+    macdh_s                             = _macd_histogram_score(macd_line, signal_line)
+    adx_s, adx_val                      = _adx_strength_score(high, low, close)
+    vol_s                               = _volume_score(close, volume)
+    ext_penalty, rp                     = _extension_series(close, high, low, volume)
 
     # ── toplam ──
     total_raw = (
-        macd_sig_score.fillna(0)
-        + macd_zero_score.fillna(0)
-        + rsi_sig_score.fillna(0)
-        + ema30_score.fillna(0)
-        + ema50_score.fillna(0)
-        + ema200_score.fillna(0)
-        + di_score.fillna(0)
-        + vol_score.fillna(0)
+        trend_s.fillna(0)
+        + mom_s.fillna(0)
+        + rsi_s.fillna(0)
+        + bb_s.fillna(0)
+        + macdh_s.fillna(0)
+        + adx_s.fillna(0)
+        + vol_s.fillna(0)
         + ext_penalty.fillna(0)
-    )
+    ).clip(0, 10)
     total = total_raw.ewm(span=SMOOTH_SPAN, adjust=False).mean().clip(0, 10)
 
     zero = pd.Series(0.0, index=close.index)
 
     return {
-        # yeni sinyal bileşenleri
-        "macd_signal":  macd_sig_score,
-        "macd_zero":    macd_zero_score,
-        "rsi_signal":   rsi_sig_score,
-        "ema30":        ema30_score,
-        "ema50":        ema50_score,
-        "ema200":       ema200_score,
-        "di_cross":     di_score,
-        "volume":       vol_score,
-        "ext_penalty":  ext_penalty,
-        # geriye uyumluluk alias'ları (backtest + alerts)
-        "macd_cross":   macd_sig_score + macd_zero_score,
-        "ema_cross":    ema30_score + ema50_score + ema200_score,
-        "rsi_cross":    rsi_sig_score,
+        # ── sinyal serileri (yeni key → yeni hesaplama) ──
+        "trend":       trend_s,
+        "momentum":    mom_s,
+        "rsi":         rsi_s,
+        "bbands":      bb_s,
+        "macd_zero":   macdh_s,
+        "adx":         adx_s,
+        "volume":      vol_s,
+        "ext_penalty": ext_penalty,
+        # ── geriye uyumluluk alias'ları (backtest + alerts) ──
+        "ema_cross":   trend_s,      # backtest MIN_TREND_SUBSCORE karşılaştırması
+        "macd_signal": mom_s,
+        "macd_cross":  mom_s,
+        "rsi_signal":  rsi_s,
+        "rsi_cross":   rsi_s,
+        "di_cross":    adx_s,
         "rel_strength": zero,
-        "trend":        ema30_score + ema50_score + ema200_score,
-        "momentum":     macd_sig_score + macd_zero_score,
-        "adx":          di_score,
-        "rsi":          rsi_sig_score,
-        "bbands":       zero,
-        # toplam
+        # ── toplamlar ──
         "total_raw": total_raw,
         "total":     total,
-        # yardımcı değerler (detay görüntü için)
+        # ── yardımcı değer serileri (detay ekranı + alert ind_val için) ──
+        "ema30_val":      ema30,
         "ema50_val":      ema50,
         "ema200_val":     ema200,
         "macd_val":       macd_line,
+        "signal_val":     signal_line,
         "rsi_val":        rsi_val,
-        "rsi_signal_val": rsi_signal_val,
+        "rsi_signal_val": _ema(rsi_val, 9),
         "adx_val":        adx_val,
-        "pctb_val":       zero,
+        "pctb_val":       pctb,
+        "bb_mid_val":     bb_mid,
+        "bb_upper_val":   bb_upper,
+        "bb_lower_val":   bb_lower,
         "rp_val":         rp,
     }
 
@@ -386,97 +443,128 @@ def _round1(v: float | None) -> float | None:
 
 def _build_indicators(frame: Dict[str, pd.Series]) -> List[IndicatorResult]:
     def last(key: str) -> float:
-        v = _safe_last(frame[key])
+        v = _safe_last(frame.get(key))
         return 0.0 if v is None else v
 
-    ms  = last("macd_signal")
-    mz  = last("macd_zero")
-    rs  = last("rsi_signal")
-    e30 = last("ema30")
-    e50 = last("ema50")
-    e200= last("ema200")
-    di  = last("di_cross")
-    vol = last("volume")
-    ext = last("ext_penalty")
+    trend_sc = last("trend")
+    mom_sc   = last("momentum")
+    rsi_sc   = last("rsi")
+    bb_sc    = last("bbands")
+    macdh_sc = last("macd_zero")
+    adx_sc   = last("adx")
+    vol_sc   = last("volume")
+    ext_sc   = last("ext_penalty")
 
-    macd_v   = _safe_last(frame["macd_val"])
-    rsi_v    = _safe_last(frame["rsi_val"])
-    rsig_v   = _safe_last(frame["rsi_signal_val"])
-    ema50_v  = _safe_last(frame["ema50_val"])
-    ema200_v = _safe_last(frame["ema200_val"])
-    adx_v    = _safe_last(frame["adx_val"])
-    rp_v     = _safe_last(frame["rp_val"])
+    macd_v   = _safe_last(frame.get("macd_val"))
+    rsi_v    = _safe_last(frame.get("rsi_val"))
+    ema30_v  = _safe_last(frame.get("ema30_val"))
+    ema50_v  = _safe_last(frame.get("ema50_val"))
+    ema200_v = _safe_last(frame.get("ema200_val"))
+    adx_v    = _safe_last(frame.get("adx_val"))
+    pctb_v   = _safe_last(frame.get("pctb_val"))
+    rp_v     = _safe_last(frame.get("rp_val"))
 
-    def macd_sig_detail() -> str:
-        if ms >= 1.5:  return "MACD sinyal hattını taze kesti — güçlü alım sinyali"
-        if ms >= 0.8:  return "MACD sinyal üstünde, kesişim görece yeni"
-        if ms >= 0.2:  return "MACD sinyal üstünde, kesişim eskimeye başladı"
-        return "MACD sinyal hattının altında — momentum negatif"
+    def trend_detail() -> str:
+        e30  = f"EMA30≈{ema30_v:.2f}"  if ema30_v  is not None else "EMA30"
+        e50  = f"EMA50≈{ema50_v:.2f}"  if ema50_v  is not None else "EMA50"
+        e200 = f"EMA200≈{ema200_v:.2f}" if ema200_v is not None else "EMA200"
+        if trend_sc >= W_TREND * 0.9:
+            return f"Fiyat > {e30} > {e50} > {e200} — tam hizalama, güçlü yükseliş trendi"
+        if trend_sc >= W_TREND * 0.6:
+            return f"Kısmi EMA hizalaması ({e50}) — trend gelişiyor"
+        if trend_sc >= W_TREND * 0.3:
+            return f"Fiyat en az bir EMA'nın üstünde ({e50})"
+        return f"Fiyat EMA'ların altında ({e50}) — düşüş baskısı"
 
-    def macd_zero_detail() -> str:
-        if mz >= 0.8:  return "MACD 0 hattını taze kesti — trend pozitif teyit"
-        if mz >= 0.4:  return "MACD 0 üstünde, sıfır kesişimi görece yeni"
-        if mz >= 0.1:  return "MACD 0 üstünde, kesişim eskiyor"
+    def mom_detail() -> str:
         mv = f"MACD {macd_v:.3f}" if macd_v is not None else "MACD"
-        return f"{mv} — 0 hattının altında, trend henüz doğrulanmadı"
+        if mom_sc >= W_MOMENTUM * 0.8:
+            return f"{mv} — sinyal üstünde ve pozitif bölgede (güçlü momentum)"
+        if mom_sc >= W_MOMENTUM * 0.4:
+            return f"{mv} — sinyal veya sıfır üstünde (kısmi pozisyon)"
+        return f"{mv} — sinyal altında veya negatif bölgede"
 
-    def rsi_sig_detail() -> str:
+    def rsi_detail() -> str:
         rv = f"RSI {rsi_v:.0f}" if rsi_v is not None else "RSI"
-        sv = f"/ sinyal {rsig_v:.0f}" if rsig_v is not None else ""
-        if rs >= 1.2:  return f"{rv}{sv} — RSI sinyal hattını taze kesti"
-        if rs >= 0.6:  return f"{rv}{sv} — RSI sinyal üstünde, kesişim yeni"
-        if rs >= 0.1:  return f"{rv}{sv} — RSI sinyal üstünde, eskiyor"
-        return f"{rv}{sv} — RSI sinyal hattının altında"
+        if rsi_sc >= W_RSI * 0.85:
+            return f"{rv} — sağlıklı yükseliş bölgesinde (50-65) veya oversold'dan taze toparlama"
+        if rsi_sc >= W_RSI * 0.55:
+            return f"{rv} — momentum birikimi bölgesinde (40-65)"
+        if rsi_sc >= W_RSI * 0.25:
+            return f"{rv} — toparlanma başlangıcı veya düşük momentum bölgesi"
+        if rsi_v is not None and rsi_v >= 75:
+            return f"{rv} — aşırı alım bölgesinde, geri çekilme riski"
+        return f"{rv} — zayıf momentum"
 
-    def ema_detail(score: float, period: int, val: float | None) -> str:
-        vstr = f"≈{val:.2f}" if val is not None else ""
-        if score >= 0.7 * (WEIGHTS[f"ema{period}"]):
-            return f"Fiyat EMA{period}'ü ({vstr}) taze kesti — yukarı geçiş"
-        if score >= 0.2 * (WEIGHTS[f"ema{period}"]):
-            return f"Fiyat EMA{period} ({vstr}) üstünde, kesişim eskiyor"
-        return f"Fiyat EMA{period} ({vstr}) altında"
+    def bb_detail() -> str:
+        pv = f"%B {pctb_v:.2f}" if pctb_v is not None else ""
+        if pctb_v is not None and pctb_v > 0.80:
+            return f"{pv} — üst band yakını, aşırı alım riski"
+        if bb_sc >= W_BBANDS * 0.8:
+            return f"{pv} — Bollinger alt banda çok yakın: güçlü giriş bölgesi"
+        if bb_sc >= W_BBANDS * 0.4:
+            return f"{pv} — Bollinger alt bant bölgesinde veya orta bandı taze kesti"
+        if bb_sc >= W_BBANDS * 0.1:
+            return f"{pv} — Bollinger alt-orta band arası"
+        return f"{pv} — Bollinger orta-üst band bölgesi, giriş için erken"
 
-    def di_detail() -> str:
+    def macdh_detail() -> str:
+        if macdh_sc >= W_MACD_H * 0.8:
+            return "MACD histogramı pozitif ve büyüyor — güçlenen momentum"
+        if macdh_sc >= W_MACD_H * 0.4:
+            return "MACD histogramı yön değiştirdi veya pozitife döndü"
+        return "MACD histogramı negatif veya zayıflıyor"
+
+    def adx_detail() -> str:
         av = f"ADX {adx_v:.0f}" if adx_v is not None else "ADX"
-        if di >= 1.2:  return f"+DI/−DI kesişimi taze — {av} ile yeni trend başlıyor"
-        if di >= 0.6:  return f"+DI, −DI üstünde — {av} trend güçleniyor"
-        if di >= 0.1:  return f"+DI, −DI üstünde — {av} kesişim eskiyor"
-        return f"+DI zayıf veya −DI üstünde — {av} yatay/düşüş trendi"
+        if adx_sc >= W_ADX * 0.85:
+            return f"{av} — güçlü trend, DI+ baskın (25+)"
+        if adx_sc >= W_ADX * 0.45:
+            return f"{av} — trend oluşuyor, DI+ > DI-"
+        if adx_sc >= W_ADX * 0.1:
+            return f"{av} — zayıf trend başlangıcı"
+        return f"{av} — trend yok veya DI- baskın"
 
     def vol_detail() -> str:
-        if vol >= 0.8:  return "Kesişimle birlikte güçlü hacim spike'ı — sinyal güvenilir"
-        if vol >= 0.3:  return "Kesişim döneminde hacim artışı"
-        return "Kesişim sırasında belirgin hacim onayı yok"
+        if vol_sc >= W_VOLUME * 0.9:
+            return "Çok güçlü hacim spike (SMA20 × 2+) — güçlü katılım"
+        if vol_sc >= W_VOLUME * 0.6:
+            return "Güçlü hacim artışı — hareket teyitli"
+        if vol_sc >= W_VOLUME * 0.3:
+            return "Orta seviye hacim artışı"
+        return "Belirgin hacim onayı yok"
 
     def ext_detail() -> str:
-        if ext >= -0.2:
+        if ext_sc >= -0.2:
             return "52-hft aralığında rahat konum, giriş riski düşük"
         rp_pct = round(rp_v * 100) if rp_v is not None else "?"
-        if ext >= -0.8:
+        if ext_sc >= -0.8:
             return f"52-hft aralığının %{rp_pct}'inde — hafif uzamış"
-        if ext >= -1.8:
+        if ext_sc >= -1.8:
             return f"52-hft aralığının %{rp_pct}'inde — uzamış, dikkat"
         return f"52-hft aralığının %{rp_pct}'inde — zirveye yapışık / geri çekilme riski yüksek"
 
+    bb_ind = IndicatorResult("BB Giriş", "bbands", _round1(bb_sc), W_BBANDS,
+                             value=_round1(pctb_v), detail=bb_detail())
+    # alert bb_lower_touch uyumluluğu: signal sadece gerçekten alt band bölgesindeyken True
+    bb_ind.signal = pctb_v is not None and pctb_v < 0.40
+
     return [
-        IndicatorResult("MACD × Sinyal",  "momentum", _round1(ms),  WEIGHTS["macd_signal"],
-                        value=_round1(macd_v),   detail=macd_sig_detail()),
-        IndicatorResult("MACD × Sıfır",   "macd_zero", _round1(mz), WEIGHTS["macd_zero"],
-                        value=_round1(macd_v),   detail=macd_zero_detail()),
-        IndicatorResult("RSI × Sinyal",   "rsi",      _round1(rs),  WEIGHTS["rsi_signal"],
-                        value=_round1(rsi_v),    detail=rsi_sig_detail()),
-        IndicatorResult("Fiyat × EMA30",  "ema30",    _round1(e30), WEIGHTS["ema30"],
-                        value=_round1(ema50_v),  detail=ema_detail(e30, 30, _safe_last(frame["ema50_val"]))),
-        IndicatorResult("Fiyat × EMA50",  "trend",    _round1(e50), WEIGHTS["ema50"],
-                        value=_round1(ema50_v),  detail=ema_detail(e50, 50, ema50_v)),
-        IndicatorResult("Fiyat × EMA200", "ema200",   _round1(e200),WEIGHTS["ema200"],
-                        value=_round1(ema200_v), detail=ema_detail(e200, 200, ema200_v)),
-        IndicatorResult("DI+ × DI−",      "adx",      _round1(di),  WEIGHTS["di_cross"],
-                        value=_round1(adx_v),    detail=di_detail()),
-        IndicatorResult("Hacim Onayı",    "volume",   _round1(vol), WEIGHTS["volume"],
-                        value=None,              detail=vol_detail()),
-        IndicatorResult("Genişleme Riski","extension",_round1(ext), 0.0,
-                        value=_round1(rp_v),     detail=ext_detail()),
+        IndicatorResult("EMA Hizalama",   "trend",    _round1(trend_sc), W_TREND,
+                        value=_round1(ema50_v),   detail=trend_detail()),
+        IndicatorResult("MACD Pozisyon",  "momentum", _round1(mom_sc),   W_MOMENTUM,
+                        value=_round1(macd_v),    detail=mom_detail()),
+        IndicatorResult("RSI Durumu",     "rsi",      _round1(rsi_sc),   W_RSI,
+                        value=_round1(rsi_v),     detail=rsi_detail()),
+        bb_ind,
+        IndicatorResult("MACD Histogram", "macd_zero",_round1(macdh_sc), W_MACD_H,
+                        value=_round1(macd_v),    detail=macdh_detail()),
+        IndicatorResult("ADX Güç",        "adx",      _round1(adx_sc),   W_ADX,
+                        value=_round1(adx_v),     detail=adx_detail()),
+        IndicatorResult("Hacim Onayı",    "volume",   _round1(vol_sc),   W_VOLUME,
+                        value=None,               detail=vol_detail()),
+        IndicatorResult("Genişleme Riski","extension",_round1(ext_sc),   0.0,
+                        value=_round1(rp_v),      detail=ext_detail()),
     ]
 
 

@@ -637,16 +637,15 @@
             .replace(/>/g, '&gt;');
     }
 
-    // Her sinyal kesişim bazlı; normalize oran ≥ 0.5 ise aktif sayılır.
+    // Normalize oran ≥ 0.5 ise aktif sayılır.
     const REASON_PHRASE = {
-        momentum: 'MACD sinyal hattını kesti',
-        macd_zero: 'MACD sıfır hattını geçti',
-        rsi: 'RSI sinyal hattını kesti',
-        ema30: 'fiyat EMA30\'u kırdı',
-        trend: 'fiyat EMA50\'yi kırdı',
-        ema200: 'fiyat EMA200\'ü kırdı',
-        adx: 'DI+ yönlü kesişim yaptı',
-        volume: 'kesişimde hacim onayı var',
+        trend:     'EMA\'lar tam hizalı — güçlü trend yapısı',
+        momentum:  'MACD sinyal üstünde ve pozitif bölgede',
+        rsi:       'RSI sağlıklı momentum bölgesinde',
+        bbands:    'Bollinger alt band bölgesinde — giriş fırsatı',
+        macd_zero: 'MACD histogramı pozitif ve yükselen momentum',
+        adx:       'ADX güçlü trend teyidi veriyor',
+        volume:    'hacim ortalamanın belirgin üzerinde',
     };
 
     function buildScoreReason(r) {

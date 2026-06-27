@@ -155,7 +155,8 @@ def _check_single(alert: Alert, detail: Dict) -> bool:
 
     if ct == "bb_upper_touch":
         bbands_ind = indicators.get("bbands", {})
-        return "ust band" in bbands_ind.get("detail", "")
+        d = bbands_ind.get("detail", "")
+        return "ust band" in d or "üst band" in d
 
     if ct == "ema_cross_up":
         return ind_sig("trend")

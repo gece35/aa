@@ -52,7 +52,7 @@ logger = logging.getLogger(__name__)
 # Giriş
 MIN_SCORE              = 6
 ENTRY_CONSEC_DAYS      = 2
-MIN_TREND_SUBSCORE     = 1.2  # ema_cross max 2.0; 1.2 = %60 doluluk esigi
+MIN_TREND_SUBSCORE     = 1.2  # ema_align max 2.0; 1.2 = %60 doluluk esigi
 REQUIRE_VOLUME_ENTRY   = True
 HIGH52W_FLOOR          = 0.85
 
