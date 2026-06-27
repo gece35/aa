@@ -639,11 +639,12 @@ def _calc_sl_tp(price: float, supports: list, resistances: list) -> tuple:
 # ── yardımcılar ───────────────────────────────────────────────────────────────
 
 def _pct_change_back(close: pd.Series, n: int) -> float:
-    if len(close) <= n:
+    clean = close.dropna()
+    if len(clean) <= n:
         return 0.0
-    last = float(close.iloc[-1])
-    prev = float(close.iloc[-(n + 1)])
-    if prev == 0 or pd.isna(prev) or pd.isna(last):
+    last = float(clean.iloc[-1])
+    prev = float(clean.iloc[-(n + 1)])
+    if prev == 0:
         return 0.0
     return (last - prev) / prev * 100.0
 
