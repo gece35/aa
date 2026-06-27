@@ -118,6 +118,9 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
     low_v    = df_use["Low"].astype(float).values
     volume_v = df_use["Volume"].astype(float).values if "Volume" in df_use.columns else None
     n = len(close_v)
+    # Son geçerli kapanış — NaN trailing değerleri görmezden gel (ABD tatil günleri vs.)
+    _valid = close_v[~np.isnan(close_v)]
+    last_close = float(_valid[-1]) if len(_valid) > 0 else float("nan")
 
     def date_at(i: int) -> str:
         return _date_at(df_use, i)
@@ -156,7 +159,7 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
             strength = "çok güçlü" if confidence == "yüksek" else "güçlü" if confidence == "orta" else "zayıf"
             neckline = round(valley, 4)
             # Sinyal tükendi mi? Fiyat neckline'dan >%7 aşağıdaysa formasyon geçersiz.
-            if float(close_v[-1]) >= neckline * 0.93:
+            if last_close >= neckline * 0.93:
                 patterns.append({
                     "type": "double_top",
                     "name": "İkili Tepe",
@@ -207,7 +210,7 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
             strength  = "çok güçlü" if confidence == "yüksek" else "güçlü" if confidence == "orta" else "zayıf"
             neckline  = round(peak_m, 4)
             # Sinyal tükendi mi? Fiyat neckline'dan >%7 yukarıdaysa formasyon geçersiz.
-            if float(close_v[-1]) <= neckline * 1.07:
+            if last_close <= neckline * 1.07:
                 patterns.append({
                     "type": "double_bottom",
                     "name": "İkili Dip",
@@ -252,7 +255,7 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
             neckline     = round((left_valley + right_valley) / 2, 4)
 
             # Boyun çizgisi kırıldı mı?
-            broken = float(close_v[-1]) < neckline * 0.99
+            broken = last_close < neckline * 0.99
 
             confidence = (
                 "yüksek" if (shoulders_sim and broken) else
@@ -261,7 +264,7 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
             )
             strength = "çok güçlü" if confidence == "yüksek" else "güçlü"
             # Sinyal tükendi mi? Boyun kırılmış VE fiyat >%7 aşağıdaysa formasyon geçersiz.
-            if not (broken and float(close_v[-1]) < neckline * 0.93):
+            if not (broken and last_close < neckline * 0.93):
                 patterns.append({
                     "type": "head_shoulders",
                     "name": "Omuz-Baş-Omuz",
@@ -305,7 +308,7 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
             left_peak    = float(np.max(high_v[sl:sh + 1]))
             right_peak   = float(np.max(high_v[sh:sr + 1]))
             neckline     = round((left_peak + right_peak) / 2, 4)
-            broken       = float(close_v[-1]) > neckline * 1.01
+            broken       = last_close > neckline * 1.01
 
             confidence = (
                 "yüksek" if (shoulders_sim and broken) else
@@ -314,7 +317,7 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
             )
             strength = "çok güçlü" if confidence == "yüksek" else "güçlü"
             # Sinyal tükendi mi? Boyun kırılmış VE fiyat >%7 yukarıdaysa formasyon geçersiz.
-            if not (broken and float(close_v[-1]) > neckline * 1.07):
+            if not (broken and last_close > neckline * 1.07):
                 patterns.append({
                     "type": "inv_head_shoulders",
                     "name": "Ters Omuz-Baş-Omuz",
@@ -451,7 +454,7 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
         if candidate is not None:
             upper_at_end = h_int + h_slope * (w - 1)
             lower_at_end = l_int + l_slope * (w - 1)
-            cur = float(close_v[-1])
+            cur = last_close
             BREAK_MARGIN = 0.025  # %2.5 dışarıya çıkmış = kırılım olmuş
             if cur > upper_at_end * (1 + BREAK_MARGIN) or cur < lower_at_end * (1 - BREAK_MARGIN):
                 candidate = None
