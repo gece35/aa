@@ -669,13 +669,17 @@ def score_symbol(symbol: str, df: pd.DataFrame, index_df=None) -> ScoreResult | 
     low    = df["Low"].astype(float)
     volume = df["Volume"].astype(float) if "Volume" in df.columns else pd.Series(dtype=float)
 
+    close_clean = close.dropna()
+    if close_clean.empty:
+        return None
+
     index_close = _index_close_of(index_df)
     frame = compute_score_frame(df, index_close)
 
-    last_close = float(close.iloc[-1])
+    last_close = float(close_clean.iloc[-1])
     change_pct = 0.0
-    if len(close) >= 2 and not pd.isna(close.iloc[-2]) and close.iloc[-2] != 0:
-        change_pct = (last_close - float(close.iloc[-2])) / float(close.iloc[-2]) * 100.0
+    if len(close_clean) >= 2 and close_clean.iloc[-2] != 0:
+        change_pct = (last_close - float(close_clean.iloc[-2])) / float(close_clean.iloc[-2]) * 100.0
 
     high_52 = float(high.tail(252).dropna().max()) if not high.tail(252).dropna().empty else None
     low_52  = float(low.tail(252).dropna().min())  if not low.tail(252).dropna().empty else None
@@ -722,6 +726,7 @@ def score_symbol_detailed(symbol: str, df: pd.DataFrame, index_df=None) -> dict 
     high   = df["High"].astype(float)
     low    = df["Low"].astype(float)
     volume = df["Volume"].astype(float) if "Volume" in df.columns else pd.Series(dtype=float)
+    last_close = float(close.dropna().iloc[-1]) if not close.dropna().empty else 0.0
 
     hist = [
         {
@@ -735,14 +740,17 @@ def score_symbol_detailed(symbol: str, df: pd.DataFrame, index_df=None) -> dict 
     ohlcv = []
     for idx, row in df.tail(500).iterrows():
         try:
+            o, h, l, c = float(row["Open"]), float(row["High"]), float(row["Low"]), float(row["Close"])
+            if any(math.isnan(v) or math.isinf(v) for v in (o, h, l, c)):
+                continue
             date_str = str(idx.date()) if hasattr(idx, "date") else str(idx)[:10]
             vol_val  = row.get("Volume", 0)
             ohlcv.append({
                 "t": date_str,
-                "o": round(float(row["Open"]),  4),
-                "h": round(float(row["High"]),  4),
-                "l": round(float(row["Low"]),   4),
-                "c": round(float(row["Close"]), 4),
+                "o": round(o, 4),
+                "h": round(h, 4),
+                "l": round(l, 4),
+                "c": round(c, 4),
                 "v": int(float(vol_val)) if not pd.isna(vol_val) else 0,
             })
         except (KeyError, ValueError, TypeError):
@@ -750,10 +758,10 @@ def score_symbol_detailed(symbol: str, df: pd.DataFrame, index_df=None) -> dict 
 
     avg_vol = float(volume.tail(20).mean()) if not volume.empty else 0.0
     sr      = _find_sr_levels(high, low, close)
-    stop_loss, take_profit = _calc_sl_tp(float(close.iloc[-1]), sr["supports"], sr["resistances"])
+    stop_loss, take_profit = _calc_sl_tp(last_close, sr["supports"], sr["resistances"])
 
     risk_reward = None
-    price = float(close.iloc[-1])
+    price = last_close
     if stop_loss and take_profit and price > stop_loss:
         risk = price - stop_loss
         if risk > 0:
