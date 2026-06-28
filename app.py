@@ -27,7 +27,8 @@ from backend.billing import billing_bp
 from backend.newsletter import newsletter_bp
 from backend.support import support_bp
 from backend.cache import (
-    exchange_cache, scan_cache, stock_cache, stock_news_cache, symbol_cache,
+    exchange_cache, fundamentals_cache, scan_cache, stock_cache, stock_news_cache,
+    symbol_cache,
 )
 from backend.config import (
     APP_BASE_URL, DATABASE_URL, DEBUG, GA_MEASUREMENT_ID, LEGAL_ENTITY_ADDRESS,
@@ -38,6 +39,7 @@ from backend.db import db, migrate
 from backend.limits import PLANS, enforce_collection_limit, get_plan, quota, requires_plan
 from backend.models import Portfolio, StockComment, TweetLog, User, Watchlist
 from backend.news import fetch_news, fetch_stock_news
+from backend.fundamentals import GROQ_API_KEY, analyze_fundamentals
 from backend.backtest import run_backtest
 from backend.scanner import get_index_df, scan_market, scan_market_chunk
 from backend.scoring import score_symbol_detailed
@@ -368,6 +370,35 @@ def create_app() -> Flask:
         detail["cached"] = False
         stock_cache.set(cache_key, detail)
         return jsonify(detail)
+
+    # ── API: AI destekli bilanço analizi ───────────────────────────────────
+    # Şimdilik herkese açık; ileride üyelere kısıtlamak için bu route'a
+    # @requires_plan("free") veya @quota("fundamentals", per="day") eklenir.
+
+    @flask_app.route("/api/stock/<path:symbol>/fundamentals")
+    def api_stock_fundamentals(symbol: str):
+        symbol = symbol.upper().strip()
+        if not GROQ_API_KEY:
+            return jsonify({
+                "error": "config_error",
+                "message": "Bilanço analizi servisi şu an kullanılamıyor.",
+            }), 503
+
+        cache_key = f"fund:{symbol}"
+        cached = fundamentals_cache.get(cache_key)
+        if cached is not None:
+            c = dict(cached)
+            c["cached"] = True
+            return jsonify(c)
+
+        result = analyze_fundamentals(symbol)
+        # available=False ise (veri yok / AI hatası) cache'leme — sonraki denemede
+        # tekrar denensin. Yalnızca başarılı analizleri cache'le.
+        if result.get("available"):
+            result["generated_at"] = int(time.time())
+            result["cached"] = False
+            fundamentals_cache.set(cache_key, result)
+        return jsonify(result)
 
     @flask_app.route("/api/exchange-rate")
     def api_exchange_rate():

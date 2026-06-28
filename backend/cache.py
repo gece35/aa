@@ -117,3 +117,4 @@ stock_cache       = TTLCache(ttl_seconds=300,  name="stock")
 symbol_cache      = TTLCache(ttl_seconds=600,  name="sym")
 stock_news_cache  = TTLCache(ttl_seconds=300,  name="snews")
 exchange_cache    = TTLCache(ttl_seconds=300,  name="exch")
+fundamentals_cache = TTLCache(ttl_seconds=86400, name="fund")  # bilanço çeyreklik güncellenir

@@ -6,6 +6,7 @@
             fetch(`/api/scan?market=${market}&offset=${offset}&limit=${limit}&force=${force ? 1 : 0}&sort=${sort}`).then((r) => r.json()),
         stock: (symbol) => fetch(`/api/stock/${encodeURIComponent(symbol)}`).then((r) => r.json()),
         stockNews: (symbol) => fetch(`/api/news/stock/${encodeURIComponent(symbol)}`).then((r) => r.json()),
+        stockFundamentals: (symbol) => fetch(`/api/stock/${encodeURIComponent(symbol)}/fundamentals`).then((r) => r.json()),
         exchangeRate: () => fetch('/api/exchange-rate').then((r) => r.json()),
         alertsList: () => fetch('/api/alerts').then((r) => r.json()),
         alertsCreate: (body) => fetch('/api/alerts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json()),
@@ -777,6 +778,7 @@
             if (data.error) throw new Error(data.error);
             els.modalContent.innerHTML = renderStockDetail(data, newsData);
             wireDetailTabs(data);
+            wireFundamentalsTab(data.symbol);
             wireModalWatchToggle(data.symbol);
             wireModalShare(data.symbol, data.score);
             wireModalPortfolioForm(data);
@@ -924,6 +926,7 @@
             <!-- Sekme çubuğu -->
             <div style="display:flex;gap:0;margin-top:18px;border-bottom:1px solid var(--glass-brd);">
                 <button class="detail-modal-tab active" data-dtab="ozet" style="padding:8px 18px;font-size:13px;font-weight:500;background:none;border:none;border-bottom:2px solid var(--accent);color:var(--text-1);cursor:pointer;">Özet</button>
+                <button class="detail-modal-tab" data-dtab="bilanco" style="padding:8px 18px;font-size:13px;font-weight:500;background:none;border:none;border-bottom:2px solid transparent;color:var(--text-3);cursor:pointer;">Bilanço Analizi</button>
                 <button class="detail-modal-tab" data-dtab="haberler" style="padding:8px 18px;font-size:13px;font-weight:500;background:none;border:none;border-bottom:2px solid transparent;color:var(--text-3);cursor:pointer;">Haberler</button>
             </div>
 
@@ -980,6 +983,20 @@
                 </div>
             </div>
 
+            <!-- BİLANÇO ANALİZİ paneli -->
+            <div id="dtab-bilanco" class="dtab-panel" style="display:none;padding-top:14px;">
+                <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--text-3);margin-bottom:6px;">Yapay Zeka Bilanço Analizi</div>
+                <div style="font-size:12px;color:var(--text-3);line-height:1.5;margin-bottom:14px;">
+                    Hissenin son bilanço ve gelir tablosu verileri yapay zeka ile değerlendirilir ve
+                    finansal sağlık <b>pozitif / nötr / negatif</b> olarak sınıflandırılır.
+                </div>
+                <button id="fundAnalyzeBtn" class="btn btn-primary" style="font-size:13px;padding:8px 18px;">&#129504; Analiz Et</button>
+                <div id="fundResult" style="margin-top:16px;"></div>
+                <div style="margin-top:16px;font-size:11px;color:var(--text-3);line-height:1.5;">
+                    &#9888; Bu analiz eğitim amaçlıdır ve yatırım tavsiyesi değildir.
+                </div>
+            </div>
+
             <!-- HABERLER paneli -->
             <div id="dtab-haberler" class="dtab-panel" style="display:none;padding-top:14px;">
                 <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--text-3);margin-bottom:10px;">Son Haberler</div>
@@ -1018,6 +1035,103 @@
                 });
             });
         });
+    }
+
+    // --- Bilanço analizi sekmesi ---
+    function wireFundamentalsTab(symbol) {
+        const btn = document.getElementById('fundAnalyzeBtn');
+        const result = document.getElementById('fundResult');
+        if (!btn || !result) return;
+        let loaded = false;
+        btn.addEventListener('click', async () => {
+            if (loaded) return;
+            btn.disabled = true;
+            const original = btn.innerHTML;
+            btn.innerHTML = 'Analiz ediliyor...';
+            result.innerHTML = '<div class="empty" style="font-size:13px;">Bilanço yapay zeka ile analiz ediliyor, bu birkaç saniye sürebilir...</div>';
+            try {
+                const data = await API.stockFundamentals(symbol);
+                if (data.error === 'config_error') {
+                    result.innerHTML = '<div class="empty" style="font-size:13px;">Bilanço analizi servisi şu an kullanılamıyor. Lütfen daha sonra tekrar deneyin.</div>';
+                    btn.innerHTML = original; btn.disabled = false;
+                    return;
+                }
+                if (!data.available) {
+                    result.innerHTML = '<div class="empty" style="font-size:13px;">Bu hisse için bilanço verisi bulunamadı. (BIST hisselerinde temel veri çoğu zaman eksik olabilir.)</div>';
+                    btn.innerHTML = original; btn.disabled = false;
+                    return;
+                }
+                result.innerHTML = renderFundamentals(data);
+                loaded = true;
+                btn.style.display = 'none';
+            } catch (err) {
+                result.innerHTML = `<div class="empty" style="font-size:13px;">Analiz yapılamadı: ${escapeHtml(err.message)}</div>`;
+                btn.innerHTML = original; btn.disabled = false;
+            }
+        });
+    }
+
+    function renderFundamentals(d) {
+        const verdictMap = {
+            positive: { label: 'Pozitif', color: 'var(--neon)', icon: '&#9650;' },
+            neutral:  { label: 'Nötr',    color: 'var(--text-3)', icon: '&#9644;' },
+            negative: { label: 'Negatif', color: 'var(--danger)', icon: '&#9660;' },
+        };
+        const v = verdictMap[d.verdict] || verdictMap.neutral;
+        const m = d.metrics || {};
+
+        const fmtMoney = (val) => {
+            if (val == null) return '—';
+            const abs = Math.abs(val);
+            if (abs >= 1e9) return (val / 1e9).toFixed(2) + ' Mlr';
+            if (abs >= 1e6) return (val / 1e6).toFixed(2) + ' Mn';
+            return val.toFixed(2);
+        };
+        const fmtRatio = (val) => (val == null ? '—' : val.toFixed(2));
+        const fmtPct = (val) => {
+            if (val == null) return '—';
+            const sign = val >= 0 ? '+' : '';
+            const color = val >= 0 ? 'var(--neon)' : 'var(--danger)';
+            return `<span style="color:${color}">${sign}${val.toFixed(1)}%</span>`;
+        };
+
+        const rows = [
+            ['Hasılat', fmtMoney(m.revenue)],
+            ['Net Kar', fmtMoney(m.net_income)],
+            ['Özkaynak', fmtMoney(m.equity)],
+            ['Toplam Borç', fmtMoney(m.total_debt)],
+            ['Borç / Özkaynak', fmtRatio(m.debt_to_equity)],
+            ['Cari Oran', fmtRatio(m.current_ratio)],
+            ['Net Kar Marjı', m.net_margin_pct == null ? '—' : fmtPct(m.net_margin_pct)],
+            ['Hasılat (YoY)', fmtPct(m.revenue_yoy_pct)],
+            ['Net Kar (YoY)', fmtPct(m.net_income_yoy_pct)],
+        ];
+
+        const listHtml = (items, color) => (items && items.length)
+            ? `<ul style="margin:6px 0 0;padding-left:18px;color:var(--text-2);font-size:13px;line-height:1.7;">${items.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul>`
+            : '';
+
+        return `
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
+                <span style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:999px;font-weight:700;font-size:14px;color:${v.color};border:1.5px solid ${v.color};">${v.icon} ${v.label}</span>
+                ${m.period ? `<span style="font-size:11px;color:var(--text-3);">Dönem: ${escapeHtml(m.period)}</span>` : ''}
+            </div>
+            ${d.summary ? `<div style="padding:12px 14px;border-radius:10px;background:rgba(255,255,255,.03);border:1px solid var(--glass-brd-soft);font-size:13px;color:var(--text-2);line-height:1.6;">${escapeHtml(d.summary)}</div>` : ''}
+            <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;">
+                ${(d.strengths && d.strengths.length) ? `<div style="flex:1;min-width:160px;">
+                    <div style="font-size:10px;color:var(--neon);letter-spacing:1.5px;text-transform:uppercase;font-weight:700;">Güçlü Yönler</div>
+                    ${listHtml(d.strengths)}
+                </div>` : ''}
+                ${(d.risks && d.risks.length) ? `<div style="flex:1;min-width:160px;">
+                    <div style="font-size:10px;color:var(--danger);letter-spacing:1.5px;text-transform:uppercase;font-weight:700;">Riskler</div>
+                    ${listHtml(d.risks)}
+                </div>` : ''}
+            </div>
+            <div style="margin-top:18px;">
+                <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--text-3);margin-bottom:8px;">Temel Metrikler</div>
+                ${rows.map(([k, val]) => `<div class="detail-row"><span class="k">${k}</span><span>${val}</span></div>`).join('')}
+            </div>
+        `;
     }
 
     function closeModal() { els.modal.classList.add('hidden'); }
