@@ -57,6 +57,7 @@ REQUIRE_VOLUME_ENTRY   = True
 HIGH52W_FLOOR          = 0.85
 MIN_SCORE_EVENT        = 6    # olay-tabanlı girişte istenen min skor (2-gün-7 yerine)
 ENTRY_TRIGGER_LOOKBACK = 2    # taze kesişim penceresi (bar): tetikleyici son N bar içinde olmalı
+MIN_HOLD_SIGNAL_EXIT_US = 5   # ABD: sinyal_kirilim ilk N barda ateşlenemiyor (çırpınma koruması)
 
 # Rejim
 USE_DUAL_REGIME        = True
@@ -169,7 +170,8 @@ def _regime_short_series(index_df: pd.DataFrame) -> pd.Series:
 
 def _build_signals(symbol: str, df: pd.DataFrame, atr_period: int,
                    master_timeline: pd.DatetimeIndex,
-                   index_close: Optional[pd.Series] = None) -> Optional[Dict[str, pd.Series]]:
+                   index_close: Optional[pd.Series] = None,
+                   market: str = "bist") -> Optional[Dict[str, pd.Series]]:
     """Bir sembolün tüm sinyallerini hesaplar ve master timeline'a hizalar."""
     if df is None or df.empty or len(df) < MIN_HISTORY:
         return None
@@ -185,22 +187,47 @@ def _build_signals(symbol: str, df: pd.DataFrame, atr_period: int,
         # ── kesişim olay serileri (canlı skorlama motorundan) ──
         ema50_val  = frame["ema50_val"]
         ema200_val = frame["ema200_val"]
-        # Boğa tetikleyici: herhangi taze yukarı kesişim son ENTRY_TRIGGER_LOOKBACK bar içinde
-        bull_trigger = (
-            frame["x_macd_up"].fillna(False)
-            | frame["x_price_ema50_up"].fillna(False)
-            | frame["x_di_up"].fillna(False)
-            | frame["x_rsi50_up"].fillna(False)
-        ).astype(float).rolling(ENTRY_TRIGGER_LOOKBACK, min_periods=1).max()
-        # Ayı / trend kırılım tetikleyici: herhangi aşağı kesişim (o bar)
-        bear_trigger = (
-            frame["x_macd_dn"].fillna(False)
-            | frame["x_price_ema50_dn"].fillna(False)
-            | frame["x_di_dn"].fillna(False)
-            | frame["x_price_ema200_dn"].fillna(False)
-        ).astype(float)
         # Trend yönü onayı: hiyerarşi yukarı (kapanış > EMA200 ve EMA50 > EMA200)
         trend_ok = ((df["Close"] > ema200_val) & (ema50_val > ema200_val)).astype(float)
+
+        if market == "us":
+            # ABD: daha katı boğa tetikleyici — en az 2 eş zamanlı yukarı kesişim
+            # Tek kesişim S&P 500 büyük-cap hisselerinde gürültülü, çift onay kaliteyi artırır
+            bull_count = (
+                frame["x_macd_up"].fillna(False).astype(int)
+                + frame["x_price_ema50_up"].fillna(False).astype(int)
+                + frame["x_di_up"].fillna(False).astype(int)
+                + frame["x_rsi50_up"].fillna(False).astype(int)
+            )
+            bull_trigger = (bull_count >= 2).astype(float).rolling(ENTRY_TRIGGER_LOOKBACK, min_periods=1).max()
+            # ABD: ayı tetikleyici çift onay — MACD + ek sinyal VEYA EMA200 kırılımı (önemli seviye)
+            bear_trigger = (
+                (frame["x_macd_dn"].fillna(False)
+                 & (frame["x_price_ema50_dn"].fillna(False) | frame["x_di_dn"].fillna(False)))
+                | frame["x_price_ema200_dn"].fillna(False)
+            ).astype(float)
+            # Göreli güç: hissenin 20-günlük getirisi S&P 500'ü geçmeli (endeks lideri filtresi)
+            if index_close is not None:
+                idx_ret20   = index_close.reindex(df.index, method="ffill").pct_change(20)
+                stock_ret20 = df["Close"].astype(float).pct_change(20)
+                rel_strength = (stock_ret20 > idx_ret20).astype(float)
+            else:
+                rel_strength = pd.Series(1.0, index=df.index)
+        else:
+            # BIST: tek kesişim yeterli, gürültü daha az (daha az verimli piyasa)
+            bull_trigger = (
+                frame["x_macd_up"].fillna(False)
+                | frame["x_price_ema50_up"].fillna(False)
+                | frame["x_di_up"].fillna(False)
+                | frame["x_rsi50_up"].fillna(False)
+            ).astype(float).rolling(ENTRY_TRIGGER_LOOKBACK, min_periods=1).max()
+            bear_trigger = (
+                frame["x_macd_dn"].fillna(False)
+                | frame["x_price_ema50_dn"].fillna(False)
+                | frame["x_di_dn"].fillna(False)
+                | frame["x_price_ema200_dn"].fillna(False)
+            ).astype(float)
+            rel_strength = pd.Series(1.0, index=df.index)  # BIST: göreli güç filtresi yok
     except Exception:
         logger.exception("Sinyal hesabı başarısız: %s", symbol)
         return None
@@ -218,9 +245,10 @@ def _build_signals(symbol: str, df: pd.DataFrame, atr_period: int,
         "low":         df["Low"].reindex(master_timeline),
         "close":       df["Close"].reindex(master_timeline),
         # ── olay-tabanlı giriş/çıkış serileri ──
-        "bull_trigger": bull_trigger.reindex(master_timeline),
-        "bear_trigger": bear_trigger.reindex(master_timeline),
-        "trend_ok":     trend_ok.reindex(master_timeline),
+        "bull_trigger":  bull_trigger.reindex(master_timeline),
+        "bear_trigger":  bear_trigger.reindex(master_timeline),
+        "trend_ok":      trend_ok.reindex(master_timeline),
+        "rel_strength":  rel_strength.reindex(master_timeline),
     }
 
 
@@ -340,8 +368,9 @@ def _simulate_portfolio(market: str,
                 continue
 
             # 1a-bis. Sinyal kırılımı → tam çıkış (BİRİNCİL çıkış)
-            # Ters kesişim/trend kırılması: MACD<sinyal, fiyat<EMA50, DI-<DI+ veya fiyat<EMA200
-            if not pd.isna(bear_trig) and float(bear_trig) >= 1.0:
+            # ABD: ilk MIN_HOLD_SIGNAL_EXIT_US barda ateşlenemiyor (giriş sonrası kısa gürültü)
+            signal_exit_ok = (market != "us") or (pos.hold_days >= MIN_HOLD_SIGNAL_EXIT_US)
+            if signal_exit_ok and not pd.isna(bear_trig) and float(bear_trig) >= 1.0:
                 cash += _close_position_full(pos, float(close_today), today, "sinyal_kirilim", trades)
                 sector_count[pos.sector] = max(0, sector_count.get(pos.sector, 0) - 1)
                 del positions[sym]
@@ -456,6 +485,7 @@ def _simulate_portfolio(market: str,
             next_open  = sd["open"].iloc[d_idx + 1]
             bull_trig  = sd["bull_trigger"].iloc[d_idx]
             trend_ok   = sd["trend_ok"].iloc[d_idx]
+            rel_str    = sd["rel_strength"].iloc[d_idx]
 
             if any(pd.isna(x) for x in [score, trend_sub, volume_t, vol_sma,
                                           close_t, high52w, atr_t, next_open,
@@ -465,10 +495,12 @@ def _simulate_portfolio(market: str,
                 continue
 
             # Olay-tabanlı giriş: taze boğa kesişimi + trend yönü onayı + emniyet filtreleri
+            # ABD: ek göreli güç filtresi (hisse endeksi 20g'de geçmeli)
             if (float(bull_trig) >= 1.0                       # son ENTRY_TRIGGER_LOOKBACK barda taze yukarı kesişim
                     and float(trend_ok) >= 1.0                # EMA hiyerarşisi yukarı (kapanış>EMA200, EMA50>EMA200)
                     and int(score) >= MIN_SCORE_EVENT
                     and float(trend_sub) >= MIN_TREND_SUBSCORE
+                    and (pd.isna(rel_str) or float(rel_str) >= 1.0)  # göreli güç (BIST'te her zaman 1.0)
                     and (not REQUIRE_VOLUME_ENTRY or float(volume_t) >= float(vol_sma))
                     and float(close_t) >= float(high52w) * HIGH52W_FLOOR):
                 sector = get_sector(sym)
@@ -631,7 +663,7 @@ def run_backtest(market: str) -> dict:
     signal_data: Dict[str, Dict[str, pd.Series]] = {}
     for symbol in tickers:
         df = data.get(symbol)
-        sd = _build_signals(symbol, df, atr_period, master_timeline, index_close)
+        sd = _build_signals(symbol, df, atr_period, master_timeline, index_close, market)
         if sd is not None:
             signal_data[symbol] = sd
 
@@ -676,10 +708,13 @@ def run_backtest(market: str) -> dict:
         "donem":     "Son 1 yıl (~252 işlem günü)",
         "strateji":  "TDO v3 — Kesişim Tetikleyici + Trend Onayı (olay-tabanlı)",
         "parametreler": {
-            "giris_yontemi":        "Taze boğa kesişimi (MACD/EMA50/DI+/RSI-50) + trend yönü onayı",
-            "cikis_yontemi":        "Ters kesişim/trend kırılımı (birincil) + ATR trailing (güvenlik ağı)",
+            "giris_yontemi":        "Taze boğa kesişimi (MACD/EMA50/DI+/RSI-50) + trend yönü onayı" + (" — ABD: min 2 eş zamanlı kesişim + göreli güç" if market == "us" else ""),
+            "cikis_yontemi":        "Ters kesişim/trend kırılımı (birincil) + ATR trailing (güvenlik ağı)" + (f" — ABD: ilk {MIN_HOLD_SIGNAL_EXIT_US}g çırpınma koruması" if market == "us" else ""),
             "giris_skoru":          MIN_SCORE_EVENT,
             "tetik_penceresi_bar":  ENTRY_TRIGGER_LOOKBACK,
+            "abd_min_hold_sinyal":  MIN_HOLD_SIGNAL_EXIT_US if market == "us" else None,
+            "abd_goreceli_guc":     "20g getiri > S&P 500" if market == "us" else None,
+            "abd_cift_kesisim":     "min 2 boğa kesişimi" if market == "us" else None,
             "min_trend_alt":        MIN_TREND_SUBSCORE,
             "hacim_zorunlu":        REQUIRE_VOLUME_ENTRY,
             "atr_periyodu":         atr_period,
