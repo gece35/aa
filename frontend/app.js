@@ -21,6 +21,7 @@
         portfolioAdd: (body) => fetch('/api/portfolio', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json()),
         portfolioRemove: (id) => fetch(`/api/portfolio/${id}`, { method: 'DELETE' }).then((r) => r.json()),
         backtest: (market, force = false) => fetch(`/api/backtest?market=${market}&force=${force ? 1 : 0}`).then((r) => r.json()),
+        signalStudy: (market, force = false) => fetch(`/api/signal-study?market=${market}&force=${force ? 1 : 0}`).then((r) => r.json()),
         commentsList: (symbol) => fetch(`/api/comments/${encodeURIComponent(symbol)}`).then((r) => r.json()),
         commentsAdd: (symbol, body) => fetch(`/api/comments/${encodeURIComponent(symbol)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ body }) }).then((r) => r.json()),
         commentsDelete: (id) => fetch(`/api/comments/${id}`, { method: 'DELETE' }).then((r) => r.json()),
@@ -1355,7 +1356,8 @@
     }
 
     // ── Backtest UI ───────────────────────────────────────────────────────────
-    const _btState = { market: 'bist', data: null, loading: false, expanded: new Set() };
+    const _btState = { market: 'bist', data: null, loading: false, expanded: new Set(),
+                       study: null, studyLoading: false };
 
     function renderBacktestTab() {
         const el = document.getElementById('backtestContent');
@@ -1376,14 +1378,19 @@
                     <button id="btForceBtn" class="btn btn-ghost" title="Cache'i temizle ve yeniden çalıştır" ${_btState.loading ? 'disabled' : ''}>
                         ↺ Yenile
                     </button>
+                    <button id="btStudyBtn" class="btn btn-ghost" title="Kesişim sinyallerinin tarihsel ileri getiri etüdü" ${_btState.studyLoading ? 'disabled' : ''}>
+                        ${_btState.studyLoading ? '<span class="bt-spinner"></span> Etüt…' : '🔬 Sinyal Etüdü'}
+                    </button>
                 </div>
             </div>
+            <div id="btStudyResults"></div>
             <div id="btResults"></div>`;
 
         el.querySelectorAll('.bt-market-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 _btState.market = btn.dataset.market;
                 _btState.data = null;
+                _btState.study = null;
                 _btState.expanded = new Set();
                 renderBacktestTab();
             });
@@ -1391,7 +1398,9 @@
 
         document.getElementById('btRunBtn')?.addEventListener('click', () => runBacktest(false));
         document.getElementById('btForceBtn')?.addEventListener('click', () => runBacktest(true));
+        document.getElementById('btStudyBtn')?.addEventListener('click', () => runSignalStudy(false));
 
+        if (_btState.study) renderSignalStudy(_btState.study);
         if (_btState.data) renderBacktestResults(_btState.data);
         else {
             document.getElementById('btResults').innerHTML = `
@@ -1425,6 +1434,76 @@
         renderBacktestTab();
     }
 
+    async function runSignalStudy(force) {
+        if (_btState.studyLoading) return;
+        _btState.studyLoading = true;
+        renderBacktestTab();
+        const box = document.getElementById('btStudyResults');
+        if (box) box.innerHTML = `
+            <div class="bt-empty glass">
+                <div class="bt-spinner-lg"></div>
+                <div style="font-size:14px;margin-top:16px;color:var(--text-2)">
+                    Kesişim sinyalleri taranıyor…
+                </div>
+            </div>`;
+        try {
+            _btState.study = await API.signalStudy(_btState.market, force);
+        } catch (e) {
+            _btState.study = { hata: 'Bağlantı hatası' };
+        }
+        _btState.studyLoading = false;
+        renderBacktestTab();
+    }
+
+    function renderSignalStudy(data) {
+        const el = document.getElementById('btStudyResults');
+        if (!el || !data) return;
+        if (data.hata) {
+            el.innerHTML = `<div class="bt-empty glass" style="color:var(--danger)">⚠ ${escapeHtml(data.hata)}</div>`;
+            return;
+        }
+        const o = data.ozet || {};
+        const rows = (data.tetikleyiciler || []).map(t => {
+            const hit = t.isabet_pct_10g;
+            const hitColor = hit == null ? 'var(--text-3)' : (hit >= 50 ? 'var(--neon)' : 'var(--warn)');
+            const fmt = (v) => (v == null ? '-' : (v >= 0 ? '+' : '') + v + '%');
+            const col = (v) => (v == null ? 'var(--text-3)' : (v >= 0 ? 'var(--neon)' : 'var(--danger)'));
+            return `
+                <tr>
+                    <td class="bt-symbol">${escapeHtml(t.ad || t.key)}</td>
+                    <td class="num">${t.olay_sayisi ?? 0}</td>
+                    <td class="num" style="color:${hitColor}">${hit != null ? hit + '%' : '-'}</td>
+                    <td class="num" style="color:${col(t.ort_getiri_pct_5g)}">${fmt(t.ort_getiri_pct_5g)}</td>
+                    <td class="num" style="color:${col(t.ort_getiri_pct_10g)}">${fmt(t.ort_getiri_pct_10g)}</td>
+                    <td class="num" style="color:${col(t.ort_getiri_pct_20g)}">${fmt(t.ort_getiri_pct_20g)}</td>
+                    <td class="num">${t.profit_factor_10g ?? '-'}</td>
+                </tr>`;
+        }).join('');
+
+        el.innerHTML = `
+            <div class="bt-table-wrap glass" style="margin-bottom:16px;">
+                <div class="bt-exits-title" style="padding:12px 14px 4px;">🔬 Sinyal İsabet Etüdü</div>
+                <div style="padding:0 14px 8px;font-size:12px;color:var(--text-3);">
+                    ${escapeHtml(data.aciklama || '')}
+                    ${o.toplam_olay != null ? ` — Toplam <strong>${o.toplam_olay}</strong> olay, ${o.test_edilen_hisse ?? '-'} hisse${o.isabet_pct_10g != null ? `, genel 10g isabet <strong>${o.isabet_pct_10g}%</strong>` : ''}.` : ''}
+                </div>
+                <table class="bt-table">
+                    <thead>
+                        <tr>
+                            <th>Tetikleyici Kesişim (trend onaylı)</th>
+                            <th class="num">Olay</th>
+                            <th class="num">İsabet (10g)</th>
+                            <th class="num">Ort. 5g</th>
+                            <th class="num">Ort. 10g</th>
+                            <th class="num">Ort. 20g</th>
+                            <th class="num">PF (10g)</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows || `<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-3)">Olay bulunamadı.</td></tr>`}</tbody>
+                </table>
+            </div>`;
+    }
+
     function renderBacktestResults(data) {
         const el = document.getElementById('btResults');
         if (!el) return;
@@ -1438,7 +1517,8 @@
 
         const exitDist = o.cikis_dagilimlari || {};
         const exitLabels = {
-            trailing_stop: 'Trailing Stop',
+            trailing_stop: 'Trailing Stop (güvenlik ağı)',
+            sinyal_kirilim: 'Sinyal Kırılımı',
             kismi_tp: 'Kısmi TP',
             score_3bar: 'Skor (3 gün)',
             score_crash: 'Skor Crash',
@@ -1519,7 +1599,9 @@
             <div class="bt-meta glass">
                 <span class="bt-meta-item">📅 ${escapeHtml(data.donem || '')}</span>
                 ${data.strateji ? `<span class="bt-meta-item">🧭 ${escapeHtml(data.strateji)}</span>` : ''}
-                <span class="bt-meta-item">🎯 Min skor: <strong>${params.giris_skoru ?? params.min_skor ?? '-'}</strong> (${params.ardisik_gun ?? 1} gün ardışık)</span>
+                ${params.giris_yontemi ? `<span class="bt-meta-item">🎯 Giriş: <strong>${escapeHtml(params.giris_yontemi)}</strong></span>` : ''}
+                ${params.cikis_yontemi ? `<span class="bt-meta-item">🔻 Çıkış: <strong>${escapeHtml(params.cikis_yontemi)}</strong></span>` : ''}
+                <span class="bt-meta-item">🎯 Min skor: <strong>${params.giris_skoru ?? '-'}</strong>${params.tetik_penceresi_bar ? ` (tetik ${params.tetik_penceresi_bar} bar)` : ''}</span>
                 <span class="bt-meta-item">📊 Trend alt-skoru: <strong>≥${params.min_trend_alt ?? '-'}</strong></span>
                 <span class="bt-meta-item">🛑 ATR stop: <strong>×${params.atr_initial_mult ?? '-'}</strong></span>
                 <span class="bt-meta-item">🎢 Trail: <strong>×${params.atr_trail_mult ?? '-'}</strong></span>
@@ -1592,6 +1674,7 @@
     function buildTradeDetailHtml(trades) {
         const exitLabels = {
             trailing_stop: '🛑 Trail',
+            sinyal_kirilim: '🔻 Sinyal Kırılımı',
             kismi_tp: '✅ Kısmi TP',
             score_3bar: '📉 Skor 3g',
             score_crash: '📉 Skor↓',

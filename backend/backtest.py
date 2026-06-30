@@ -49,12 +49,14 @@ logger = logging.getLogger(__name__)
 
 # ── Strateji sabitleri ────────────────────────────────────────────────────────
 
-# Giriş
+# Giriş — olay-tabanlı (kesişim tetikleyici + trend yönü onayı)
 MIN_SCORE              = 6
 ENTRY_CONSEC_DAYS      = 2
 MIN_TREND_SUBSCORE     = 1.2  # ema_align max 2.0; 1.2 = %60 doluluk esigi
 REQUIRE_VOLUME_ENTRY   = True
 HIGH52W_FLOOR          = 0.85
+MIN_SCORE_EVENT        = 6    # olay-tabanlı girişte istenen min skor (2-gün-7 yerine)
+ENTRY_TRIGGER_LOOKBACK = 2    # taze kesişim penceresi (bar): tetikleyici son N bar içinde olmalı
 
 # Rejim
 USE_DUAL_REGIME        = True
@@ -179,6 +181,26 @@ def _build_signals(symbol: str, df: pd.DataFrame, atr_period: int,
         atr         = _atr_series(df, atr_period)
         high52w     = df["Close"].rolling(252, min_periods=60).max()
         vol_sma20   = df["Volume"].rolling(20).mean() if "Volume" in df.columns else pd.Series(0.0, index=df.index)
+
+        # ── kesişim olay serileri (canlı skorlama motorundan) ──
+        ema50_val  = frame["ema50_val"]
+        ema200_val = frame["ema200_val"]
+        # Boğa tetikleyici: herhangi taze yukarı kesişim son ENTRY_TRIGGER_LOOKBACK bar içinde
+        bull_trigger = (
+            frame["x_macd_up"].fillna(False)
+            | frame["x_price_ema50_up"].fillna(False)
+            | frame["x_di_up"].fillna(False)
+            | frame["x_rsi50_up"].fillna(False)
+        ).astype(float).rolling(ENTRY_TRIGGER_LOOKBACK, min_periods=1).max()
+        # Ayı / trend kırılım tetikleyici: herhangi aşağı kesişim (o bar)
+        bear_trigger = (
+            frame["x_macd_dn"].fillna(False)
+            | frame["x_price_ema50_dn"].fillna(False)
+            | frame["x_di_dn"].fillna(False)
+            | frame["x_price_ema200_dn"].fillna(False)
+        ).astype(float)
+        # Trend yönü onayı: hiyerarşi yukarı (kapanış > EMA200 ve EMA50 > EMA200)
+        trend_ok = ((df["Close"] > ema200_val) & (ema50_val > ema200_val)).astype(float)
     except Exception:
         logger.exception("Sinyal hesabı başarısız: %s", symbol)
         return None
@@ -195,6 +217,10 @@ def _build_signals(symbol: str, df: pd.DataFrame, atr_period: int,
         "high":        df["High"].reindex(master_timeline),
         "low":         df["Low"].reindex(master_timeline),
         "close":       df["Close"].reindex(master_timeline),
+        # ── olay-tabanlı giriş/çıkış serileri ──
+        "bull_trigger": bull_trigger.reindex(master_timeline),
+        "bear_trigger": bear_trigger.reindex(master_timeline),
+        "trend_ok":     trend_ok.reindex(master_timeline),
     }
 
 
@@ -280,7 +306,7 @@ def _simulate_portfolio(market: str,
             atr_today    = sd["atr"].iloc[d_idx]
             score_today  = sd["score"].iloc[d_idx]
             score_prev   = sd["score"].iloc[d_idx - 1] if d_idx > 0 else score_today
-            score_pp     = sd["score"].iloc[d_idx - 2] if d_idx > 1 else score_today
+            bear_trig    = sd["bear_trigger"].iloc[d_idx]
 
             if pd.isna(close_today) or pd.isna(open_today) or pd.isna(high_today) or pd.isna(low_today):
                 continue
@@ -305,10 +331,18 @@ def _simulate_portfolio(market: str,
                         if new_trail > pos.trailing_stop:
                             pos.trailing_stop = new_trail
 
-            # 1a. Stop hit (gap-aware)
+            # 1a. ATR stop hit (gap-aware) — felaket koruma güvenlik ağı
             if float(low_today) <= pos.trailing_stop:
                 exit_price = max(float(open_today), pos.trailing_stop)
                 cash += _close_position_full(pos, exit_price, today, "trailing_stop", trades)
+                sector_count[pos.sector] = max(0, sector_count.get(pos.sector, 0) - 1)
+                del positions[sym]
+                continue
+
+            # 1a-bis. Sinyal kırılımı → tam çıkış (BİRİNCİL çıkış)
+            # Ters kesişim/trend kırılması: MACD<sinyal, fiyat<EMA50, DI-<DI+ veya fiyat<EMA200
+            if not pd.isna(bear_trig) and float(bear_trig) >= 1.0:
+                cash += _close_position_full(pos, float(close_today), today, "sinyal_kirilim", trades)
                 sector_count[pos.sector] = max(0, sector_count.get(pos.sector, 0) - 1)
                 del positions[sym]
                 continue
@@ -334,26 +368,11 @@ def _simulate_portfolio(market: str,
                 cash += _close_position_partial(pos, float(close_today), today, "score_crash",
                                                 PARTIAL_TP_RATIO, trades)
 
-            # 1d. 3-bar düşük skor → tam çıkış
-            if (not pd.isna(score_today) and not pd.isna(score_prev) and not pd.isna(score_pp)
-                    and int(score_today) <= EXIT_SCORE_THRESHOLD
-                    and int(score_prev) <= EXIT_SCORE_THRESHOLD
-                    and int(score_pp) <= EXIT_SCORE_THRESHOLD):
-                cash += _close_position_full(pos, float(close_today), today, "score_3bar", trades)
-                sector_count[pos.sector] = max(0, sector_count.get(pos.sector, 0) - 1)
-                del positions[sym]
-                continue
-
-            # 1e. Dead money @ 20. gün
-            gain_today = (float(close_today) - pos.entry_price) / pos.entry_price if pos.entry_price > 0 else 0
-            if (pos.hold_days == DEAD_MONEY_DAYS and gain_today < DEAD_MONEY_RETURN
-                    and not pd.isna(score_today) and int(score_today) <= 5):
-                cash += _close_position_full(pos, float(close_today), today, "dead_money", trades)
-                sector_count[pos.sector] = max(0, sector_count.get(pos.sector, 0) - 1)
-                del positions[sym]
-                continue
+            # 1d. Sinyal kırılımı birincil çıkış olduğundan skor-3bar ve dead-money
+            #     kuralları kaldırıldı (ters kesişim onların işini görüyor).
 
             # 1f. Zaman çıkışı
+            gain_today = (float(close_today) - pos.entry_price) / pos.entry_price if pos.entry_price > 0 else 0
             if pos.hold_days >= MAX_HOLD_DAYS:
                 if pos.hold_days < MAX_HOLD_DAYS + HOLD_EXTENSION_DAYS:
                     weak = (gain_today < 0.03) or (pd.isna(score_today) or int(score_today) < 7)
@@ -428,7 +447,6 @@ def _simulate_portfolio(market: str,
             if sym in positions:
                 continue
             score      = sd["score"].iloc[d_idx]
-            score_prev = sd["score"].iloc[d_idx - 1] if d_idx > 0 else 0
             trend_sub  = sd["trend_sub"].iloc[d_idx]
             volume_t   = sd["volume"].iloc[d_idx]
             vol_sma    = sd["vol_sma20"].iloc[d_idx]
@@ -436,15 +454,20 @@ def _simulate_portfolio(market: str,
             high52w    = sd["high52w"].iloc[d_idx]
             atr_t      = sd["atr"].iloc[d_idx]
             next_open  = sd["open"].iloc[d_idx + 1]
+            bull_trig  = sd["bull_trigger"].iloc[d_idx]
+            trend_ok   = sd["trend_ok"].iloc[d_idx]
 
-            if any(pd.isna(x) for x in [score, score_prev, trend_sub, volume_t, vol_sma,
-                                          close_t, high52w, atr_t, next_open]):
+            if any(pd.isna(x) for x in [score, trend_sub, volume_t, vol_sma,
+                                          close_t, high52w, atr_t, next_open,
+                                          bull_trig, trend_ok]):
                 continue
             if float(next_open) <= 0 or float(atr_t) <= 0:
                 continue
 
-            if (int(score) >= MIN_SCORE
-                    and int(score_prev) >= MIN_SCORE
+            # Olay-tabanlı giriş: taze boğa kesişimi + trend yönü onayı + emniyet filtreleri
+            if (float(bull_trig) >= 1.0                       # son ENTRY_TRIGGER_LOOKBACK barda taze yukarı kesişim
+                    and float(trend_ok) >= 1.0                # EMA hiyerarşisi yukarı (kapanış>EMA200, EMA50>EMA200)
+                    and int(score) >= MIN_SCORE_EVENT
                     and float(trend_sub) >= MIN_TREND_SUBSCORE
                     and (not REQUIRE_VOLUME_ENTRY or float(volume_t) >= float(vol_sma))
                     and float(close_t) >= float(high52w) * HIGH52W_FLOOR):
@@ -651,10 +674,12 @@ def run_backtest(market: str) -> dict:
     return {
         "market":    market,
         "donem":     "Son 1 yıl (~252 işlem günü)",
-        "strateji":  "TDO v2 — Trend Devamlılığı Onayı",
+        "strateji":  "TDO v3 — Kesişim Tetikleyici + Trend Onayı (olay-tabanlı)",
         "parametreler": {
-            "giris_skoru":          MIN_SCORE,
-            "ardisik_gun":          ENTRY_CONSEC_DAYS,
+            "giris_yontemi":        "Taze boğa kesişimi (MACD/EMA50/DI+/RSI-50) + trend yönü onayı",
+            "cikis_yontemi":        "Ters kesişim/trend kırılımı (birincil) + ATR trailing (güvenlik ağı)",
+            "giris_skoru":          MIN_SCORE_EVENT,
+            "tetik_penceresi_bar":  ENTRY_TRIGGER_LOOKBACK,
             "min_trend_alt":        MIN_TREND_SUBSCORE,
             "hacim_zorunlu":        REQUIRE_VOLUME_ENTRY,
             "atr_periyodu":         atr_period,
@@ -664,12 +689,9 @@ def run_backtest(market: str) -> dict:
             "kismi_tp_oran":        PARTIAL_TP_RATIO * 100,
             "break_even_trigger":   BREAK_EVEN_TRIGGER * 100,
             "trailing_trigger":     TRAILING_TRIGGER * 100,
-            "cikis_skoru":          EXIT_SCORE_THRESHOLD,
-            "cikis_skoru_ardisik":  EXIT_SCORE_CONSEC,
             "skor_crash_dusus":     SCORE_CRASH_DROP,
             "max_sure_gun":         MAX_HOLD_DAYS,
             "uzatma_gun":           HOLD_EXTENSION_DAYS,
-            "dead_money_gun":       DEAD_MONEY_DAYS,
             "max_pozisyon":         MAX_OPEN_POSITIONS_BIST if market == "bist" else MAX_OPEN_POSITIONS_US,
             "max_sektor":           MAX_PER_SECTOR,
             "risk_per_trade_pct":   RISK_PER_TRADE * 100,
@@ -681,4 +703,140 @@ def run_backtest(market: str) -> dict:
         },
         "ozet":      genel_stats,
         "hisseler":  hisse_sonuclari,
+    }
+
+
+# ── Sinyal isabet etüdü ──────────────────────────────────────────────────────
+
+# Tetikleyici kesişim türleri: (frame anahtarı, görünen ad)
+SIGNAL_TRIGGERS: List[Tuple[str, str]] = [
+    ("x_macd_up",        "MACD × Sinyal (yukarı kesişim)"),
+    ("x_price_ema50_up", "Fiyat × EMA50 (yukarı kesişim)"),
+    ("x_di_up",          "DI+ × DI− (yukarı kesişim)"),
+    ("x_rsi50_up",       "RSI × 50 (yukarı kesişim)"),
+]
+
+STUDY_HORIZONS = (5, 10, 20)  # ileri bakış (işlem günü)
+
+
+def _study_stats(returns_by_h: Dict[int, List[float]]) -> dict:
+    """Bir tetikleyici için ufuk-bazlı isabet/getiri istatistikleri."""
+    base = returns_by_h.get(10, [])
+    out: dict = {"olay_sayisi": len(base)}
+    if not base:
+        return out
+    wins = [r for r in base if r > 0]
+    losses = [r for r in base if r <= 0]
+    gross_profit = sum(wins) if wins else 0.0
+    gross_loss = abs(sum(losses)) if losses else 0.0
+    out["isabet_pct_10g"]     = round(len(wins) / len(base) * 100, 1)
+    out["ort_kazanc_pct_10g"] = round(sum(wins) / len(wins), 2) if wins else 0.0
+    out["ort_kayip_pct_10g"]  = round(sum(losses) / len(losses), 2) if losses else 0.0
+    out["profit_factor_10g"]  = round(gross_profit / gross_loss, 2) if gross_loss > 0 else None
+    for h in STUDY_HORIZONS:
+        rs = returns_by_h.get(h, [])
+        out[f"ort_getiri_pct_{h}g"] = round(sum(rs) / len(rs), 2) if rs else 0.0
+    return out
+
+
+def run_signal_study(market: str) -> dict:
+    """Her kesişim tetikleyicisinin (trend onaylı) tarihsel ileri getirisini ölçer.
+
+    Portföy kurgusundan bağımsız 'sinyal isabet' etüdü: bir tetikleyici kesişim
+    gerçekleştikten sonra +5/+10/+20 işlem günü içinde fiyatın tarihsel davranışı.
+    Yatırım tavsiyesi değildir — yalnızca geçmiş gözlem istatistiğidir.
+    """
+    tickers = get_tickers(market)
+    if not tickers:
+        return {"hata": f"Bilinmeyen market: {market}"}
+
+    index_symbol = MARKET_INDICES.get(market)
+    if not index_symbol:
+        return {"hata": f"Endeks tanımı yok: {market}"}
+
+    try:
+        idx_data = download_ohlcv([index_symbol], period="500d", interval="1d")
+        idx_df = idx_data.get(index_symbol)
+    except Exception:
+        logger.exception("Endeks verisi alınamadı: %s", index_symbol)
+        return {"hata": f"Endeks verisi alınamadı: {index_symbol}"}
+
+    if idx_df is None or idx_df.empty:
+        return {"hata": f"Endeks verisi boş: {index_symbol}"}
+
+    index_close = idx_df["Close"].astype(float)
+    data: Dict[str, pd.DataFrame] = download_ohlcv(tickers, period="500d", interval="1d")
+    max_h = max(STUDY_HORIZONS)
+
+    # Tetikleyici başına ufuk-bazlı getiri havuzları
+    pools: Dict[str, Dict[int, List[float]]] = {
+        key: {h: [] for h in STUDY_HORIZONS} for key, _ in SIGNAL_TRIGGERS
+    }
+    tested = 0
+
+    for symbol in tickers:
+        df = data.get(symbol)
+        if df is None or df.empty or len(df) < MIN_HISTORY:
+            continue
+        try:
+            frame = compute_score_frame(df, index_close)
+        except Exception:
+            logger.exception("Etüt sinyal hesabı başarısız: %s", symbol)
+            continue
+
+        close  = df["Close"].astype(float).values
+        ema50  = frame["ema50_val"].values
+        ema200 = frame["ema200_val"].values
+        n = len(close)
+        if n < MIN_HISTORY:
+            continue
+        tested += 1
+
+        # Trend onayı: kapanış > EMA200 ve EMA50 > EMA200
+        trend_ok = (close > ema200) & (ema50 > ema200)
+        # Yalnızca son ~1 yıllık pencere içindeki olaylar (warm-up hariç)
+        start = max(MIN_HISTORY, n - BACKTEST_DAYS - 1)
+        last_eval = n - max_h  # ileri getiriyi hesaplayabileceğimiz son bar
+
+        for key, _name in SIGNAL_TRIGGERS:
+            flag = frame[key].fillna(False).values.astype(bool)
+            for i in range(start, last_eval):
+                if not flag[i] or not trend_ok[i]:
+                    continue
+                base_px = close[i]
+                if not np.isfinite(base_px) or base_px <= 0:
+                    continue
+                for h in STUDY_HORIZONS:
+                    fut = close[i + h]
+                    if np.isfinite(fut):
+                        pools[key][h].append(float((fut - base_px) / base_px * 100.0))
+
+    tetikleyiciler: List[dict] = []
+    all_10g: List[float] = []
+    for key, name in SIGNAL_TRIGGERS:
+        stats = _study_stats(pools[key])
+        stats["ad"] = name
+        stats["key"] = key
+        tetikleyiciler.append(stats)
+        all_10g.extend(pools[key][10])
+
+    ozet: dict = {"toplam_olay": len(all_10g), "test_edilen_hisse": tested}
+    if all_10g:
+        wins = [r for r in all_10g if r > 0]
+        ozet["isabet_pct_10g"]   = round(len(wins) / len(all_10g) * 100, 1)
+        ozet["ort_getiri_pct_10g"] = round(float(sum(all_10g) / len(all_10g)), 2)
+
+    logger.info(
+        "Sinyal etüdü tamamlandı: market=%s test=%d olay=%d",
+        market, tested, len(all_10g),
+    )
+
+    return {
+        "market":        market,
+        "tip":           "sinyal_etudu",
+        "donem":         "Son 1 yıl (~252 işlem günü)",
+        "aciklama":      "Trend onaylı kesişim sonrası tarihsel ileri getiri gözlemi (yatırım tavsiyesi değildir).",
+        "ufuklar_gun":   list(STUDY_HORIZONS),
+        "ozet":          ozet,
+        "tetikleyiciler": tetikleyiciler,
     }

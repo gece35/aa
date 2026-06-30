@@ -40,7 +40,7 @@ from backend.limits import PLANS, enforce_collection_limit, get_plan, quota, req
 from backend.models import Portfolio, StockComment, TweetLog, User, Watchlist
 from backend.news import fetch_news, fetch_stock_news
 from backend.fundamentals import GROQ_API_KEY, analyze_fundamentals
-from backend.backtest import run_backtest
+from backend.backtest import run_backtest, run_signal_study
 from backend.scanner import get_index_df, scan_market, scan_market_chunk
 from backend.scoring import score_symbol_detailed
 from backend.tickers import MARKETS, market_of_symbol
@@ -686,6 +686,29 @@ def create_app() -> Flask:
             return jsonify({"hata": "Backtest sırasında hata oluştu"}), 500
 
         _backtest_cache[market] = result
+        return jsonify(result)
+
+    # ── API: Sinyal İsabet Etüdü ────────────────────────────────────────────────
+    _signal_study_cache: dict = {}
+
+    @flask_app.route("/api/signal-study")
+    @admin_required
+    def api_signal_study():
+        market = request.args.get("market", "bist").lower()
+        force  = request.args.get("force", "0") in ("1", "true", "yes")
+        if market not in MARKETS:
+            return jsonify({"hata": f"Bilinmeyen market: {market}"}), 400
+
+        if not force and market in _signal_study_cache:
+            return jsonify(_signal_study_cache[market])
+
+        try:
+            result = run_signal_study(market)
+        except Exception:
+            logger.exception("Sinyal etüdü hatası market=%s", market)
+            return jsonify({"hata": "Sinyal etüdü sırasında hata oluştu"}), 500
+
+        _signal_study_cache[market] = result
         return jsonify(result)
 
 

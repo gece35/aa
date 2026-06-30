@@ -291,7 +291,7 @@ def _macd_histogram_score(macd_line: pd.Series, signal_line: pd.Series) -> pd.Se
 
 def _adx_strength_score(high: pd.Series, low: pd.Series, close: pd.Series):
     """ADX güç + DI yön skoru (0 – W_ADX).
-    Döner: (score_series, adx_series)"""
+    Döner: (score_series, adx_series, plus_di_series, minus_di_series)"""
     adx, plus_di, minus_di = _adx(high, low, close)
     av   = adx.fillna(0).values.astype(float)
     dpos = (plus_di > minus_di).astype(float).values
@@ -310,7 +310,7 @@ def _adx_strength_score(high: pd.Series, low: pd.Series, close: pd.Series):
     di_cross = _cross_up(plus_di, minus_di)
     fresh_c  = _freshness(_bars_since_cross(di_cross), lookback=10)
     score    = (base_s + fresh_c * 0.2).clip(0.0, 1.0)
-    return score * W_ADX, adx
+    return score * W_ADX, adx, plus_di, minus_di
 
 
 def _volume_score(close: pd.Series, volume: pd.Series) -> pd.Series:
@@ -387,7 +387,7 @@ def compute_score_frame(df: pd.DataFrame, index_close: Optional[pd.Series] = Non
     bb_mid, bb_upper, bb_lower, bb_bw, pctb = _bollinger(close)
     bb_s                                = _bb_entry_score(close, bb_lower, bb_mid, bb_upper, pctb)
     macdh_s                             = _macd_histogram_score(macd_line, signal_line)
-    adx_s, adx_val                      = _adx_strength_score(high, low, close)
+    adx_s, adx_val, plus_di, minus_di   = _adx_strength_score(high, low, close)
     vol_s                               = _volume_score(close, volume)
     ext_penalty, rp                     = _extension_series(close, high, low, volume)
 
@@ -436,11 +436,24 @@ def compute_score_frame(df: pd.DataFrame, index_close: Optional[pd.Series] = Non
         "rsi_val":        rsi_val,
         "rsi_signal_val": _ema(rsi_val, 9),
         "adx_val":        adx_val,
+        "plus_di_val":    plus_di,
+        "minus_di_val":   minus_di,
         "pctb_val":       pctb,
         "bb_mid_val":     bb_mid,
         "bb_upper_val":   bb_upper,
         "bb_lower_val":   bb_lower,
         "rp_val":         rp,
+        # ── önceden hesaplanmış kesişim olay bayrakları (backtest + sinyal etüdü) ──
+        # Boğa tetikleyicileri (yukarı kesişim):
+        "x_macd_up":         _cross_up(macd_line, signal_line),
+        "x_price_ema50_up":  _cross_up(close, ema50),
+        "x_di_up":           _cross_up(plus_di, minus_di),
+        "x_rsi50_up":        _cross_up(rsi_val, pd.Series(50.0, index=close.index)),
+        # Ayı / trend kırılım tetikleyicileri (aşağı kesişim):
+        "x_macd_dn":         _cross_up(signal_line, macd_line),
+        "x_price_ema50_dn":  _cross_up(ema50, close),
+        "x_di_dn":           _cross_up(minus_di, plus_di),
+        "x_price_ema200_dn": _cross_up(ema200, close),
     }
 
 

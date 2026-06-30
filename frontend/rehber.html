@@ -7,12 +7,12 @@
 <meta name="description" content="Nebula Scanner puan sistemi nasıl çalışır? Hangi skor aralığı ne anlama gelir? Göstergeler ve kullanım kılavuzu." />
 <meta property="og:type" content="article" />
 <meta property="og:title" content="Kullanım Rehberi — Nebula Scanner" />
-<meta property="og:description" content="Nebula Scanner'ın 0-10 puanlama sistemi, TDO v2 stratejisi, sinyal kriterleri ve backtest sonuçları hakkında kapsamlı rehber." />
+<meta property="og:description" content="Nebula Scanner'ın 0-10 puanlama sistemi, TDO v3 olay-tabanlı test metodolojisi, sinyal kriterleri ve backtest sonuçları hakkında kapsamlı rehber." />
 <meta property="og:url" content="https://nebulascanner.com/rehber.html" />
 <meta property="og:image" content="https://nebulascanner.com/logo.svg" />
 <meta name="twitter:card" content="summary" />
 <meta name="twitter:title" content="Kullanım Rehberi — Nebula Scanner" />
-<meta name="twitter:description" content="0-10 puan sistemi, TDO v2 stratejisi ve backtest sonuçları. BIST ve ABD hisse analizi için kapsamlı rehber." />
+<meta name="twitter:description" content="0-10 puan sistemi, TDO v3 olay-tabanlı test metodolojisi ve backtest sonuçları. BIST ve ABD hisse analizi için kapsamlı rehber." />
 <link rel="icon" href="/logo.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -294,7 +294,7 @@
     <div class="hero-tag">Kullanım Rehberi</div>
     <h1>Puan Sistemi Nasıl Çalışır?</h1>
     <p class="meta">Her hisse 0-10 arasında bir kesişim sinyali skoru alır. Bu sayfa skorun ne anlama geldiğini, nasıl yorumlanabileceğini ve geçmiş verilere dayalı backtest sinyal kriterlerini açıklar.</p>
-    <p>Nebula Scanner, sekiz teknik sinyal kanalını <strong>kesişim (crossover) bazlı</strong> bir motorla birleştirir. Her sinyal, ilgili iki çizginin birbirini yukarı doğru kestiği anda tam puanla aktive olur; kesişimden sonra her geçen bar için puan lineer olarak solar ve 20 bar sonra sıfıra iner. Böylece skor "trendin sağlığı" değil <strong>"taze sinyal yoğunluğu"</strong>nu ölçer. Bu sayfada anlatılan kriterler — <strong>TDO v2 (Trend Devamlılığı Onayı)</strong> — son 1 yıllık tarihsel veriyle backtest edilmiş çoklu filtre modelidir.</p>
+    <p>Nebula Scanner, sekiz teknik sinyal kanalını <strong>kesişim (crossover) bazlı</strong> bir motorla birleştirir. Her sinyal, ilgili iki çizginin birbirini yukarı doğru kestiği anda tam puanla aktive olur; kesişimden sonra her geçen bar için puan lineer olarak solar ve 20 bar sonra sıfıra iner. Böylece skor "trendin sağlığı" değil <strong>"taze sinyal yoğunluğu"</strong>nu ölçer. Bu sayfada anlatılan kriterler — <strong>TDO v3 (Trend Devamlılığı Onayı)</strong> — son 1 yıllık tarihsel veriyle backtest edilmiş, <strong>kesişim olayı + trend yönü onayı</strong> temelli olay-tabanlı bir modeldir.</p>
   </div>
 
   <div class="warning-box">
@@ -308,23 +308,23 @@
   <div class="band-grid">
     <div class="band-card band-green">
       <div class="band-score">7–10</div>
-      <div class="band-title">Yüksek Sinyal Yoğunluğu — TDO v2 Eşiği</div>
-      <p class="band-desc">Birden fazla sinyal kanalı yakın zamanda aktive olmuş ve henüz solmamış. MACD, RSI ve EMA kesişimleri taze. <strong>TDO v2 backtest modelinin koşullarını karşılayan bant</strong>: 2 gün üst üste skor 7+, EMA kanallarında aktif kesişim ve hacim onayı olmalıdır. Skor 8-10 arasında sinyal yoğunluğu en yüksek seviyededir.</p>
-      <div class="band-profile">Backtest referans bölgesi — çoklu filtre kapısı</div>
+      <div class="band-title">Yüksek Sinyal Yoğunluğu — Olay Referans Bölgesi</div>
+      <p class="band-desc">Birden fazla sinyal kanalı yakın zamanda aktive olmuş ve henüz solmamış. MACD, RSI ve EMA kesişimleri taze. <strong>TDO v3 backtest modelinde sinyal başlangıç koşullarının gözlendiği bant</strong>: taze bir boğa kesişimi + trend yönü onayı (kapanış>EMA200, EMA50>EMA200) + hacim onayı. Skor 8-10 arasında sinyal yoğunluğu en yüksek seviyededir.</p>
+      <div class="band-profile">Backtest referans bölgesi — kesişim + trend kapısı</div>
     </div>
 
     <div class="band-card band-blue">
       <div class="band-score">5–6</div>
       <div class="band-title">Sinyal Sönüyor</div>
-      <p class="band-desc">Kesişim sinyalleri oluşmuş ancak aradan birkaç hafta geçmiş, puanlar lineer olarak solmuş. Yeni bir kesişim olmadıkça bu bant izleme niteliğindedir. 3 ardışık gün skor 4'e veya altına düşmesi TDO v2 backtest modelinde zayıflama göstergesi olarak değerlendirilir.</p>
+      <p class="band-desc">Kesişim sinyalleri oluşmuş ancak aradan birkaç hafta geçmiş, puanlar lineer olarak solmuş. Yeni bir kesişim olmadıkça bu bant izleme niteliğindedir. Ters bir kesişim/trend kırılımı (örn. fiyat<EMA50) TDO v3 backtest modelinde sinyal sönümü göstergesi olarak değerlendirilir.</p>
       <div class="band-profile">İzleme — sinyal eşiğinin hemen altında</div>
     </div>
 
     <div class="band-card band-yellow">
       <div class="band-score">3–4</div>
       <div class="band-title">Sinyaller Büyük Ölçüde Söndü</div>
-      <p class="band-desc">Aktif kesişim yok ya da çok az; var olanlar 15-20 bar önce oluşmuş. Bu bantta 3 ardışık gün kalan hisseler TDO v2 backtest kurallarında tam sonlandırma koşulunu karşılar. Yön belirsiz; yeni kesişim olmaksızın tekrar 7+ bandına dönmesi güçtür.</p>
-      <div class="band-profile">Zayıflama uyarı bandı — TDO v2 skor filtresi</div>
+      <p class="band-desc">Aktif kesişim yok ya da çok az; var olanlar 15-20 bar önce oluşmuş. Bu bant, TDO v3 backtest modelinde sinyal sönümü/trend kırılımı koşullarının tipik olarak gözlendiği bölgedir. Yön belirsiz; yeni kesişim olmaksızın tekrar 7+ bandına dönmesi güçtür.</p>
+      <div class="band-profile">Zayıflama uyarı bandı — sinyal sönümü</div>
     </div>
 
     <div class="band-card band-gray">
@@ -335,23 +335,24 @@
     </div>
   </div>
 
-  <!-- TDO v2 -->
-  <h2>TDO v2 Stratejisi — Üç Katman</h2>
-  <p>Skor tek başına yeterli değil. Sistem skoru sadece bir <em>filtre</em> olarak kullanır; asıl kâr/zarar yönetimi volatiliteye uyumlu üç ayrı katmanla yapılır:</p>
+  <!-- TDO v3 -->
+  <h2>TDO v3 Test Metodolojisi — Üç Katman</h2>
+  <p>Sistem <strong>kesişim olaylarını</strong> ve <strong>trend yönünü</strong> birlikte kullanır. Skor tek başına tetikleyici değildir; tarihsel testte izlenen senaryo, bir <em>taze kesişim</em> olayının trend yönü onayı ile birleştiği barlardır. Aşağıdaki üç katman tamamen <strong>geçmiş veri üzerindeki gözlem amaçlı backtest metodolojisini</strong> tanımlar — yatırım tavsiyesi değildir.</p>
 
   <div class="layer-cards">
 
     <div class="layer-card layer-card-green">
       <div class="layer-num">1</div>
       <div>
-        <div class="layer-title">Filtre Kriterleri — Çoklu Filtre</div>
-        <div class="layer-subtitle">Yanıltıcı göstergeleri eler, güçlü trend yapılarını ayırt eder</div>
+        <div class="layer-title">Sinyal Başlangıç Koşulları — Kesişim + Trend Onayı</div>
+        <div class="layer-subtitle">Tarihsel testte pozisyonun açıldığı varsayılan koşullar (gözlem amaçlı)</div>
         <div class="layer-pills">
-          <span class="layer-pill">Skor ≥ 7</span>
-          <span class="layer-pill">2 gün üst üste</span>
-          <span class="layer-pill">Trend bileşeni ≥ 2</span>
+          <span class="layer-pill">Taze boğa kesişimi: MACD×Sinyal · Fiyat×EMA50 · DI+×DI− · RSI×50</span>
+          <span class="layer-pill">Trend yönü onayı: kapanış > EMA200 ve EMA50 > EMA200</span>
+          <span class="layer-pill">Skor ≥ 6</span>
+          <span class="layer-pill">Trend bileşeni ≥ 1.2</span>
           <span class="layer-pill">Hacim ortalamanın üstünde</span>
-          <span class="layer-pill">Endeks EMA200 + EMA50 üstünde</span>
+          <span class="layer-pill">Endeks EMA200 + EMA50 üstünde (rejim)</span>
           <span class="layer-pill">52 haftalık zirvenin %85'i üstünde</span>
         </div>
       </div>
@@ -360,15 +361,15 @@
     <div class="layer-card layer-card-blue">
       <div class="layer-num">2</div>
       <div>
-        <div class="layer-title">Sonlandırma Kriterleri — Backtest Stop Parametreleri</div>
-        <div class="layer-subtitle">Backtest metodolojisinde uygulanan sonlandırma koşulları</div>
+        <div class="layer-title">Sinyal Sönümü / Trend Kırılımı Koşulları</div>
+        <div class="layer-subtitle">Tarihsel testte pozisyonun kapandığı varsayılan koşullar (gözlem amaçlı)</div>
         <div class="layer-pills">
-          <span class="layer-pill">%0–4 getiri: ATR stop (hisseye özel)</span>
+          <span class="layer-pill">Birincil: ters kesişim/trend kırılımı — MACD&lt;Sinyal · Fiyat&lt;EMA50 · DI−&lt;DI+ · Fiyat&lt;EMA200</span>
+          <span class="layer-pill">ATR stop: güvenlik ağı (felaket koruması, hisseye özel)</span>
           <span class="layer-pill">%4 getiri eşiğinde: stop başlangıç fiyatına (break-even)</span>
           <span class="layer-pill">%6+ getiri: trailing stop devreye girer</span>
           <span class="layer-pill">%8 getiri eşiğinde: kısmi sonlandırma kriteri</span>
-          <span class="layer-pill">3 gün skor ≤ 4: tam sonlandırma kriteri</span>
-          <span class="layer-pill">20. günde durağan: sonlandırma kriteri</span>
+          <span class="layer-pill">Süre sınırı: 60 gün (zayıfsa) / 90 gün</span>
         </div>
       </div>
     </div>
@@ -511,29 +512,29 @@
   </div>
 
   <!-- Backtest criteria -->
-  <h2>TDO v2 — Backtest Sinyal Kriterleri (5 Filtre)</h2>
-  <p>Aşağıdaki beş filtrenin <strong>hepsi aynı anda</strong> sağlanmalıdır. Tek bir filtrenin kaçırılması sinyali geçersiz kılar. Bu çoklu filtre yapısı yanıltıcı göstergeleri eler:</p>
+  <h2>TDO v3 — Backtest Sinyal Başlangıç Koşulları</h2>
+  <p>Yeni metodoloji <strong>olay-tabanlıdır</strong>: tarihsel testte pozisyonun açıldığı varsayılan bar, bir <em>taze kesişim olayının</em> trend yönü onayı ve emniyet filtreleriyle birleştiği bardır. Aşağıdaki koşulların hepsi aynı anda gözlenir. Bu, "kesişim + trend yönü" odaklı canlı gösterge sistemiyle birebir tutarlıdır:</p>
 
   <div class="checklist-box">
     <div class="check-item">
       <span class="check-icon check-green">1</span>
       <div>
-        <strong>Skor ≥ 7 — 2 Gün Üst Üste</strong>
-        <p>Bugün ve dün skor 7 veya üzerinde olmalı. Tek günlük spike'lar (8 sonra 5'e düşen hisseler) elenir. Skor 8 yerine 7 seçildi çünkü 8 + ardışık gün koşulu yıllık 30-50 işlem üretiyor — istatistiksel anlamlılık için yetersiz. Kalite, alt filtrelerden gelir.</p>
+        <strong>Taze Boğa Kesişimi (Tetikleyici Olay)</strong>
+        <p>Son birkaç bar içinde şu yukarı kesişimlerden <em>en az biri</em> gerçekleşmiş olmalı: <strong>MACD × Sinyal</strong>, <strong>Fiyat × EMA50</strong>, <strong>DI+ × DI−</strong> veya <strong>RSI × 50</strong>. Önceki yöntemin "skor ≥ 7, 2 gün üst üste" eşiği yerine artık asıl tetikleyici, sistemin kalbi olan kesişim olayının kendisidir.</p>
       </div>
     </div>
     <div class="check-item">
       <span class="check-icon check-blue">2</span>
       <div>
-        <strong>EMA Kanallarında Aktif Kesişim</strong>
-        <p>Toplam skor 7 olsa bile yalnızca MACD ve RSI kanallarından geliyorsa (EMA kesişim kanalları sıfırda) sinyal koşulu <em>karşılanmaz</em>. Fiyat/EMA50 veya Fiyat/EMA200 kesişim kanallarından en az birinin aktif olması beklenir. Bu filtre "yapısal hareket olmaksızın göstergeden puan toplamış" sahte adayları eler.</p>
+        <strong>Trend Yönü Onayı — EMA Hiyerarşisi</strong>
+        <p>Kesişim olayının yalnızca yukarı yönlü trend içinde dikkate alınması için kapanış <strong>EMA200 üstünde</strong> ve <strong>EMA50 > EMA200</strong> olmalı. Bu, "trend yönü belirleyici" katmandır; düşüş trendinde oluşan kesişimleri eler. Ek olarak skor ≥ 6 ve trend bileşeni ≥ 1.2 koşulu aranır.</p>
       </div>
     </div>
     <div class="check-item">
       <span class="check-icon check-blue">3</span>
       <div>
         <strong>Hacim Onayı — Günlük Hacim ≥ 20-Gün Ortalaması</strong>
-        <p>Düşük hacimli kırılımların başarı oranı %38, yüksek hacimli olanların %58 (akademik veri). TDO v2 modeli sinyal gününde hacmin SMA20 üstünde olmasını şart koşar.</p>
+        <p>Düşük hacimli kırılımların başarı oranı %38, yüksek hacimli olanların %58 (akademik veri). TDO v3 modeli kesişim olayının gözlendiği günde hacmin SMA20 üstünde olmasını arar.</p>
       </div>
     </div>
     <div class="check-item">
@@ -552,9 +553,23 @@
     </div>
   </div>
 
+  <!-- Birincil sonlandırma: sinyal kırılımı -->
+  <h2>Birincil Sonlandırma — Sinyal Sönümü / Trend Kırılımı</h2>
+  <p>Yeni metodolojide tarihsel testte pozisyonun kapandığı varsayılan ana koşul, giriş tetikleyicisinin <strong>tersi</strong> olan bir kesişim/trend kırılımıdır. Şu aşağı kesişimlerden <em>herhangi biri</em> gözlendiğinde sonlandırma koşulu oluşur (gözlem amaçlı, yatırım tavsiyesi değildir):</p>
+
+  <div class="checklist-box">
+    <div class="check-item">
+      <span class="check-icon check-gray">🔻</span>
+      <div>
+        <strong>Ters Kesişim / Trend Kırılımı</strong>
+        <p><strong>MACD &lt; Sinyal</strong>, <strong>Fiyat &lt; EMA50</strong>, <strong>DI− &lt; DI+</strong> veya <strong>Fiyat &lt; EMA200</strong> (sert trend kırılımı). Bu koşul, eski metodun "3 gün skor ≤ 4" ve "20. gün dead money" kurallarının yerini alır — kesişim sistemiyle tutarlı, daha erken ve net bir sönüm sinyalidir.</p>
+      </div>
+    </div>
+  </div>
+
   <!-- Position management -->
-  <h2>3-Aşamalı Stop Parametreleri (TDO v2 Backtest)</h2>
-  <p>Sabit %5 koruma seviyesi tüm hisseleri aynı volatilitede sayar — bu yanlıştır. BIST hisseleri arasında 5x ATR farkı vardır. TDO v2 backtest modeli ATR (Average True Range) bazlı dinamik stop parametresi kullanır:</p>
+  <h2>ATR Tabanlı Stop — Güvenlik Ağı (Felaket Koruması)</h2>
+  <p>Sinyal kırılımı birincil sonlandırma koşuludur; ATR stop ise sinyal gelmeden önce sert düşüşlerde devreye giren <strong>güvenlik ağıdır</strong>. Sabit %5 koruma seviyesi tüm hisseleri aynı volatilitede sayar — bu yanlıştır. Bu yüzden model ATR (Average True Range) bazlı dinamik stop parametresi kullanır:</p>
 
   <div class="checklist-box">
     <div class="check-item">
@@ -600,34 +615,21 @@
     </div>
   </div>
 
-  <h2>Skor Bazlı Çıkış</h2>
+  <h2>Yardımcı Sonlandırma Koşulları</h2>
+  <p>Sinyal kırılımı birincil koşuldur; aşağıdakiler ona ek olarak devreye giren yardımcı kriterlerdir:</p>
   <div class="checklist-box">
     <div class="check-item">
       <span class="check-icon check-yellow">↓</span>
       <div>
-        <strong>Tek Günde Skor -3 → Kısmi Çıkış Koşulu (Backtest)</strong>
+        <strong>Tek Günde Skor Sert Düşüş → Kısmi Sonlandırma Koşulu (Backtest)</strong>
         <p>Hızlı bozulma belirtisi. Kısmi sonlandırma koşulu henüz oluşmadıysa backtest modelinde %50 sonlandırma kriteri oluşur.</p>
-      </div>
-    </div>
-    <div class="check-item">
-      <span class="check-icon check-gray">⊘</span>
-      <div>
-        <strong>3 Ardışık Gün Skor ≤ 4 → Tam Çıkış Koşulu (Backtest)</strong>
-        <p>Backtest kurallarında yapısal bozulma göstergesi. Tek günlük dalgalanma değil, sürekli zayıflama. Backtest modelinde tam sonlandırma koşulu oluşur.</p>
-      </div>
-    </div>
-    <div class="check-item">
-      <span class="check-icon check-gray">💤</span>
-      <div>
-        <strong>20. Gün Dead Money Kontrolü</strong>
-        <p>20 işlem günü sonunda getiri %1'den az ve skor 5'in altındaysa pozisyon kapatılır. Sermaye opportunity cost'u yer; başka fırsata geçmek mantıklı.</p>
       </div>
     </div>
     <div class="check-item">
       <span class="check-icon check-gray">⏱</span>
       <div>
         <strong>60 Gün Limit (90 Gün Maksimum)</strong>
-        <p>60. günde fiyat +%3 üstündeyse ve skor hâlâ 7+ ise +30 gün uzatma. Aksi halde pozisyon kapatılır. 90. günde her durumda zorunlu sonlandırma.</p>
+        <p>60. günde getiri zayıf (örn. +%3 altı) veya skor düşükse pozisyon kapatılır; aksi halde +30 gün uzatma. 90. günde her durumda zorunlu sonlandırma. Bu, sinyal kırılımı gelmeden takılı kalan pozisyonlar için zaman emniyetidir.</p>
       </div>
     </div>
   </div>
@@ -650,6 +652,12 @@
         <p>Backtest modelinde "kill switch" devreye girer. Tüm açık pozisyonlar için sonlandırma koşulu oluşur; 30 işlem günü tarama yapılmaz. Bu kural CTA fonlarının çekirdek mekanizmasıdır.</p>
       </div>
     </div>
+  </div>
+
+  <h2>Sinyal İsabet Etüdü — Kesişimlerin Tarihsel Gözlemi</h2>
+  <p>Portföy kurgusundan bağımsız ikinci bir araç, her tetikleyici kesişimin <strong>tek başına</strong> tarihsel davranışını ölçer. Trend onaylı bir kesişim (örn. MACD × Sinyal) gözlendikten sonra fiyatın <strong>+5, +10 ve +20 işlem günü</strong> içindeki ortalama hareketi ve pozitif sonuç oranı hesaplanır. Bu, "hangi kesişim türü tarihsel olarak daha tutarlı hareket etmiş" sorusunu yalnızca <em>gözlem</em> olarak yanıtlar.</p>
+  <div class="warning-box" style="margin-bottom: 16px;">
+    <strong>Önemli:</strong> Etüt sonuçları geçmiş veriye dayalı istatistiksel gözlemdir; gelecekteki hareketi göstermez ve alım-satım yönlendirmesi içermez. "X kesişimi sonrası 10 günlük ortalama hareket şu olmuştur" tarzı ifadeler tarihsel bir özettir, tavsiye değildir.
   </div>
 
   <div class="warning-box" style="margin-top: 0;">
@@ -759,15 +767,15 @@
     <li class="step-item">
       <div class="step-num">2</div>
       <div class="step-body">
-        <strong>"≥ 7 Puan" Filtresini Uygula</strong>
-        <p>Ana ekranda BIST veya ABD pazarını seçin. Filtre çiplerinden <strong>≥ 7 Puan</strong> seçeneğini etkinleştirin. TDO v2 backtest modelinin sinyal eşiği 7'dir; kalite, ardışık gün + trend alt-skoru + hacim onayı filtrelerinden gelir.</p>
+        <strong>Yüksek Skorlu Hisseleri Süz</strong>
+        <p>Ana ekranda BIST veya ABD pazarını seçin. Filtre çiplerinden yüksek skor (örn. <strong>≥ 7 Puan</strong>) seçeneğini etkinleştirin. Yüksek skor, birden fazla kesişim kanalının taze olduğu bölgeyi işaret eder; TDO v3 modelinde asıl tetikleyici ise bir sonraki adımdaki kesişim olayıdır.</p>
       </div>
     </li>
     <li class="step-item">
       <div class="step-num">3</div>
       <div class="step-body">
-        <strong>2 Gün Üst Üste Teyit Et</strong>
-        <p>Bir hisse 7+ skor aldığında, ertesi gün skoru yeniden kontrol etmek TDO v2 modelinin temel kuralıdır — eğer skor 7'nin üzerinde kalmaya devam ediyorsa gösterge doğrulanmış sayılır. Bu ikinci gün kontrolü tek günlük sahte spike'ları filtreler.</p>
+        <strong>Kesişim Olayı + Trend Yönü Teyidi</strong>
+        <p>TDO v3 modelinin temel koşulu, <strong>taze bir boğa kesişiminin</strong> (MACD×Sinyal, Fiyat×EMA50, DI+×DI− veya RSI×50) <strong>yukarı trend yönü</strong> (kapanış>EMA200 ve EMA50>EMA200) ile birlikte gözlenmesidir. Hisse detayında gösterge kartlarından hangi kesişimin taze olduğunu kontrol edebilirsiniz. Bu, eski "2 gün üst üste" kuralının yerini alır.</p>
       </div>
     </li>
     <li class="step-item">
@@ -788,14 +796,14 @@
       <div class="step-num">6</div>
       <div class="step-body">
         <strong>ATR Parametrelerini İncele</strong>
-        <p>TDO v2 modelinde ATR-bazlı stop hesaplaması: <strong>başlangıç fiyatı − 2.5 × ATR</strong>. Sabit %5 değil; her hisse kendi volatilitesiyle ölçülür. Backtest parametrelerine göre %8 getiri eşiğinde kısmi sonlandırma kriteri oluşur; kalan bölüm için stop başlangıç fiyatına taşınır ve trailing moda geçer.</p>
+        <p>TDO v3 modelinde birincil sonlandırma koşulu ters kesişim/trend kırılımıdır; ATR-bazlı stop ise güvenlik ağıdır: <strong>başlangıç fiyatı − 2.5 × ATR</strong>. Sabit %5 değil; her hisse kendi volatilitesiyle ölçülür. Backtest parametrelerine göre %8 getiri eşiğinde kısmi sonlandırma kriteri oluşur; kalan bölüm için stop başlangıç fiyatına taşınır ve trailing moda geçer.</p>
       </div>
     </li>
     <li class="step-item">
       <div class="step-num">7</div>
       <div class="step-body">
         <strong>Portföy Uyarılarını Yorumla</strong>
-        <p>Portföy sekmesi rozet sistemiyle pozisyon sağlığını gösterir. "Trend Sağlıklı" → skor 7+, sinyaller aktif. "Zayıflama Belirtileri" → skor düşmekte, izleme önerilir. "Yüksek Risk" → stop bölgesine yaklaşıldı veya skor 0-2. 3 ardışık gün skor 4 veya altına düşmesi TDO v2 backtest modelinde tam sonlandırma koşulu olarak değerlendirilir.</p>
+        <p>Portföy sekmesi rozet sistemiyle pozisyon sağlığını gösterir. "Trend Sağlıklı" → skor 7+, sinyaller aktif. "Zayıflama Belirtileri" → skor düşmekte, izleme önerilir. "Yüksek Risk" → stop bölgesine yaklaşıldı veya skor 0-2. Ters bir kesişim/trend kırılımı (örn. MACD<Sinyal veya fiyat<EMA50) TDO v3 backtest modelinde sinyal sönümü/sonlandırma koşulu olarak değerlendirilir.</p>
       </div>
     </li>
   </ol>
