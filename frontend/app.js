@@ -2,6 +2,7 @@
 (function () {
     const API = {
         markets: () => fetch('/api/markets').then((r) => r.json()),
+        index: (market) => fetch(`/api/index/${market}`).then((r) => r.json()),
         scanChunk: (market, offset, limit, force = false, sort = 'score') =>
             fetch(`/api/scan?market=${market}&offset=${offset}&limit=${limit}&force=${force ? 1 : 0}&sort=${sort}`).then((r) => r.json()),
         stock: (symbol) => fetch(`/api/stock/${encodeURIComponent(symbol)}`).then((r) => r.json()),
@@ -296,6 +297,50 @@
         });
     }
 
+    // --- endeks mini grafikleri (BIST 100 / S&P 500) ---
+    function renderIndexCard(market, d) {
+        const priceEl  = document.getElementById(`indexPrice-${market}`);
+        const chEl     = document.getElementById(`indexChange-${market}`);
+        const regimeEl = document.getElementById(`indexRegime-${market}`);
+        const canvas   = document.getElementById(`indexSpark-${market}`);
+        if (!priceEl) return;
+
+        if (!d || d.error) {
+            priceEl.textContent = '-';
+            if (chEl) chEl.textContent = '';
+            if (regimeEl) regimeEl.textContent = '';
+            return;
+        }
+
+        const isUp = (d.change_pct || 0) >= 0;
+        priceEl.textContent = d.price != null
+            ? d.price.toLocaleString('tr-TR', { maximumFractionDigits: 2, minimumFractionDigits: 2 })
+            : '-';
+        if (chEl) {
+            chEl.textContent = fmtChange(d.change_pct);
+            chEl.className = 'index-change ' + (isUp ? 'up' : 'down');
+        }
+        if (regimeEl) {
+            regimeEl.textContent = d.regime_ok ? '🟢 Rejim Olumlu' : '🔴 Rejim Zayıf';
+            regimeEl.title = d.regime_ok
+                ? 'Endeks 200 günlük ortalamanın üzerinde — Giriş Sinyali rozeti gösterilebilir.'
+                : 'Endeks 200 günlük ortalamanın altında — bu piyasada hiçbir hissede Giriş Sinyali rozeti gösterilmez.';
+            regimeEl.className = 'index-regime ' + (d.regime_ok ? 'regime-ok' : 'regime-bad');
+        }
+        if (canvas) drawSparkline(canvas, d.sparkline || [], isUp);
+    }
+
+    async function loadIndices() {
+        ['bist', 'us'].forEach(async (market) => {
+            try {
+                const d = await API.index(market);
+                renderIndexCard(market, d);
+            } catch (_) {
+                renderIndexCard(market, null);
+            }
+        });
+    }
+
     // --- scan (lazy / chunked) ---
     async function loadScan(force = false) {
         const m = ms();
@@ -539,7 +584,7 @@
     function buildStockCard(r, idx) {
         const isGuestLocked = !_currentUser && idx >= 5;
         const card = document.createElement('div');
-        card.className = 'stock-card glass' + (isGuestLocked ? ' guest-locked' : '');
+        card.className = 'stock-card glass' + (isGuestLocked ? ' guest-locked' : '') + (r.entry_signal ? ' has-entry-signal' : '');
         const change = Number(r.change_pct || 0);
         const changeClass = change >= 0 ? 'up' : 'down';
         const displaySymbol = r.symbol.replace('.IS', '');
@@ -553,6 +598,9 @@
             : '';
         const nearPeakBadge = r.near_peak
             ? `<span class="badge near-peak" title="52 haftalik zirveye %5 icinde">&#9650; Tepe</span>`
+            : '';
+        const entryBadge = r.entry_signal
+            ? `<span class="badge entry-signal" title="Backtest'in olay-tabanlı giriş kurallarına uyuyor: taze kesişim + trend onayı + yeterli hacim + 52 haftalık zirveye yakınlık (bkz. Rehber → Basit Anlatım)">&#127919; Giriş Sinyali</span>`
             : '';
         const reason = buildScoreReason(r);
 
@@ -578,6 +626,7 @@
                 <div class="change ${changeClass}">${fmtChange(change)}</div>
             </div>
             <div class="indicators">
+                ${entryBadge}
                 ${r.indicators.map((ind) => {
                     const cls = ind.score > 0 ? 'on' : (ind.score < 0 ? 'penalty' : '');
                     const sign = ind.score > 0 ? '+' : '';
@@ -2855,6 +2904,7 @@
         await loadMarkets();
         fetchExchangeRate();
         loadScan();
+        loadIndices();
         // ?s=SYMBOL deeplink — paylaş butonu linklerini destekler
         const deepSym = new URLSearchParams(location.search).get('s');
         if (deepSym) openStockModal(deepSym.toUpperCase());

@@ -46,6 +46,19 @@ W_ADX      = 1.5   # ADX güç
 W_VOLUME   = 1.0   # Hacim onayı
 EXT_PENALTY_MAX = -2.0   # Genişleme cezası üst sınırı
 
+# ── canlı giriş sinyali eşikleri ─────────────────────────────────────────────
+# backend/backtest.py bu sabitleri buradan import eder — tek kaynak (TDOV giriş
+# kuralları ile canlı taramadaki "Giriş Sinyali" rozeti birebir aynı eşikleri
+# kullanır, iki yerde ayrı ayrı güncellenme riski olmasın diye).
+ENTRY_TRIGGER_LOOKBACK = 2     # taze kesişim penceresi (bar)
+MIN_SCORE_EVENT        = 6     # olay-tabanlı girişte istenen min skor
+MIN_TREND_SUBSCORE     = 1.2   # ema_align max 2.0; %60 doluluk eşiği
+HIGH52W_FLOOR          = 0.85  # 52 haftalık zirvenin altında kalınabilecek pay
+REQUIRE_VOLUME_ENTRY   = True
+REGIME_EMA_SHORT       = 50
+REGIME_RECENT_DAYS     = 20
+REGIME_RECENT_FLOOR    = -0.03
+
 
 @dataclass
 class IndicatorResult:
@@ -76,6 +89,7 @@ class ScoreResult:
     low_52w: float | None = None
     volume_spike: bool = False
     near_peak: bool = False
+    entry_signal: bool = False
 
     @staticmethod
     def _sf(v: float, ndigits: int = 2) -> float:
@@ -100,6 +114,7 @@ class ScoreResult:
             "indicators": [asdict(ind) for ind in self.indicators],
             "volume_spike": self.volume_spike,
             "near_peak": self.near_peak,
+            "entry_signal": self.entry_signal,
         }
 
 
@@ -672,9 +687,130 @@ def _index_close_of(index_df) -> Optional[pd.Series]:
     return None
 
 
+# ── canlı giriş sinyali (backtest.py'nin olay-tabanlı giriş kurallarıyla aynı eşikler) ──
+
+def compute_regime_ok(index_df) -> bool:
+    """Piyasa rejimi yukarı mı? (BIST: XU100, ABD: S&P 500)
+
+    backtest.py'deki dual rejim kapısıyla birebir aynı kriter: endeks EMA200
+    üstünde VE (EMA50 üstünde OR son 20 günde -%3'ten fazla düşmemiş). Rejim
+    kapalıyken hiçbir hissede Giriş Sinyali rozeti gösterilmez — backtest'te de
+    rejim kapalıyken portföy hiç yeni pozisyon açmaz, aynı kural canlıda uygulanır.
+    """
+    index_close = _index_close_of(index_df)
+    if index_close is None:
+        return True  # endeks verisi yoksa filtre uygulanamaz, engellemeyelim
+    close = index_close.dropna()
+    if len(close) < 60:
+        return True
+
+    long_ok = True
+    if len(close) >= 200:
+        ema200 = close.ewm(span=200, adjust=False).mean()
+        long_ok = bool(close.iloc[-1] > ema200.iloc[-1])
+    if not long_ok:
+        return False
+
+    ema_short = close.ewm(span=REGIME_EMA_SHORT, adjust=False).mean()
+    above_short = bool(close.iloc[-1] > ema_short.iloc[-1])
+    not_falling = True
+    if len(close) > REGIME_RECENT_DAYS:
+        ret_recent = close.pct_change(REGIME_RECENT_DAYS).iloc[-1]
+        not_falling = bool(not pd.isna(ret_recent) and ret_recent > REGIME_RECENT_FLOOR)
+    return above_short or not_falling
+
+
+def compute_entry_signal(
+    df: pd.DataFrame,
+    frame: Dict[str, pd.Series],
+    index_close: Optional[pd.Series],
+    market: str,
+) -> bool:
+    """Son bar için backtest.py'nin olay-tabanlı giriş kurallarının aynısını kontrol eder.
+
+    Tarama ekranındaki "🎯 Giriş Sinyali" rozeti bu fonksiyona dayanır: taze
+    boğa kesişimi + trend yönü onayı + (ABD'de) göreli güç + hacim onayı +
+    52 hafta filtresi — backend/backtest.py `_build_signals`/ana döngü ile aynı
+    eşikleri kullanır (bkz. rehber.html "Basit Anlatım"). Backtest'in aksine
+    250 barlık ısınma zorunluluğu yoktur (score_symbol ile aynı min. 60 bar);
+    bu yüzden kısa geçmişli hisselerde EMA200 daha az anlamlı olabilir.
+    """
+    close = df["Close"].astype(float)
+    if len(close.dropna()) < 60:
+        return False
+
+    ema50_val, ema200_val = frame["ema50_val"], frame["ema200_val"]
+    c_last, e50_last, e200_last = close.iloc[-1], ema50_val.iloc[-1], ema200_val.iloc[-1]
+    if pd.isna(c_last) or pd.isna(e50_last) or pd.isna(e200_last):
+        return False
+    if not (c_last > e200_last and e50_last > e200_last):
+        return False
+
+    market = (market or "bist").lower()
+    if market == "us":
+        # ABD: en az 2 eş zamanlı yukarı kesişim — tek kesişim gürültülü
+        bull_count = (
+            frame["x_macd_up"].fillna(False).astype(int)
+            + frame["x_price_ema50_up"].fillna(False).astype(int)
+            + frame["x_di_up"].fillna(False).astype(int)
+            + frame["x_rsi50_up"].fillna(False).astype(int)
+        )
+        bull_trigger = bool((bull_count.tail(ENTRY_TRIGGER_LOOKBACK) >= 2).any())
+
+        rel_ok = True
+        if index_close is not None and len(close) > 20:
+            idx_ret20 = index_close.reindex(df.index, method="ffill").pct_change(20)
+            if len(idx_ret20.dropna()):
+                stock_ret20 = close.pct_change(20).iloc[-1]
+                idx_last = idx_ret20.iloc[-1]
+                if not pd.isna(stock_ret20) and not pd.isna(idx_last):
+                    rel_ok = stock_ret20 > idx_last
+    else:
+        # BIST: tek kesişim yeterli, göreli güç filtresi yok
+        bull_any = (
+            frame["x_macd_up"].fillna(False)
+            | frame["x_price_ema50_up"].fillna(False)
+            | frame["x_di_up"].fillna(False)
+            | frame["x_rsi50_up"].fillna(False)
+        )
+        bull_trigger = bool(bull_any.tail(ENTRY_TRIGGER_LOOKBACK).any())
+        rel_ok = True
+
+    if not bull_trigger or not rel_ok:
+        return False
+
+    total_last = _safe_last(frame["total"])
+    score = int(round(max(0.0, min(10.0, total_last)))) if total_last is not None else 0
+    if score < MIN_SCORE_EVENT:
+        return False
+
+    trend_sub = _safe_last(frame["trend"])
+    if trend_sub is None or trend_sub < MIN_TREND_SUBSCORE:
+        return False
+
+    if REQUIRE_VOLUME_ENTRY and "Volume" in df.columns:
+        volume = df["Volume"].astype(float)
+        if len(volume) >= 20:
+            vol_sma20 = volume.rolling(20).mean().iloc[-1]
+            if pd.isna(vol_sma20) or volume.iloc[-1] < vol_sma20:
+                return False
+
+    high52w = close.rolling(252, min_periods=60).max().iloc[-1]
+    if pd.isna(high52w) or c_last < high52w * HIGH52W_FLOOR:
+        return False
+
+    return True
+
+
 # ── ana puanlama ──────────────────────────────────────────────────────────────
 
-def score_symbol(symbol: str, df: pd.DataFrame, index_df=None) -> ScoreResult | None:
+def score_symbol(
+    symbol: str,
+    df: pd.DataFrame,
+    index_df=None,
+    market: str = "bist",
+    regime_ok: bool = True,
+) -> ScoreResult | None:
     if df is None or df.empty or len(df) < 60:
         return None
 
@@ -714,6 +850,8 @@ def score_symbol(symbol: str, df: pd.DataFrame, index_df=None) -> ScoreResult | 
 
     near_peak = bool(high_52 and high_52 > 0 and last_close >= high_52 * 0.97)
 
+    entry_signal = regime_ok and compute_entry_signal(df, frame, index_close, market)
+
     return ScoreResult(
         symbol=symbol,
         score=score,
@@ -728,11 +866,18 @@ def score_symbol(symbol: str, df: pd.DataFrame, index_df=None) -> ScoreResult | 
         indicators=indicators,
         volume_spike=volume_spike,
         near_peak=near_peak,
+        entry_signal=entry_signal,
     )
 
 
-def score_symbol_detailed(symbol: str, df: pd.DataFrame, index_df=None) -> dict | None:
-    base = score_symbol(symbol, df, index_df=index_df)
+def score_symbol_detailed(
+    symbol: str,
+    df: pd.DataFrame,
+    index_df=None,
+    market: str = "bist",
+    regime_ok: bool = True,
+) -> dict | None:
+    base = score_symbol(symbol, df, index_df=index_df, market=market, regime_ok=regime_ok)
     if base is None:
         return None
 

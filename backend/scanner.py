@@ -9,7 +9,7 @@ from typing import Dict, List
 
 from .cache import scan_cache, symbol_cache
 from .data_fetcher import download_ohlcv
-from .scoring import score_symbol
+from .scoring import compute_regime_ok, score_symbol
 from .tickers import MARKETS, get_index_symbol, get_tickers
 
 logger = logging.getLogger(__name__)
@@ -41,14 +41,59 @@ def get_index_df(market: str):
     return idx
 
 
-def _compute_scores(data: Dict, index_df=None) -> List[dict]:
+INDEX_LABELS = {"bist": "BIST 100", "us": "S&P 500"}
+
+
+def build_index_summary(market: str) -> dict | None:
+    """Tarama sekmesindeki endeks mini-grafiği için özet veri (BIST 100 / S&P 500).
+
+    get_index_df ile aynı cache'i kullanır — tarama zaten indirdiği için ek
+    maliyeti yoktur. regime_ok, compute_entry_signal rozetinin dayandığı aynı
+    piyasa rejimi kriteridir; kullanıcı rozetin neden görünmediğini buradan
+    (rejim olumsuzsa) anlayabilir.
+    """
+    market = (market or "").lower()
+    if market not in MARKETS:
+        return None
+    index_df = get_index_df(market)
+    if index_df is None or index_df.empty:
+        return None
+
+    close = index_df["Close"].astype(float).dropna()
+    if close.empty:
+        return None
+
+    last = float(close.iloc[-1])
+
+    def _chg(n: int) -> float:
+        if len(close) <= n:
+            return 0.0
+        prev = float(close.iloc[-(n + 1)])
+        return (last - prev) / prev * 100.0 if prev else 0.0
+
+    return {
+        "market": market,
+        "symbol": get_index_symbol(market),
+        "label": INDEX_LABELS.get(market, market.upper()),
+        "price": round(last, 2),
+        "change_pct": round(_chg(1), 2),
+        "change_week_pct": round(_chg(5), 2),
+        "change_month_pct": round(_chg(21), 2),
+        "sparkline": [round(float(v), 2) for v in close.tail(90).tolist()],
+        "regime_ok": compute_regime_ok(index_df),
+        "generated_at": int(time.time()),
+    }
+
+
+def _compute_scores(data: Dict, index_df=None, market: str = "bist", regime_ok: bool = True) -> List[dict]:
     results: List[dict] = []
     if not data:
         return results
 
     with ThreadPoolExecutor(max_workers=16) as pool:
         futures = {
-            pool.submit(score_symbol, symbol, df, index_df): symbol for symbol, df in data.items()
+            pool.submit(score_symbol, symbol, df, index_df, market, regime_ok): symbol
+            for symbol, df in data.items()
         }
         for fut in as_completed(futures):
             symbol = futures[fut]
@@ -89,10 +134,11 @@ def scan_market(market: str, force: bool = False, max_tickers: int = None) -> di
     started = time.time()
     data = download_ohlcv(tickers, period="300d", interval="1d")
     index_df = get_index_df(market)
+    regime_ok = compute_regime_ok(index_df)
     download_secs = time.time() - started
 
     compute_started = time.time()
-    results = _compute_scores(data, index_df)
+    results = _compute_scores(data, index_df, market, regime_ok)
     compute_secs = time.time() - compute_started
 
     payload = {
@@ -102,6 +148,7 @@ def scan_market(market: str, force: bool = False, max_tickers: int = None) -> di
         "total": len(tickers),
         "scored": len(results),
         "results": results,
+        "regime_ok": regime_ok,
         "generated_at": int(time.time()),
         "timings": {
             "download_secs": round(download_secs, 2),
@@ -189,19 +236,22 @@ def scan_market_chunk(market: str, offset: int, limit: int, force: bool = False,
 
     download_secs = 0.0
     compute_secs = 0.0
+    regime_ok = None
 
     if missing:
         started = time.time()
         data = download_ohlcv(missing, period="300d", interval="1d")
         # Endeksi (goreceli guc icin) market basina cache'le, her chunk'ta yeniden indirme
         index_df = get_index_df(market)
+        regime_ok = compute_regime_ok(index_df)
         download_secs = time.time() - started
 
         compute_started = time.time()
         if data:
             with ThreadPoolExecutor(max_workers=min(16, len(data))) as pool:
                 futures = {
-                    pool.submit(score_symbol, symbol, df, index_df): symbol for symbol, df in data.items()
+                    pool.submit(score_symbol, symbol, df, index_df, market, regime_ok): symbol
+                    for symbol, df in data.items()
                 }
                 for fut in as_completed(futures):
                     symbol = futures[fut]
@@ -232,6 +282,7 @@ def scan_market_chunk(market: str, offset: int, limit: int, force: bool = False,
         "results": results,
         "has_more": (offset + len(chunk_symbols)) < total,
         "next_offset": offset + len(chunk_symbols),
+        "regime_ok": regime_ok,
         "generated_at": int(time.time()),
         "timings": {
             "download_secs": round(download_secs, 2),

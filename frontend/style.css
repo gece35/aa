@@ -180,6 +180,29 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
 .summary .s-label { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-3); }
 .summary .s-value { font-size: 28px; font-family: 'Outfit', 'Inter', sans-serif; font-weight: 700; color: var(--text-1); }
 
+/* index bar — BIST 100 / S&P 500 mini grafikleri */
+.index-bar {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 16px; margin-bottom: 18px;
+}
+.index-card { padding: 16px 20px; }
+.index-card-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+}
+.index-label { font-size: 13px; font-weight: 700; letter-spacing: .4px; color: var(--text-1); }
+.index-regime { font-size: 11px; font-weight: 600; color: var(--text-3); }
+.index-regime.regime-ok { color: var(--neon); }
+.index-regime.regime-bad { color: var(--danger); }
+.index-card-body { display: flex; align-items: center; gap: 16px; }
+.index-price-block { display: flex; flex-direction: column; gap: 4px; min-width: 96px; }
+.index-price { font-size: 22px; font-weight: 700; font-family: 'Outfit', 'Inter', sans-serif; color: var(--text-1); }
+.index-change { font-size: 13px; font-weight: 600; }
+.index-change.up { color: var(--neon); }
+.index-change.down { color: var(--danger); }
+.index-spark-wrap { flex: 1; height: 48px; min-width: 0; position: relative; }
+.index-spark-wrap canvas { width: 100%; height: 100%; display: block; }
+
 /* filters */
 .filters {
     padding: 14px 18px;
@@ -696,6 +719,18 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
     color: #ff8c00;
     background: rgba(255, 140, 0, 0.12);
     border-color: rgba(255, 140, 0, 0.4);
+}
+
+/* entry signal badge — backtest'in olay-tabanli giris kurallarina uyan hisseler */
+.badge.entry-signal {
+    color: #e9d5ff;
+    background: rgba(168, 85, 247, 0.18);
+    border-color: rgba(168, 85, 247, 0.55);
+    box-shadow: 0 0 10px rgba(168, 85, 247, 0.35);
+}
+.stock-card.has-entry-signal {
+    border-color: rgba(168, 85, 247, 0.45);
+    box-shadow: 0 0 0 1px rgba(168, 85, 247, 0.28), 0 14px 34px rgba(168, 85, 247, 0.12);
 }
 
 /* stop loss / take profit box */
@@ -1736,6 +1771,9 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
     .summary-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 12px; }
     .summary { padding: 12px 14px; }
     .summary .s-value { font-size: 22px; }
+
+    .index-bar { grid-template-columns: 1fr; gap: 10px; margin-bottom: 12px; }
+    .index-card { padding: 12px 14px; }
 
     /* Portföy: daha sıkı padding */
     .port-card { padding: 0; }

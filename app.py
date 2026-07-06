@@ -41,8 +41,8 @@ from backend.models import Portfolio, StockComment, TweetLog, User, Watchlist
 from backend.news import fetch_news, fetch_stock_news
 from backend.fundamentals import GROQ_API_KEY, analyze_fundamentals
 from backend.backtest import run_backtest, run_signal_study
-from backend.scanner import get_index_df, scan_market, scan_market_chunk
-from backend.scoring import score_symbol_detailed
+from backend.scanner import build_index_summary, get_index_df, scan_market, scan_market_chunk
+from backend.scoring import compute_regime_ok, score_symbol_detailed
 from backend.tickers import MARKETS, market_of_symbol
 from backend.repetition import build_repetition_schedule
 from backend.storage import (
@@ -280,6 +280,18 @@ def create_app() -> Flask:
             "plan": "premium" if (current_user.is_authenticated and current_user.is_premium) else "free",
         })
 
+    # ── API: Endeks özeti (Tarama sekmesi mini grafiği) ────────────────────
+
+    @flask_app.route("/api/index/<market>")
+    def api_index(market: str):
+        market = (market or "").lower()
+        if market not in MARKETS:
+            return jsonify({"error": f"unknown market: {market}"}), 400
+        summary = build_index_summary(market)
+        if summary is None:
+            return jsonify({"error": "index data unavailable"}), 404
+        return jsonify(summary)
+
     # ── API: Tarama ────────────────────────────────────────────────────────
 
     @flask_app.route("/api/scan")
@@ -361,8 +373,12 @@ def create_app() -> Flask:
         if df is None or df.empty:
             return jsonify({"error": f"data unavailable for {symbol}"}), 404
 
-        index_df = get_index_df(market_of_symbol(symbol))
-        detail = score_symbol_detailed(symbol, df, index_df=index_df)
+        symbol_market = market_of_symbol(symbol)
+        index_df = get_index_df(symbol_market)
+        detail = score_symbol_detailed(
+            symbol, df, index_df=index_df,
+            market=symbol_market, regime_ok=compute_regime_ok(index_df),
+        )
         if detail is None:
             return jsonify({"error": f"insufficient data for {symbol}"}), 404
 
@@ -528,8 +544,12 @@ def create_app() -> Flask:
             df = data.get(symbol)
             if df is None or df.empty:
                 return {}
-            index_df = get_index_df(market_of_symbol(symbol))
-            return score_symbol_detailed(symbol, df, index_df=index_df) or {}
+            symbol_market = market_of_symbol(symbol)
+            index_df = get_index_df(symbol_market)
+            return score_symbol_detailed(
+                symbol, df, index_df=index_df,
+                market=symbol_market, regime_ok=compute_regime_ok(index_df),
+            ) or {}
 
         try:
             check_alerts_for_user(current_user.id, _fetcher)

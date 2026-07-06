@@ -41,29 +41,33 @@ import numpy as np
 import pandas as pd
 
 from .data_fetcher import download_ohlcv
-from .scoring import compute_score_frame
+from .scoring import (
+    ENTRY_TRIGGER_LOOKBACK,
+    HIGH52W_FLOOR,
+    MIN_SCORE_EVENT,
+    MIN_TREND_SUBSCORE,
+    REGIME_EMA_SHORT,
+    REGIME_RECENT_DAYS,
+    REGIME_RECENT_FLOOR,
+    REQUIRE_VOLUME_ENTRY,
+    compute_score_frame,
+)
 from .sectors import get_sector
 from .tickers import get_tickers
 
 logger = logging.getLogger(__name__)
 
 # ── Strateji sabitleri ────────────────────────────────────────────────────────
+# Giriş eşikleri (MIN_TREND_SUBSCORE, REQUIRE_VOLUME_ENTRY, HIGH52W_FLOOR,
+# MIN_SCORE_EVENT, ENTRY_TRIGGER_LOOKBACK, REGIME_*) backend/scoring.py'dan
+# import edilir — canlı taramadaki "Giriş Sinyali" rozetiyle tek kaynak.
 
-# Giriş — olay-tabanlı (kesişim tetikleyici + trend yönü onayı)
-MIN_SCORE              = 6
-ENTRY_CONSEC_DAYS      = 2
-MIN_TREND_SUBSCORE     = 1.2  # ema_align max 2.0; 1.2 = %60 doluluk esigi
-REQUIRE_VOLUME_ENTRY   = True
-HIGH52W_FLOOR          = 0.85
-MIN_SCORE_EVENT        = 6    # olay-tabanlı girişte istenen min skor (2-gün-7 yerine)
-ENTRY_TRIGGER_LOOKBACK = 2    # taze kesişim penceresi (bar): tetikleyici son N bar içinde olmalı
+MIN_SCORE              = 6    # eski 2-gün-ardışık modelden kalma, artık kullanılmıyor
+ENTRY_CONSEC_DAYS      = 2    # eski 2-gün-ardışık modelden kalma, artık kullanılmıyor
 MIN_HOLD_SIGNAL_EXIT_US = 5   # ABD: sinyal_kirilim ilk N barda ateşlenemiyor (çırpınma koruması)
 
 # Rejim
 USE_DUAL_REGIME        = True
-REGIME_EMA_SHORT       = 50
-REGIME_RECENT_DAYS     = 20
-REGIME_RECENT_FLOOR    = -0.03
 
 # ATR & trailing stop
 ATR_PERIOD_BIST        = 20
