@@ -48,7 +48,7 @@ EXT_PENALTY_MAX = -2.0   # Genişleme cezası üst sınırı
 
 # ── canlı giriş sinyali eşikleri ─────────────────────────────────────────────
 # backend/backtest.py bu sabitleri buradan import eder — tek kaynak (TDOV giriş
-# kuralları ile canlı taramadaki "Giriş Sinyali" rozeti birebir aynı eşikleri
+# kuralları ile canlı taramadaki "TDOV Eşleşti" rozeti birebir aynı eşikleri
 # kullanır, iki yerde ayrı ayrı güncellenme riski olmasın diye).
 ENTRY_TRIGGER_LOOKBACK = 2     # taze kesişim penceresi (bar)
 MIN_SCORE_EVENT        = 6     # olay-tabanlı girişte istenen min skor
@@ -694,7 +694,7 @@ def compute_regime_ok(index_df) -> bool:
 
     backtest.py'deki dual rejim kapısıyla birebir aynı kriter: endeks EMA200
     üstünde VE (EMA50 üstünde OR son 20 günde -%3'ten fazla düşmemiş). Rejim
-    kapalıyken hiçbir hissede Giriş Sinyali rozeti gösterilmez — backtest'te de
+    kapalıyken hiçbir hissede TDOV Eşleşti rozeti gösterilmez — backtest'te de
     rejim kapalıyken portföy hiç yeni pozisyon açmaz, aynı kural canlıda uygulanır.
     """
     index_close = _index_close_of(index_df)
@@ -728,7 +728,7 @@ def compute_entry_signal(
 ) -> bool:
     """Son bar için backtest.py'nin olay-tabanlı giriş kurallarının aynısını kontrol eder.
 
-    Tarama ekranındaki "🎯 Giriş Sinyali" rozeti bu fonksiyona dayanır: taze
+    Tarama ekranındaki "🎯 TDOV Eşleşti" rozeti bu fonksiyona dayanır: taze
     boğa kesişimi + trend yönü onayı + (ABD'de) göreli güç + hacim onayı +
     52 hafta filtresi — backend/backtest.py `_build_signals`/ana döngü ile aynı
     eşikleri kullanır (bkz. rehber.html "Basit Anlatım"). Backtest'in aksine

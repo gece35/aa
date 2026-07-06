@@ -60,7 +60,7 @@ logger = logging.getLogger(__name__)
 # ── Strateji sabitleri ────────────────────────────────────────────────────────
 # Giriş eşikleri (MIN_TREND_SUBSCORE, REQUIRE_VOLUME_ENTRY, HIGH52W_FLOOR,
 # MIN_SCORE_EVENT, ENTRY_TRIGGER_LOOKBACK, REGIME_*) backend/scoring.py'dan
-# import edilir — canlı taramadaki "Giriş Sinyali" rozetiyle tek kaynak.
+# import edilir — canlı taramadaki "TDOV Eşleşti" rozetiyle tek kaynak.
 
 MIN_SCORE              = 6    # eski 2-gün-ardışık modelden kalma, artık kullanılmıyor
 ENTRY_CONSEC_DAYS      = 2    # eski 2-gün-ardışık modelden kalma, artık kullanılmıyor

@@ -323,8 +323,8 @@
         if (regimeEl) {
             regimeEl.textContent = d.regime_ok ? '🟢 Rejim Olumlu' : '🔴 Rejim Zayıf';
             regimeEl.title = d.regime_ok
-                ? 'Endeks 200 günlük ortalamanın üzerinde — Giriş Sinyali rozeti gösterilebilir.'
-                : 'Endeks 200 günlük ortalamanın altında — bu piyasada hiçbir hissede Giriş Sinyali rozeti gösterilmez.';
+                ? 'Endeks 200 günlük ortalamanın üzerinde — TDOV Eşleşti rozeti gösterilebilir.'
+                : 'Endeks 200 günlük ortalamanın altında — bu piyasada hiçbir hissede TDOV Eşleşti rozeti gösterilmez.';
             regimeEl.className = 'index-regime ' + (d.regime_ok ? 'regime-ok' : 'regime-bad');
         }
         if (canvas) drawSparkline(canvas, d.sparkline || [], isUp);
@@ -600,7 +600,7 @@
             ? `<span class="badge near-peak" title="52 haftalik zirveye %5 icinde">&#9650; Tepe</span>`
             : '';
         const entryBadge = r.entry_signal
-            ? `<span class="badge entry-signal" title="Backtest'in olay-tabanlı giriş kurallarına uyuyor: taze kesişim + trend onayı + yeterli hacim + 52 haftalık zirveye yakınlık (bkz. Rehber → Basit Anlatım)">&#127919; Giriş Sinyali</span>`
+            ? `<span class="badge entry-signal" title="Bu hisse TDOV'un geçmiş test verisinde gözlemlenen koşul setiyle eşleşiyor: taze kesişim + trend onayı + yeterli hacim + 52 haftalık zirveye yakınlık (bkz. Rehber → Basit Anlatım). Bu bir alım tavsiyesi değildir, yalnızca geçmiş veri modeline dayalı bir eşleşme bilgisidir.">&#127919; TDOV Eşleşti</span>`
             : '';
         const reason = buildScoreReason(r);
 
