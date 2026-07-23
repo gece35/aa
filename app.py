@@ -59,6 +59,23 @@ logger = logging.getLogger(__name__)
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "frontend")
 
 
+def _is_admin_user() -> bool:
+    return bool(current_user.is_authenticated and getattr(current_user, "is_admin", False))
+
+
+def _mask_entry_signal_one(d: dict) -> dict:
+    """'TDOV Eşleşti' rozetini yalnızca admin hesabına göstermek için diğer
+    kullanıcılara giden yanıtta entry_signal'i False'a çeker. Cache'deki asıl
+    sözlüğü bozmamak için (in-memory TTLCache referans tutar) maskeleme
+    gerektiğinde yeni bir kopya döner — doğrudan mutasyon symbol_cache/
+    scan_cache/stock_cache'i kalıcı olarak bozar."""
+    return {**d, "entry_signal": False} if d.get("entry_signal") else d
+
+
+def _mask_entry_signal(results: list) -> list:
+    return [_mask_entry_signal_one(r) for r in results]
+
+
 def _asset_version() -> str:
     """app.js ve style.css mtime'ını birleştirip cache-buster string üretir."""
     try:
@@ -335,6 +352,10 @@ def create_app() -> Flask:
             logger.exception("Tarama hatasi")
             return jsonify({"error": str(exc)}), 500
 
+        if not _is_admin_user():
+            payload = dict(payload)
+            payload["results"] = _mask_entry_signal(payload.get("results", []))
+
         return jsonify(payload)
 
     # ── API: Haberler ──────────────────────────────────────────────────────
@@ -366,6 +387,8 @@ def create_app() -> Flask:
             if cached is not None:
                 c = dict(cached)
                 c["cached"] = True
+                if not _is_admin_user():
+                    c = _mask_entry_signal_one(c)
                 return jsonify(c)
 
         data = download_ohlcv([symbol], period="2y", interval="1d")
@@ -385,6 +408,8 @@ def create_app() -> Flask:
         detail["generated_at"] = int(time.time())
         detail["cached"] = False
         stock_cache.set(cache_key, detail)
+        if not _is_admin_user():
+            detail = _mask_entry_signal_one(detail)
         return jsonify(detail)
 
     # ── API: AI destekli bilanço analizi ───────────────────────────────────

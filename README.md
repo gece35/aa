@@ -23,6 +23,8 @@ Ham toplam (maks ≈10.5) `EWM(span=2)` ile yumuşatılır ve 0-10'a clip edilir
 
 Tarama kartlarında bir hisse, `backend/backtest.py`'nin (bkz. aşağıda) olay-tabanlı giriş kurallarının **aynısını** karşılıyorsa 🎯 **TDOV Eşleşti** rozetiyle işaretlenir: taze boğa kesişimi + trend yönü onayı + skor ≥6 + trend alt-skoru ≥1.2 + hacim onayı + 52 hafta filtresi (ABD'de ek olarak göreli güç + çift kesişim şartı). Eşikler `scoring.py`'da tek kaynak olarak tanımlıdır, `backtest.py` bunları oradan import eder. Piyasa rejimi (endeks 200 günlük ortalamanın altındaysa) kapalıyken hiçbir hissede rozet gösterilmez — bu bilgi Tarama sekmesinin üstündeki BIST 100 / S&P 500 endeks kartlarında (`/api/index/<market>`) 🟢/🔴 durumuyla gösterilir. Rozet kasıtlı olarak nadir görünür; bu bir alım tavsiyesi değil, geçmiş test verisiyle örtüşme bilgisidir.
 
+**Görünürlük:** Yatırım tavsiyesi izlenimini önlemek için rozet yalnızca `is_admin=True` olan hesaba gösterilir; `/api/scan` ve `/api/stock/<symbol>` yanıtlarında admin olmayan kullanıcılar için `entry_signal` sunucu tarafında `false`'a maskelenir (`app.py` → `_mask_entry_signal*`). Maskeleme, paylaşılan TTL cache'deki gerçek değeri bozmadan yalnızca yanıt kopyasında uygulanır.
+
 ## Formasyon Tespiti (`backend/patterns.py`) — v2
 
 Son 120 barda 11 teknik formasyon türü tespiti; her formasyon için güven skoru, geçerlilik kontrolü ve işaretçi/trend çizgisi koordinatları üretilir.
