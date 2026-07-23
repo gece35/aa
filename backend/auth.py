@@ -16,7 +16,7 @@ from .db import db
 from .email import send_password_reset, send_verify_email
 from .models import EmailToken, User
 from .security import (
-    generate_token, hash_password, hash_token, is_strong_password, now_utc,
+    generate_token, hash_password, hash_token, is_strong_password, limiter, now_utc,
     token_expiry, verify_password,
 )
 
@@ -57,6 +57,7 @@ def _normalize_email(raw: str) -> str:
 # ── Endpoints ──────────────────────────────────────────────────────────────
 
 @auth_bp.route("/signup", methods=["POST"])
+@limiter.limit("5 per hour")
 def signup():
     body = request.get_json(silent=True) or {}
     raw_email = (body.get("email") or "").strip()
@@ -112,6 +113,7 @@ def signup():
 
 
 @auth_bp.route("/login", methods=["POST"])
+@limiter.limit("10 per minute")
 def login():
     body = request.get_json(silent=True) or {}
     try:
@@ -158,6 +160,7 @@ def me():
 
 
 @auth_bp.route("/forgot", methods=["POST"])
+@limiter.limit("3 per hour")
 def forgot():
     body = request.get_json(silent=True) or {}
     try:
@@ -262,6 +265,7 @@ def verify_get():
 
 
 @auth_bp.route("/resend-verify-public", methods=["POST"])
+@limiter.limit("3 per hour")
 def resend_verify_public():
     """Giriş yapamayan (doğrulanmamış) kullanıcı için herkese açık yeniden gönderme."""
     body = request.get_json(silent=True) or {}
@@ -285,6 +289,7 @@ def resend_verify_public():
 
 @auth_bp.route("/resend-verify", methods=["POST"])
 @login_required
+@limiter.limit("5 per hour")
 def resend_verify():
     if current_user.email_verified_at:
         return jsonify({"ok": True})
@@ -306,9 +311,19 @@ def resend_verify():
 
 @auth_bp.route("/me", methods=["DELETE"])
 @login_required
+@limiter.limit("5 per hour")
 def delete_account():
-    """KVKK Madde 11 — silme hakkı. LS aboneliği iptal etmeyi billing.py yapar."""
+    """KVKK Madde 11 — silme hakkı. LS aboneliği iptal etmeyi billing.py yapar.
+
+    Geri alınamaz bir işlem olduğu ve "beni hatırla" oturumu 30 gün boyunca
+    açık kalabildiği için (paylaşılan/ortak cihaz senaryosu), şifre tekrar
+    istenir — sadece geçerli bir oturum yeterli değildir.
+    """
+    body = request.get_json(silent=True) or {}
+    password = body.get("password") or ""
     user = current_user._get_current_object()
+    if not verify_password(password, user.password_hash):
+        return jsonify({"error": "invalid_password", "message": "Şifre hatalı."}), 401
     user_id = user.id
     # LS subscription cancellation
     try:
@@ -337,6 +352,27 @@ def export_data():
         "watchlist": [{"symbol": w.symbol} for w in u.watchlist],
         "portfolio": [p.to_dict() for p in u.portfolio],
     })
+
+
+@auth_bp.route("/password", methods=["POST"])
+@login_required
+@limiter.limit("10 per hour")
+def change_password():
+    """Oturum açıkken şifre değiştirme — Ayarlar sayfası."""
+    body = request.get_json(silent=True) or {}
+    current_password = body.get("current_password") or ""
+    new_password = body.get("new_password") or ""
+    user = current_user._get_current_object()
+
+    if not verify_password(current_password, user.password_hash):
+        return jsonify({"error": "invalid_password", "message": "Mevcut şifre hatalı."}), 401
+    if not is_strong_password(new_password):
+        return jsonify({"error": "weak_password",
+                        "message": "Yeni şifre en az 10 karakter ve birden fazla karakter sınıfı içermelidir."}), 400
+
+    user.password_hash = hash_password(new_password)
+    db.session.commit()
+    return jsonify({"ok": True})
 
 
 @auth_bp.route("/consent", methods=["POST"])

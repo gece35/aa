@@ -1,13 +1,12 @@
-"""Özelleştirilebilir alarm sistemi (multi-tenant, SQLAlchemy).
+"""Özelleştirilebilir fiyat alarmı sistemi (multi-tenant, SQLAlchemy).
+
+Kasıtlı olarak tek bir şeye odaklanır: bir hisse belirlenen fiyat seviyesinin
+üstüne çıktığında ya da altına düştüğünde kullanıcıya haber vermek. Daha
+önce RSI/MACD/Bollinger/EMA/skor gibi teknik kriterler de desteklenirdi;
+genel kullanıcı kitlesi için anlaşılması zor olduğundan kaldırıldı — bkz.
+CONDITION_LABELS.
 
 Desteklenen kriter tipleri:
-  rsi_below, rsi_above      — RSI eşik değeri
-  macd_cross_up             — MACD sinyali yukarı kesti
-  macd_cross_down           — MACD sinyali aşağı kesti
-  bb_lower_touch            — Bollinger alt banda değdi
-  bb_upper_touch            — Bollinger üst banda değdi
-  ema_cross_up              — Fiyat EMA50 üzerine çıktı
-  score_above               — Skor eşiği aştı
   price_below, price_above  — Fiyat eşiği
 """
 
@@ -15,7 +14,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from sqlalchemy import select, func as sa_func
 
@@ -25,16 +24,8 @@ from .models import Alert
 logger = logging.getLogger(__name__)
 
 CONDITION_LABELS = {
-    "rsi_below":       "RSI <",
-    "rsi_above":       "RSI >",
-    "macd_cross_up":   "MACD Yukarı Kesti",
-    "macd_cross_down": "MACD Aşağı Kesti",
-    "bb_lower_touch":  "Bollinger Alt Band",
-    "bb_upper_touch":  "Bollinger Üst Band",
-    "ema_cross_up":    "EMA50 Üzerine Çıktı",
-    "score_above":     "Skor ≥",
-    "price_below":     "Fiyat <",
-    "price_above":     "Fiyat >",
+    "price_above": "Fiyat şu değerin üstüne çıkınca",
+    "price_below": "Fiyat şu değerin altına düşünce",
 }
 
 
@@ -122,55 +113,17 @@ def count_active_alerts(user_id: str) -> int:
 # ── Alarm kontrol mantığı ──────────────────────────────────────────────────
 
 def _check_single(alert: Alert, detail: Dict) -> bool:
+    """Fiyat eşiği kontrolü. Eski (artık kaldırılmış) teknik kriter tiplerinde
+    kurulmuş bir alarm varsa condition_type burada tanınmaz ve sessizce
+    False döner — bir daha tetiklenmez, hata vermez."""
     ct = alert.condition_type
     cv = alert.condition_value
-
-    indicators: Dict[str, Any] = {
-        ind["key"]: ind for ind in detail.get("indicators", [])
-    }
-
-    def ind_val(key: str) -> Optional[float]:
-        return indicators.get(key, {}).get("value")
-
-    def ind_sig(key: str) -> bool:
-        return bool(indicators.get(key, {}).get("signal", False))
-
-    if ct == "rsi_below":
-        v = ind_val("rsi")
-        return v is not None and cv is not None and v < cv
-
-    if ct == "rsi_above":
-        v = ind_val("rsi")
-        return v is not None and cv is not None and v > cv
-
-    if ct == "macd_cross_up":
-        return ind_sig("momentum")
-
-    if ct == "macd_cross_down":
-        v = ind_val("momentum")
-        return v is not None and v < 0
-
-    if ct == "bb_lower_touch":
-        return ind_sig("bbands")
-
-    if ct == "bb_upper_touch":
-        bbands_ind = indicators.get("bbands", {})
-        d = bbands_ind.get("detail", "")
-        return "ust band" in d or "üst band" in d
-
-    if ct == "ema_cross_up":
-        return ind_sig("trend")
-
-    if ct == "score_above":
-        score = detail.get("score")
-        return score is not None and cv is not None and score >= cv
+    price = detail.get("price")
 
     if ct == "price_below":
-        price = detail.get("price")
         return price is not None and cv is not None and price < cv
 
     if ct == "price_above":
-        price = detail.get("price")
         return price is not None and cv is not None and price > cv
 
     return False

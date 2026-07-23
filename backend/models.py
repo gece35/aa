@@ -78,6 +78,9 @@ class User(UserMixin, db.Model):
             "is_admin": self.is_admin,
             "is_lifetime": self.is_lifetime,
             "email_verified": bool(self.email_verified_at),
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "can_manage_billing": bool(self.ls_customer_id),
+            "marketing_consent": bool(self.marketing_consent_at),
         }
 
 

@@ -1,4 +1,4 @@
-"""Şifre hashleme + kısa süreli token üretimi/doğrulaması."""
+"""Şifre hashleme + kısa süreli token üretimi/doğrulaması + rate limiting."""
 
 from __future__ import annotations
 
@@ -8,8 +8,16 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple
 
 import bcrypt as _bcrypt
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 from .config import SECRET_KEY
+
+# Tek `limiter` nesnesi burada oluşturulur (app'e bağlanmadan) — böylece
+# blueprint'ler (auth.py vb.) döngüsel import olmadan `@limiter.limit(...)`
+# dekoratörünü kullanabilir. Gerçek app'e bağlama + storage config app.py'de
+# create_app() içinde `limiter.init_app(flask_app)` ile yapılır.
+limiter = Limiter(key_func=get_remote_address)
 
 
 def hash_password(password: str) -> str:

@@ -54,8 +54,9 @@ Railway'de 3 süreç (Procfile): `web` (gunicorn, 2 worker), `worker` (arka plan
 
 - **Factory pattern Flask app** — `create_app()` ile oluşturulan tek uygulama
 - **Postgres + SQLAlchemy** — üretimde Postgres (`psycopg`), Flask-Migrate ile şema geçmişi (`migrations/`); lokal geliştirmede SQLite fallback
-- **Auth & abonelik** — Flask-Login ile oturum, e-posta doğrulama/şifre sıfırlama (`auth.py`); LemonSqueezy ile Premium abonelik (`billing.py`)
-- **Rate limiting & günlük kota** — Flask-Limiter + Redis (varsa) / in-memory fallback (`limits.py`, `quota_store.py`)
+- **Auth & abonelik** — Flask-Login ile oturum, e-posta doğrulama/şifre sıfırlama (`auth.py`); LemonSqueezy ile Premium abonelik (`billing.py`). İlk 100 kayıt ömür boyu ücretsiz Premium alır (`auth.py` → `signup`); sonrasında Premium, frontend'deki Ayarlar/Fiyatlandırma modallarından LemonSqueezy checkout ile satın alınır. Şu an Üye (ücretsiz) ve Premium arasında özellik farkı yok — bu ayrım ayrı bir iş olarak planlanıyor.
+- **Rate limiting & günlük kota** — hassas auth uçları (login/signup/forgot/resend-verify/password) `Flask-Limiter` ile IP başına sınırlanır (`security.py`, `Redis` varsa Redis / yoksa in-memory storage); ayrıca özellik başı günlük kullanım kotası (`limits.py`, `quota_store.py`)
+- **Güvenlik başlıkları** — `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` her yanıtta; `Content-Security-Policy` şimdilik Report-Only modda (`app.py`)
 - **Toplu veri indirme** — `yfinance.download(..., threads=True)` ile tüm hisseler tek seferde
 - **TTL cache** — `/api/scan`, `/api/stock`, `/api/news`, `/api/index/<market>` yanıtları önbelleklenir; `force=1` bypass eder
 - **Lexicon tabanlı sentiment** — Haber başlıklarını TR+EN kelime listesiyle pozitif/nötr/negatif sınıflandırır
@@ -93,7 +94,7 @@ Tekrar tarihleri: `+1 gün → +1 hafta → +1 ay → +3 ay`. `.ics` dosyası te
 app.py                   # Flask giriş noktası (create_app factory)
 tekrar.py                # Bağımsız aralıklı tekrar CLI aracı
 backend/
-  alerts.py              # Özelleştirilebilir fiyat/gösterge alarmları (SQLAlchemy)
+  alerts.py              # Fiyat hedefi alarmları (SQLAlchemy) — üstüne çıkınca / altına düşünce
   auth.py                # Kayıt, giriş, e-posta doğrulama, şifre sıfırlama
   backtest.py            # TDOV backtest motoru (olay-tabanlı giriş/çıkış, ATR trailing)
   billing.py             # LemonSqueezy ödeme ve abonelik yönetimi
@@ -203,7 +204,7 @@ Ayrıca `/api/billing/*` (LemonSqueezy checkout/portal/webhook), `/api/newslette
 
 ## Auth API (`/api/auth`)
 
-`/api/auth/signup` · `/api/auth/login` · `/api/auth/logout` · `/api/auth/me` · `/api/auth/forgot` · `/api/auth/reset` · `/api/auth/verify` · `/api/auth/resend-verify` · `/api/auth/resend-verify-public` · `/api/auth/export` · `/api/auth/consent`
+`/api/auth/signup` · `/api/auth/login` · `/api/auth/logout` · `/api/auth/me` (`GET`/`DELETE`, silme şifre onayı ister) · `/api/auth/password` (şifre değiştir, oturum açıkken) · `/api/auth/forgot` · `/api/auth/reset` · `/api/auth/verify` · `/api/auth/resend-verify` · `/api/auth/resend-verify-public` · `/api/auth/export` · `/api/auth/consent`
 
 ## Notlar
 

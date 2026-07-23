@@ -17,14 +17,8 @@
     <!-- <script async src="https://www.googletagmanager.com/gtag/js?id=GA_MEASUREMENT_ID"></script>
     <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','GA_MEASUREMENT_ID');</script> -->
     <link rel="icon" href="/logo.svg" type="image/svg+xml">
-    <!-- Microsoft Clarity -->
-    <script type="text/javascript">
-        (function(c,l,a,r,i,t,y){
-            c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-            t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
-            y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-        })(window, document, "clarity", "script", "wmh101q9jz");
-    </script>
+    <!-- Microsoft Clarity: app.js'te çerez rızası kabul edildikten sonra
+         yüklenir (bkz. _loadClarity) — GA4 ile aynı rıza kuralına tabi. -->
     <!-- Schema.org Structured Data -->
     <script type="application/ld+json">
     {
@@ -120,6 +114,8 @@
                 <button id="signupBtn" class="btn btn-primary">Üye Ol</button>
             </div>
             <div id="userArea" class="user-area hidden">
+                <span id="planBadge" class="plan-badge hidden"></span>
+                <button id="upgradeBtn" class="btn btn-ghost upgrade-btn hidden">&#11088; Premium'a Geç</button>
                 <div class="user-pill" id="userPill">
                     <span id="userEmail" class="user-email"></span>
                 </div>
@@ -130,11 +126,8 @@
                         <span id="accountPanelEmail"></span>
                     </div>
                     <div class="account-panel-actions">
-                        <button id="exportDataBtn" class="account-panel-btn">
-                            &#x2193; Verilerimi İndir
-                        </button>
-                        <button id="deleteAccountBtn" class="account-panel-btn danger">
-                            &#x1F5D1; Hesabımı Sil
+                        <button id="openSettingsBtn" class="account-panel-btn">
+                            &#x2699; Ayarlar
                         </button>
                     </div>
                 </div>
@@ -305,18 +298,15 @@
         <div class="modal-backdrop" id="alertModalBackdrop"></div>
         <div class="modal-card glass" style="max-width:460px;width:95%;">
             <button class="modal-close" id="alertModalClose">&times;</button>
-            <h3 style="margin:0 0 18px;font-family:'Inter';font-size:20px;">Yeni Alarm Oluştur</h3>
+            <h3 style="margin:0 0 6px;font-family:'Inter';font-size:20px;">Yeni Alarm Oluştur</h3>
+            <p style="margin:0 0 18px;font-size:13px;color:var(--text-3);">Bir hisse için hedef fiyat belirle, o seviyeye ulaşınca haber verelim.</p>
             <div class="alert-form">
                 <label class="af-label">Hisse Sembolü</label>
                 <input id="af-symbol" class="af-input" type="text" placeholder="TSLA, MGROS, AAPL..." autocomplete="off" />
-                <label class="af-label">Kriter</label>
-                <select id="af-condition" class="af-input">
-                    <option value="">-- Kriter seç --</option>
-                </select>
-                <div id="af-value-wrap" class="hidden">
-                    <label class="af-label" id="af-value-label">Eşik Değeri</label>
-                    <input id="af-value" class="af-input" type="number" step="any" placeholder="örn. 30" />
-                </div>
+                <label class="af-label">Ne zaman haber vereyim?</label>
+                <div class="af-direction-group" id="af-direction-group"></div>
+                <label class="af-label" id="af-value-label">Hedef Fiyat</label>
+                <input id="af-value" class="af-input" type="number" step="any" min="0" placeholder="örn. 250" />
                 <div id="af-error" style="color:var(--danger);font-size:12px;margin-top:4px;display:none;"></div>
                 <button id="af-submit" class="btn btn-primary" style="width:100%;margin-top:12px;">Alarm Kur</button>
             </div>
@@ -413,6 +403,8 @@
         <div class="modal-card glass confirm-modal-card">
             <h3>Hesabı Sil</h3>
             <p>Tüm verileriniz (favoriler, portföy, alarmlar) kalıcı olarak silinecek. Bu işlem <strong>geri alınamaz.</strong></p>
+            <label class="af-label">Onaylamak için şifreni gir</label>
+            <input id="confirmDeletePassword" class="af-input" type="password" placeholder="Şifreniz" autocomplete="current-password" style="margin-bottom:12px;" />
             <div id="confirmDeleteError" style="color:var(--danger);font-size:13px;display:none;margin-bottom:12px;"></div>
             <div class="confirm-modal-btns">
                 <button id="confirmDeleteCancel" class="btn btn-ghost">Vazgeç</button>
@@ -421,7 +413,91 @@
         </div>
     </div>
 
+    <!-- Ayarlar modalı -->
+    <div id="settingsModal" class="modal hidden" role="dialog" aria-label="Ayarlar">
+        <div class="modal-backdrop" id="settingsModalBackdrop"></div>
+        <div class="modal-card glass settings-modal-card">
+            <button class="modal-close" id="settingsModalClose">&times;</button>
+            <h3 style="margin:0 0 18px;font-family:'Inter';font-size:20px;">&#x2699; Ayarlar</h3>
+
+            <div class="settings-section">
+                <h4>Hesap</h4>
+                <div class="settings-row">
+                    <span class="settings-row-label">E-posta</span>
+                    <span id="settingsEmail" class="settings-row-value"></span>
+                </div>
+                <div class="settings-row">
+                    <span class="settings-row-label">Kayıt tarihi</span>
+                    <span id="settingsCreatedAt" class="settings-row-value"></span>
+                </div>
+                <div class="settings-row">
+                    <span class="settings-row-label">E-posta doğrulama</span>
+                    <span id="settingsVerifyStatus" class="settings-row-value"></span>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h4>Plan &amp; Faturalama</h4>
+                <div class="settings-row">
+                    <span class="settings-row-label">Planınız</span>
+                    <span id="settingsPlanValue" class="settings-row-value"></span>
+                </div>
+                <div id="settingsPlanActions" class="settings-actions"></div>
+            </div>
+
+            <div class="settings-section">
+                <h4>Gizlilik</h4>
+                <label class="consent-row">
+                    <input type="checkbox" id="settingsMarketingConsent" />
+                    <span>Nebula Scanner'dan pazarlama e-postaları almak istiyorum.</span>
+                </label>
+                <div class="settings-row" style="margin-top:10px;">
+                    <span class="settings-row-label">Çerez / analitik tercihi: <span id="settingsCookieStatus"></span></span>
+                    <button id="settingsCookiePref" class="btn btn-ghost" style="font-size:12px;padding:5px 10px;">Değiştir</button>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h4>Şifre Değiştir</h4>
+                <div class="alert-form">
+                    <input id="settingsCurrentPassword" class="af-input" type="password" placeholder="Mevcut şifre" autocomplete="current-password" />
+                    <input id="settingsNewPassword" class="af-input" type="password" placeholder="Yeni şifre (en az 10 karakter, harf+rakam)" autocomplete="new-password" />
+                    <div id="settingsPasswordMsg" style="font-size:12px;display:none;"></div>
+                    <button id="settingsPasswordSubmit" class="btn btn-primary" style="width:100%;">Şifreyi Güncelle</button>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h4>Veri &amp; Hesap</h4>
+                <div class="settings-actions">
+                    <button id="exportDataBtn" class="account-panel-btn">&#x2193; Verilerimi İndir</button>
+                    <button id="deleteAccountBtn" class="account-panel-btn danger">&#x1F5D1; Hesabımı Sil</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Premium pricing modalı -->
+    <div id="pricingModal" class="modal hidden" role="dialog" aria-label="Fiyatlandırma">
+        <div class="modal-backdrop" id="pricingModalBackdrop"></div>
+        <div class="modal-card glass pricing-modal-card">
+            <button class="modal-close" id="pricingModalClose">&times;</button>
+            <h3 style="margin:0 0 6px;font-family:'Inter';font-size:20px;">Premium'a Geç</h3>
+            <p style="margin:0 0 20px;font-size:13px;color:var(--text-3);">İlk 100 üyeye ömür boyu ücretsiz Premium hakkı tanındı. Bu haktan sonra kayıt olanlar için Premium ücretlidir. Kesin fiyat, bir sonraki adımdaki güvenli ödeme sayfasında gösterilir.</p>
+            <div class="pricing-cards">
+                <div class="pricing-card">
+                    <div class="pricing-card-title">Aylık</div>
+                    <button class="btn btn-primary pricing-cta" data-period="monthly">Aylık Abone Ol</button>
+                </div>
+                <div class="pricing-card featured">
+                    <div class="pricing-card-badge">Avantajlı</div>
+                    <div class="pricing-card-title">Yıllık</div>
+                    <button class="btn btn-primary pricing-cta" data-period="yearly">Yıllık Abone Ol</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Çerez Banner -->
     <div id="cookieBanner" class="cookie-banner hidden">
         <span>Ziyaret istatistikleri için Google Analytics kullanıyoruz.

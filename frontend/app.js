@@ -2715,38 +2715,35 @@
         </div>`;
     }
 
-    // Yeni alarm modal
+    // Yeni alarm modal — sadece fiyat hedefi (üstüne çıkınca / altına düşünce)
+    let _selectedDirection = '';
+
     function openAlertModal() {
         const modal = document.getElementById('alertModal');
-        const sel = document.getElementById('af-condition');
-        if (!modal || !sel) return;
+        const dirGroup = document.getElementById('af-direction-group');
+        if (!modal || !dirGroup) return;
 
-        const needsValue = ['rsi_below','rsi_above','score_above','price_below','price_above'];
-
-        if (alertConditions.length && sel.options.length <= 1) {
+        if (alertConditions.length && !dirGroup.children.length) {
             alertConditions.forEach(c => {
-                const opt = document.createElement('option');
-                opt.value = c.type; opt.textContent = c.label;
-                sel.appendChild(opt);
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'af-direction-btn';
+                btn.dataset.type = c.type;
+                btn.textContent = c.label;
+                btn.addEventListener('click', () => {
+                    _selectedDirection = c.type;
+                    dirGroup.querySelectorAll('.af-direction-btn').forEach(b => {
+                        b.classList.toggle('active', b.dataset.type === c.type);
+                    });
+                });
+                dirGroup.appendChild(btn);
             });
         }
 
-        sel.onchange = () => {
-            const wrap = document.getElementById('af-value-wrap');
-            const lbl = document.getElementById('af-value-label');
-            if (needsValue.includes(sel.value)) {
-                wrap.classList.remove('hidden');
-                const c = alertConditions.find(x => x.type === sel.value);
-                if (lbl && c) lbl.textContent = c.label + ' (eşik değeri)';
-            } else {
-                wrap.classList.add('hidden');
-            }
-        };
-
+        _selectedDirection = '';
+        dirGroup.querySelectorAll('.af-direction-btn').forEach(b => b.classList.remove('active'));
         document.getElementById('af-symbol').value = '';
         document.getElementById('af-value').value = '';
-        document.getElementById('af-condition').value = '';
-        document.getElementById('af-value-wrap').classList.add('hidden');
         const errEl = document.getElementById('af-error');
         if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
 
@@ -2774,22 +2771,20 @@
 
     document.getElementById('af-submit')?.addEventListener('click', async () => {
         const symbol = (document.getElementById('af-symbol')?.value || '').trim().toUpperCase();
-        const condition_type = document.getElementById('af-condition')?.value || '';
+        const condition_type = _selectedDirection;
         const valueStr = document.getElementById('af-value')?.value || '';
-        const needsValue = ['rsi_below','rsi_above','score_above','price_below','price_above'];
         const errEl = document.getElementById('af-error');
 
         if (!symbol || !condition_type) {
-            if (errEl) { errEl.textContent = 'Hisse sembolü ve kriter zorunludur.'; errEl.style.display = 'block'; }
+            if (errEl) { errEl.textContent = 'Hisse sembolü ve yön seçimi zorunludur.'; errEl.style.display = 'block'; }
             return;
         }
-        if (needsValue.includes(condition_type) && !valueStr) {
-            if (errEl) { errEl.textContent = 'Bu kriter için eşik değeri girilmeli.'; errEl.style.display = 'block'; }
+        if (!valueStr) {
+            if (errEl) { errEl.textContent = 'Hedef fiyat girilmeli.'; errEl.style.display = 'block'; }
             return;
         }
 
-        const body = { symbol, condition_type };
-        if (valueStr) body.condition_value = parseFloat(valueStr);
+        const body = { symbol, condition_type, condition_value: parseFloat(valueStr) };
 
         const btn = document.getElementById('af-submit');
         if (btn) btn.disabled = true;
@@ -2889,8 +2884,15 @@
             authArea.classList.add('hidden');
             userArea.classList.remove('hidden');
             userEmailEl.textContent = user.email;
-            if (planBadge) planBadge.classList.add('hidden');
-            if (upgradeBtn) upgradeBtn.classList.add('hidden');
+            if (planBadge) {
+                planBadge.classList.remove('hidden');
+                const isPremium = user.plan === 'premium';
+                planBadge.textContent = isPremium
+                    ? (user.is_lifetime ? '⭐ Premium (Ömür Boyu)' : '⭐ Premium')
+                    : 'Üye';
+                planBadge.classList.toggle('premium', isPremium);
+            }
+            if (upgradeBtn) upgradeBtn.classList.toggle('hidden', user.plan === 'premium');
             if (backtestTab) backtestTab.classList.toggle('hidden', !user.is_admin);
             if (verifyBanner) verifyBanner.classList.toggle('hidden', !!user.email_verified);
             if (betaBanner) betaBanner.classList.add('hidden');
@@ -3205,9 +3207,155 @@
         }
     });
 
+    // ── Ayarlar Modalı ────────────────────────────────────────────────────
+    const settingsModal = document.getElementById('settingsModal');
+
+    function openSettingsModal() {
+        accountPanel?.classList.add('hidden');
+        if (!settingsModal || !_currentUser) return;
+        const u = _currentUser;
+
+        const emailEl = document.getElementById('settingsEmail');
+        if (emailEl) emailEl.textContent = u.email;
+
+        const createdEl = document.getElementById('settingsCreatedAt');
+        if (createdEl) {
+            createdEl.textContent = u.created_at
+                ? new Date(u.created_at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })
+                : '-';
+        }
+
+        const verifyEl = document.getElementById('settingsVerifyStatus');
+        if (verifyEl) verifyEl.textContent = u.email_verified ? '✅ Doğrulandı' : '⚠ Doğrulanmadı';
+
+        const planEl = document.getElementById('settingsPlanValue');
+        const planActionsEl = document.getElementById('settingsPlanActions');
+        if (planEl) {
+            planEl.textContent = u.plan === 'premium'
+                ? (u.is_lifetime ? 'Premium (Ömür Boyu)' : 'Premium')
+                : 'Üye (Ücretsiz)';
+        }
+        if (planActionsEl) {
+            planActionsEl.innerHTML = '';
+            if (u.plan !== 'premium') {
+                const btn = document.createElement('button');
+                btn.className = 'btn btn-primary';
+                btn.style.fontSize = '13px';
+                btn.textContent = "⭐ Premium'a Geç";
+                btn.addEventListener('click', () => { closeSettingsModal(); openPricingModal(); });
+                planActionsEl.appendChild(btn);
+            } else if (u.can_manage_billing) {
+                const btn = document.createElement('button');
+                btn.className = 'btn btn-ghost';
+                btn.style.fontSize = '13px';
+                btn.textContent = 'Aboneliği Yönet';
+                btn.addEventListener('click', async () => {
+                    btn.disabled = true;
+                    try {
+                        const r = await fetch('/api/billing/portal', { method: 'POST', credentials: 'include' });
+                        const d = await r.json();
+                        if (d.url) window.location.href = d.url;
+                        else showToast('Abonelik portalı açılamadı.', 'danger');
+                    } catch { showToast('Bağlantı hatası.', 'danger'); }
+                    btn.disabled = false;
+                });
+                planActionsEl.appendChild(btn);
+            }
+        }
+
+        const marketingCb = document.getElementById('settingsMarketingConsent');
+        if (marketingCb) marketingCb.checked = !!u.marketing_consent;
+
+        const cookieStatusEl = document.getElementById('settingsCookieStatus');
+        if (cookieStatusEl) {
+            const pref = localStorage.getItem('nebula.cookieConsent');
+            cookieStatusEl.textContent = pref === 'accepted' ? 'Kabul edildi' : (pref === 'rejected' ? 'Reddedildi' : 'Henüz seçilmedi');
+        }
+
+        const pwMsg = document.getElementById('settingsPasswordMsg');
+        if (pwMsg) { pwMsg.style.display = 'none'; pwMsg.textContent = ''; }
+        const curPw = document.getElementById('settingsCurrentPassword');
+        const newPw = document.getElementById('settingsNewPassword');
+        if (curPw) curPw.value = '';
+        if (newPw) newPw.value = '';
+
+        settingsModal.classList.remove('hidden');
+    }
+
+    function closeSettingsModal() {
+        settingsModal?.classList.add('hidden');
+    }
+
+    document.getElementById('openSettingsBtn')?.addEventListener('click', openSettingsModal);
+    document.getElementById('settingsModalClose')?.addEventListener('click', closeSettingsModal);
+    document.getElementById('settingsModalBackdrop')?.addEventListener('click', closeSettingsModal);
+
+    // Pazarlama e-postası izni
+    document.getElementById('settingsMarketingConsent')?.addEventListener('change', async (e) => {
+        const checked = e.target.checked;
+        try {
+            const r = await fetch('/api/auth/consent', {
+                method: 'POST', credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ marketing_consent: checked }),
+            });
+            if (r.ok) {
+                showToast(checked ? 'Pazarlama e-postalarına izin verildi.' : 'Pazarlama e-postaları kapatıldı.', 'success');
+            } else {
+                e.target.checked = !checked;
+                showToast('Tercih kaydedilemedi.', 'danger');
+            }
+        } catch {
+            e.target.checked = !checked;
+            showToast('Bağlantı hatası.', 'danger');
+        }
+    });
+
+    // Çerez / analitik tercihini değiştir — tercih değişince GA4/Clarity yükleme
+    // kararı sayfa açılışında yeniden değerlendirilsin diye sayfa yenilenir.
+    document.getElementById('settingsCookiePref')?.addEventListener('click', () => {
+        const cur = localStorage.getItem('nebula.cookieConsent');
+        const next = cur === 'accepted' ? 'rejected' : 'accepted';
+        localStorage.setItem('nebula.cookieConsent', next);
+        showToast(next === 'accepted' ? 'Analiz çerezleri kabul edildi, sayfa yenileniyor…' : 'Analiz çerezleri reddedildi, sayfa yenileniyor…', 'info');
+        setTimeout(() => location.reload(), 900);
+    });
+
+    // Şifre değiştir
+    document.getElementById('settingsPasswordSubmit')?.addEventListener('click', async () => {
+        const btn = document.getElementById('settingsPasswordSubmit');
+        const msgEl = document.getElementById('settingsPasswordMsg');
+        const current_password = document.getElementById('settingsCurrentPassword')?.value || '';
+        const new_password = document.getElementById('settingsNewPassword')?.value || '';
+        if (msgEl) msgEl.style.display = 'none';
+        if (!current_password || !new_password) {
+            if (msgEl) { msgEl.textContent = 'Her iki alan da zorunludur.'; msgEl.style.color = 'var(--danger)'; msgEl.style.display = 'block'; }
+            return;
+        }
+        btn.disabled = true;
+        try {
+            const r = await fetch('/api/auth/password', {
+                method: 'POST', credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ current_password, new_password }),
+            });
+            const d = await r.json().catch(() => ({}));
+            if (r.ok) {
+                if (msgEl) { msgEl.textContent = 'Şifreniz güncellendi.'; msgEl.style.color = 'var(--neon)'; msgEl.style.display = 'block'; }
+                document.getElementById('settingsCurrentPassword').value = '';
+                document.getElementById('settingsNewPassword').value = '';
+            } else {
+                if (msgEl) { msgEl.textContent = d.message || 'Şifre güncellenemedi.'; msgEl.style.color = 'var(--danger)'; msgEl.style.display = 'block'; }
+            }
+        } catch {
+            if (msgEl) { msgEl.textContent = 'Bağlantı hatası.'; msgEl.style.color = 'var(--danger)'; msgEl.style.display = 'block'; }
+        } finally {
+            btn.disabled = false;
+        }
+    });
+
     // Veri indirme (KVKK export)
     document.getElementById('exportDataBtn')?.addEventListener('click', async () => {
-        accountPanel?.classList.add('hidden');
         try {
             const r = await fetch('/api/auth/export');
             if (!r.ok) { showToast('Veriler alınamadı.', 'error'); return; }
@@ -3224,10 +3372,12 @@
     // Hesap silme
     const confirmDeleteModal = document.getElementById('confirmDeleteModal');
     document.getElementById('deleteAccountBtn')?.addEventListener('click', () => {
-        accountPanel?.classList.add('hidden');
+        closeSettingsModal();
         confirmDeleteModal?.classList.remove('hidden');
         const errEl = document.getElementById('confirmDeleteError');
         if (errEl) errEl.style.display = 'none';
+        const pwEl = document.getElementById('confirmDeletePassword');
+        if (pwEl) pwEl.value = '';
     });
     document.getElementById('confirmDeleteCancel')?.addEventListener('click', () => {
         confirmDeleteModal?.classList.add('hidden');
@@ -3238,10 +3388,19 @@
     document.getElementById('confirmDeleteOk')?.addEventListener('click', async () => {
         const btn = document.getElementById('confirmDeleteOk');
         const errEl = document.getElementById('confirmDeleteError');
+        const password = document.getElementById('confirmDeletePassword')?.value || '';
+        if (!password) {
+            if (errEl) { errEl.textContent = 'Devam etmek için şifreni gir.'; errEl.style.display = 'block'; }
+            return;
+        }
         btn.disabled = true;
         btn.textContent = 'Siliniyor...';
         try {
-            const r = await fetch('/api/auth/me', { method: 'DELETE' });
+            const r = await fetch('/api/auth/me', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password }),
+            });
             if (r.ok) {
                 confirmDeleteModal?.classList.add('hidden');
                 applyUserState(null);
@@ -3250,7 +3409,7 @@
                 showToast('Hesabınız silindi. Görüşmek üzere.', 'info');
             } else {
                 const d = await r.json().catch(() => ({}));
-                if (errEl) { errEl.textContent = d.error || 'Bir hata oluştu.'; errEl.style.display = 'block'; }
+                if (errEl) { errEl.textContent = d.message || d.error || 'Bir hata oluştu.'; errEl.style.display = 'block'; }
                 btn.disabled = false; btn.textContent = 'Evet, Hesabımı Sil';
             }
         } catch {
@@ -3265,6 +3424,9 @@
     function closePricingModal() { if (pricingModal) pricingModal.classList.add('hidden'); }
     document.getElementById('pricingModalClose')?.addEventListener('click', closePricingModal);
     document.getElementById('pricingModalBackdrop')?.addEventListener('click', closePricingModal);
+    document.querySelectorAll('.pricing-cta').forEach(btn => {
+        btn.addEventListener('click', () => window.openCheckout(btn.dataset.period || 'monthly'));
+    });
 
     window.openCheckout = async function(period) {
         if (!_currentUser) { openAuthModal('signup'); return; }
@@ -3309,6 +3471,18 @@
         window.gtag('config', id);
     }
 
+    // Microsoft Clarity — GA4 ile aynı kural: sadece rıza "accepted" ise yüklenir.
+    // Önceden index.html <head>'inde koşulsuz yükleniyordu; "Reddet" seçilse bile
+    // çalışmaya devam ediyordu — bu tutarsızlık burada giderildi.
+    const CLARITY_ID = 'wmh101q9jz';
+    function _loadClarity(id) {
+        (function(c,l,a,r,i,t,y){
+            c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+            t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+            y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+        })(window, document, "clarity", "script", id);
+    }
+
     fetch('/api/config').then(r => r.json()).then(cfg => {
         if (!cfg.ga_measurement_id) return;
         window._gaMeasurementId = cfg.ga_measurement_id;
@@ -3317,6 +3491,10 @@
         }
     }).catch(() => {});
 
+    if (localStorage.getItem('nebula.cookieConsent') === 'accepted') {
+        _loadClarity(CLARITY_ID);
+    }
+
     // ── Cookie banner ────────────────────────────────────────────────────
     if (!localStorage.getItem('nebula.cookieConsent')) {
         const banner = document.getElementById('cookieBanner');
@@ -3324,6 +3502,7 @@
         document.getElementById('cookieAccept')?.addEventListener('click', () => {
             localStorage.setItem('nebula.cookieConsent', 'accepted');
             if (window._gaMeasurementId) _loadGA4(window._gaMeasurementId);
+            _loadClarity(CLARITY_ID);
             banner.classList.add('hidden');
         });
         document.getElementById('cookieReject')?.addEventListener('click', () => {

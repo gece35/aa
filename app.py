@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import time
 
 from flask import Flask, Response, jsonify, request, send_from_directory
@@ -32,7 +33,7 @@ from backend.cache import (
 )
 from backend.config import (
     APP_BASE_URL, DATABASE_URL, DEBUG, GA_MEASUREMENT_ID, LEGAL_ENTITY_ADDRESS,
-    LEGAL_ENTITY_NAME, LOG_LEVEL, SECRET_KEY, SENTRY_DSN, SUPPORT_EMAIL,
+    LEGAL_ENTITY_NAME, LOG_LEVEL, REDIS_URL, SECRET_KEY, SENTRY_DSN, SUPPORT_EMAIL,
 )
 from backend.data_fetcher import download_ohlcv, fetch_exchange_rate
 from backend.db import db, migrate
@@ -45,6 +46,7 @@ from backend.scanner import build_index_summary, get_index_df, scan_market, scan
 from backend.scoring import compute_regime_ok, score_symbol_detailed
 from backend.tickers import MARKETS, market_of_symbol
 from backend.repetition import build_repetition_schedule
+from backend.security import limiter
 from backend.storage import (
     add_lesson, delete_lesson, get_all_lessons, get_lesson,
     get_upcoming_repetitions, update_synced_events,
@@ -57,6 +59,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "frontend")
+
+# Hisse sembolü formatı — alerts/watchlist/portfolio uçlarının hepsinde aynı
+# doğrulama: rastgele/aşırı uzun string'lerin DB'ye yazılmasını (ve Postgres'te
+# String(32) sınırını aşınca 500 hatası almasını) önler.
+_SYMBOL_RE = re.compile(r'^[A-Z0-9.\-]{1,32}$')
 
 
 def _is_admin_user() -> bool:
@@ -150,6 +157,39 @@ def create_app() -> Flask:
         resources={r"/api/*": {"origins": [APP_BASE_URL] if APP_BASE_URL else ["http://localhost:5000"]}},
         supports_credentials=True,
     )
+
+    # ── Rate limiting — brute-force / spam koruması (login, signup, e-posta
+    # gönderimi gibi hassas uçlar auth.py'de @limiter.limit(...) ile ayrıca
+    # sınırlanır). Buradaki varsayılan, tek bir IP'den gelen anormal trafiğe
+    # karşı genel bir güvenlik ağıdır — normal kullanım (tarama, alarm polling
+    # vb.) bu limitin çok altında kalır.
+    flask_app.config.setdefault("RATELIMIT_STORAGE_URI", REDIS_URL or "memory://")
+    flask_app.config.setdefault("RATELIMIT_DEFAULT", "2000 per hour")
+    flask_app.config.setdefault("RATELIMIT_HEADERS_ENABLED", True)
+    limiter.init_app(flask_app)
+
+    # ── Güvenlik başlıkları ─────────────────────────────────────────────────
+    # CSP şimdilik Report-Only: siteyi kırmadan tarayıcı konsolunda ihlalleri
+    # görüp allowlist'i tamamladıktan sonra enforce moduna geçilebilir.
+    _CSP_REPORT_ONLY = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://www.clarity.ms https://www.googletagmanager.com "
+        "https://cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "img-src 'self' data: https:; "
+        "connect-src 'self' https://www.clarity.ms https://www.google-analytics.com; "
+        "frame-ancestors 'none'"
+    )
+
+    @flask_app.after_request
+    def _security_headers(resp):
+        resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+        resp.headers.setdefault("X-Frame-Options", "DENY")
+        resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        resp.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        resp.headers.setdefault("Content-Security-Policy-Report-Only", _CSP_REPORT_ONLY)
+        return resp
 
     login_manager = LoginManager()
     login_manager.init_app(flask_app)
@@ -458,25 +498,30 @@ def create_app() -> Flask:
     def health():
         return jsonify({"ok": True, "ts": int(time.time())})
 
-    _DEV_SECRET = os.environ.get("DEV_SECRET", "")
+    # Bu route yalnızca yerel geliştirmede (DEBUG=1) kaydedilir — prod'da
+    # (Railway'de DEBUG hep 0) endpoint hiç var olmaz, DEV_SECRET yanlışlıkla
+    # set edilse bile erişilemez. Daha önce prod'da da canlıydı ve tek
+    # koruması bir shared-secret string karşılaştırmasıydı.
+    if DEBUG:
+        _DEV_SECRET = os.environ.get("DEV_SECRET", "")
 
-    @flask_app.route("/api/dev/make-premium", methods=["POST"])
-    def dev_make_premium():
-        body = request.get_json(silent=True) or {}
-        secret = body.get("secret", "")
-        if not _DEV_SECRET or secret != _DEV_SECRET:
-            return jsonify({"error": "forbidden"}), 403
-        email = (body.get("email") or "").strip().lower()
-        if not email:
-            return jsonify({"error": "email_required"}), 400
-        from backend.models import User
-        user = db.session.execute(db.select(User).where(User.email == email)).scalar_one_or_none()
-        if not user:
-            return jsonify({"error": "not_found"}), 404
-        user.plan = "premium"
-        user.subscription_status = "active"
-        db.session.commit()
-        return jsonify({"ok": True, "email": user.email, "plan": user.plan, "is_premium": user.is_premium})
+        @flask_app.route("/api/dev/make-premium", methods=["POST"])
+        def dev_make_premium():
+            body = request.get_json(silent=True) or {}
+            secret = body.get("secret", "")
+            if not _DEV_SECRET or secret != _DEV_SECRET:
+                return jsonify({"error": "forbidden"}), 403
+            email = (body.get("email") or "").strip().lower()
+            if not email:
+                return jsonify({"error": "email_required"}), 400
+            from backend.models import User
+            user = db.session.execute(db.select(User).where(User.email == email)).scalar_one_or_none()
+            if not user:
+                return jsonify({"error": "not_found"}), 404
+            user.plan = "premium"
+            user.subscription_status = "active"
+            db.session.commit()
+            return jsonify({"ok": True, "email": user.email, "plan": user.plan, "is_premium": user.is_premium})
 
     @flask_app.route("/api/admin/email-test", methods=["POST"])
     @login_required
@@ -524,11 +569,12 @@ def create_app() -> Flask:
         condition_type = (body.get("condition_type") or "").strip()
         condition_value = body.get("condition_value")
 
-        import re as _re
-        if not symbol or not _re.fullmatch(r'[A-Z0-9.\-]{1,32}', symbol):
+        if not symbol or not _SYMBOL_RE.fullmatch(symbol):
             return jsonify({"error": "Geçersiz sembol formatı"}), 400
-        if not condition_type:
-            return jsonify({"error": "symbol ve condition_type zorunludur"}), 400
+        if condition_type not in CONDITION_LABELS:
+            return jsonify({"error": "Geçersiz kriter"}), 400
+        if condition_value is None:
+            return jsonify({"error": "Hedef fiyat zorunludur"}), 400
 
         err = enforce_collection_limit(current_user, "alerts", count_active_alerts(current_user.id))
         if err:
@@ -601,8 +647,8 @@ def create_app() -> Flask:
     def watchlist_add():
         body = request.get_json(silent=True) or {}
         symbol = (body.get("symbol") or "").upper().strip()
-        if not symbol:
-            return jsonify({"error": "symbol_required"}), 400
+        if not symbol or not _SYMBOL_RE.fullmatch(symbol):
+            return jsonify({"error": "invalid_symbol", "message": "Geçersiz sembol formatı"}), 400
         existing = [w.symbol for w in current_user.watchlist]
         if symbol in existing:
             return jsonify({"ok": True})
@@ -643,7 +689,7 @@ def create_app() -> Flask:
         except (TypeError, ValueError):
             return jsonify({"error": "invalid_input"}), 400
         currency = (body.get("currency") or "TRY").upper().strip()
-        if not symbol or qty <= 0 or avg_price <= 0:
+        if not symbol or not _SYMBOL_RE.fullmatch(symbol) or qty <= 0 or avg_price <= 0 or len(currency) > 8:
             return jsonify({"error": "invalid_input"}), 400
         err = enforce_collection_limit(current_user, "portfolio", len(current_user.portfolio))
         if err:

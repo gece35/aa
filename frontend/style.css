@@ -1342,6 +1342,23 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
 
 /* Alarm form */
 .alert-form { display: flex; flex-direction: column; gap: 10px; }
+.af-direction-group { display: flex; gap: 8px; }
+.af-direction-btn {
+    flex: 1;
+    padding: 10px 10px;
+    border-radius: 8px;
+    background: rgba(255,255,255,.04);
+    border: 1px solid rgba(255,255,255,.12);
+    color: var(--text-2);
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 13px;
+    font-family: inherit;
+    transition: all var(--trans);
+}
+.af-direction-btn:hover { color: var(--text-1); }
+.af-direction-btn.active[data-type="price_above"] { background: rgba(52,245,168,.12); color: var(--neon); border-color: rgba(52,245,168,.4); }
+.af-direction-btn.active[data-type="price_below"] { background: rgba(255,83,112,.12); color: var(--danger); border-color: rgba(255,83,112,.4); }
 .af-label { font-size: 12px; color: var(--text-3); font-weight: 500; margin-bottom: -4px; }
 .af-input {
     background: rgba(255,255,255,.05);
@@ -1728,6 +1745,52 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
 .confirm-modal-card h3 { margin: 0 0 12px; font-size: 18px; }
 .confirm-modal-card p { font-size: 14px; color: var(--text-2); line-height: 1.6; margin: 0 0 20px; }
 .confirm-modal-btns { display: flex; gap: 10px; justify-content: flex-end; }
+
+/* Plan rozeti + Premium CTA (header) */
+.plan-badge {
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    background: rgba(255,255,255,.05);
+    border: 1px solid var(--glass-brd-soft);
+    color: var(--text-2);
+}
+.plan-badge.premium { background: rgba(255,209,102,.14); color: #ffd166; border-color: rgba(255,209,102,.4); }
+.upgrade-btn { color: #ffd166; border-color: rgba(255,209,102,.35); }
+.upgrade-btn:hover { background: rgba(255,209,102,.12); }
+
+/* Ayarlar modalı */
+.settings-modal-card { max-width: 520px; width: 95%; max-height: 85vh; overflow-y: auto; }
+.settings-section { padding: 16px 0; border-bottom: 1px solid var(--glass-brd-soft); }
+.settings-section:last-child { border-bottom: none; padding-bottom: 4px; }
+.settings-section h4 { margin: 0 0 12px; font-size: 13px; color: var(--text-3); text-transform: uppercase; letter-spacing: .04em; }
+.settings-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: 14px; }
+.settings-row-label { color: var(--text-3); }
+.settings-row-value { color: var(--text-1); font-weight: 500; text-align: right; }
+.settings-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+
+/* Pricing modalı */
+.pricing-modal-card { max-width: 480px; width: 95%; }
+.pricing-cards { display: flex; gap: 12px; }
+.pricing-card {
+    flex: 1;
+    padding: 18px 14px;
+    border-radius: var(--radius-m);
+    border: 1px solid var(--glass-brd-soft);
+    background: rgba(255,255,255,.03);
+    text-align: center;
+    position: relative;
+}
+.pricing-card.featured { border-color: rgba(255,209,102,.4); background: rgba(255,209,102,.06); }
+.pricing-card-badge {
+    position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+    background: #ffd166; color: #1a1a2e; font-size: 10px; font-weight: 700;
+    padding: 2px 10px; border-radius: 999px;
+}
+.pricing-card-title { font-size: 15px; font-weight: 600; color: var(--text-1); margin-bottom: 12px; }
+.pricing-cta { width: 100%; }
+@media (max-width: 480px) { .pricing-cards { flex-direction: column; } }
 
 /* ── Gelişmiş Mobil (≤600px) ─────────────────────────────────────────── */
 @media (max-width: 600px) {
