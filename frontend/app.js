@@ -2257,7 +2257,24 @@
         const trendLines = [];
         let _trendPending = null;
         let _trendHintEl = null;
-        let _mousePos = null;   // anl\u0131k mouse konumu (oran, 0-1)
+        let _mousePos = null;   // anl\u0131k mouse konumu (piksel, canvas'a g\u00F6re)
+
+        // Trend noktalar\u0131 grafi\u011Fin veri uzay\u0131nda (logical index + fiyat) saklan\u0131r,
+        // b\u00F6ylece b\u00FCy\u00FCtme/k\u00FC\u00E7\u00FCltme veya kayd\u0131rma/yak\u0131nla\u015Ft\u0131rmada ger\u00E7ek zaman/fiyat
+        // konumuna g\u00F6re yeniden \u00E7izilirler (sabit piksel oran\u0131na g\u00F6re de\u011Fil).
+        function pixelToData(x, y) {
+            const logical = chart.timeScale().coordinateToLogical(x);
+            const price = candleSeries.coordinateToPrice(y);
+            if (logical === null || price === null) return null;
+            return { logical, price };
+        }
+
+        function dataToPixel(logical, price) {
+            const x = chart.timeScale().logicalToCoordinate(logical);
+            const y = candleSeries.priceToCoordinate(price);
+            if (x === null || y === null) return null;
+            return { x, y };
+        }
 
         function redrawTrendOverlay() {
             const w = overlayCanvas.width;
@@ -2270,28 +2287,32 @@
             ctx.lineWidth = 2;
             ctx.lineCap = 'round';
             ctx.setLineDash([]);
-            trendLines.forEach(({ x1r, y1r, x2r, y2r }) => {
+            trendLines.forEach(({ logical1, price1, logical2, price2 }) => {
+                const p1 = dataToPixel(logical1, price1);
+                const p2 = dataToPixel(logical2, price2);
+                if (!p1 || !p2) return;
                 ctx.beginPath();
-                ctx.moveTo(x1r * w, y1r * h);
-                ctx.lineTo(x2r * w, y2r * h);
+                ctx.moveTo(p1.x, p1.y);
+                ctx.lineTo(p2.x, p2.y);
                 ctx.stroke();
                 // U\u00E7 noktalar
-                [{ xr: x1r, yr: y1r }, { xr: x2r, yr: y2r }].forEach(({ xr, yr }) => {
+                [p1, p2].forEach(({ x, y }) => {
                     ctx.beginPath();
-                    ctx.arc(xr * w, yr * h, 3.5, 0, Math.PI * 2);
+                    ctx.arc(x, y, 3.5, 0, Math.PI * 2);
                     ctx.fillStyle = 'rgba(251,191,36,0.85)';
                     ctx.fill();
                 });
             });
 
-            if (_trendPending) {
-                const px = _trendPending.xr * w;
-                const py = _trendPending.yr * h;
+            const pendingPx = _trendPending ? dataToPixel(_trendPending.logical, _trendPending.price) : null;
+            if (pendingPx) {
+                const px = pendingPx.x;
+                const py = pendingPx.y;
 
                 // Mouse'a uzanan kesik \u00F6nizleme \u00E7izgisi
                 if (_mousePos) {
-                    const mx = _mousePos.xr * w;
-                    const my = _mousePos.yr * h;
+                    const mx = _mousePos.x;
+                    const my = _mousePos.y;
                     ctx.save();
                     ctx.setLineDash([7, 5]);
                     ctx.strokeStyle = 'rgba(251,191,36,0.55)';
@@ -2323,8 +2344,8 @@
 
             // Cursor crosshair + hedef noktas\u0131
             if (_mousePos) {
-                const mx = _mousePos.xr * w;
-                const my = _mousePos.yr * h;
+                const mx = _mousePos.x;
+                const my = _mousePos.y;
                 ctx.save();
                 ctx.setLineDash([3, 4]);
                 ctx.strokeStyle = 'rgba(251,191,36,0.3)';
@@ -2346,8 +2367,8 @@
         overlayCanvas.addEventListener('mousemove', e => {
             const rect = overlayCanvas.getBoundingClientRect();
             _mousePos = {
-                xr: (e.clientX - rect.left) / rect.width,
-                yr: (e.clientY - rect.top) / rect.height,
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top,
             };
             redrawTrendOverlay();
         });
@@ -2359,14 +2380,19 @@
 
         overlayCanvas.addEventListener('click', e => {
             const rect = overlayCanvas.getBoundingClientRect();
-            const xr = (e.clientX - rect.left) / rect.width;
-            const yr = (e.clientY - rect.top) / rect.height;
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const data = pixelToData(x, y);
+            if (!data) return;
             if (!_trendPending) {
-                _trendPending = { xr, yr };
+                _trendPending = data;
                 if (_trendHintEl) _trendHintEl.textContent = '2. noktas\u0131n\u0131 se\u00E7';
                 redrawTrendOverlay();
             } else {
-                trendLines.push({ x1r: _trendPending.xr, y1r: _trendPending.yr, x2r: xr, y2r: yr });
+                trendLines.push({
+                    logical1: _trendPending.logical, price1: _trendPending.price,
+                    logical2: data.logical, price2: data.price,
+                });
                 _trendPending = null;
                 redrawTrendOverlay();
                 if (_trendHintEl) _trendHintEl.textContent = '\u00C7izildi \u2713';
@@ -2426,14 +2452,20 @@
 
         const ro = new ResizeObserver(() => {
             try {
-                chart.applyOptions({ width: chartEl.clientWidth });
-                overlayCanvas.width = chartEl.clientWidth;
-                overlayCanvas.height = chartEl.clientHeight || 400;
+                const w = chartEl.clientWidth;
+                const h = chartEl.clientHeight || 400;
+                chart.applyOptions({ width: w, height: h });
+                overlayCanvas.width = w;
+                overlayCanvas.height = h;
                 redrawTrendOverlay();
             } catch (_) {}
         });
         ro.observe(chartEl);
         chartEl._resizeObs = ro;
+
+        // Grafik kaydırılıp yakınlaştırıldığında (pan/zoom) trend çizgileri de
+        // güncel zaman/fiyat eksenine göre yeniden konumlanmalı.
+        chart.timeScale().subscribeVisibleLogicalRangeChange(() => redrawTrendOverlay());
 
         if (patternEl) {
             if (!patterns.length) {
