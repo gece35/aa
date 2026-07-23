@@ -2176,7 +2176,9 @@
                 vertLines: { color: 'rgba(255,255,255,.04)' },
                 horzLines: { color: 'rgba(255,255,255,.04)' },
             },
-            crosshair: { mode: 1 },
+            // mode: 0 (Normal) — imleç en yakın muma "yapışmaz" (Magnet=1),
+            // sadece fare imlecinin gerçek konumunu takip eder.
+            crosshair: { mode: 0 },
             rightPriceScale: { borderColor: 'rgba(255,255,255,.08)' },
             timeScale: { borderColor: 'rgba(255,255,255,.08)', timeVisible: true, secondsVisible: false },
         });
