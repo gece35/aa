@@ -180,6 +180,10 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
                     "direction": "bearish",
                     "strength": strength,
                     "confidence": confidence,
+                    "confirmed": last_close < neckline,
+                    "trigger_distance_pct": abs(last_close - neckline) / neckline if neckline else 1.0,
+                    "volume_confirmed": vol_ok,
+                    "pattern_age": age,
                     "markers": [
                         {"t": date_at(p1), "v": float(high_v[p1]), "pos": "aboveBar", "shape": "arrowDown", "color": "#ff5370", "label": "T1"},
                         {"t": date_at(p2), "v": float(high_v[p2]), "pos": "aboveBar", "shape": "arrowDown", "color": "#ff5370", "label": "T2"},
@@ -235,6 +239,10 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
                     "direction": "bullish",
                     "strength": strength,
                     "confidence": confidence,
+                    "confirmed": last_close > neckline,
+                    "trigger_distance_pct": abs(last_close - neckline) / neckline if neckline else 1.0,
+                    "volume_confirmed": vol_ok,
+                    "pattern_age": age,
                     "markers": [
                         {"t": date_at(t1), "v": float(low_v[t1]), "pos": "belowBar", "shape": "arrowUp", "color": "#34f5a8", "label": "D1"},
                         {"t": date_at(t2), "v": float(low_v[t2]), "pos": "belowBar", "shape": "arrowUp", "color": "#34f5a8", "label": "D2"},
@@ -293,6 +301,10 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
                     "direction": "bearish",
                     "strength": strength,
                     "confidence": confidence,
+                    "confirmed": broken,
+                    "trigger_distance_pct": abs(last_close - neckline) / neckline if neckline else 1.0,
+                    "volume_confirmed": False,
+                    "pattern_age": age,
                     "markers": [
                         {"t": date_at(sl), "v": vl, "pos": "aboveBar", "shape": "arrowDown", "color": "#ff5370", "label": "Sol"},
                         {"t": date_at(sh), "v": vh, "pos": "aboveBar", "shape": "arrowDown", "color": "#ff0000", "label": "Baş"},
@@ -349,6 +361,10 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
                     "direction": "bullish",
                     "strength": strength,
                     "confidence": confidence,
+                    "confirmed": broken,
+                    "trigger_distance_pct": abs(last_close - neckline) / neckline if neckline else 1.0,
+                    "volume_confirmed": False,
+                    "pattern_age": age,
                     "markers": [
                         {"t": date_at(sl), "v": vl, "pos": "belowBar", "shape": "arrowUp", "color": "#34f5a8", "label": "Sol"},
                         {"t": date_at(sh), "v": vh, "pos": "belowBar", "shape": "arrowUp", "color": "#00ff88", "label": "Baş"},
@@ -420,14 +436,24 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
         r2_sum    = h_r2 + l_r2
         confidence = "yüksek" if (h_r2 > 0.72 and l_r2 > 0.72) else "orta" if (h_r2 > 0.5 and l_r2 > 0.5) else "düşük"
 
+        # Formasyon sınırlarının bugünkü (son bar) uzantısı — hem geçerlilik
+        # kontrolünde hem tetikleyiciye yakınlık hesabında kullanılır.
+        upper_at_end = h_int + h_slope * (w - 1)
+        lower_at_end = l_int + l_slope * (w - 1)
+
         candidate: dict | None = None
 
         if h_fall and l_rise:
+            # Yön belirsiz: hangi sınır daha yakınsa kırılım o yönde beklenir.
+            dist_up   = abs(last_close - upper_at_end) / upper_at_end if upper_at_end else 1.0
+            dist_down = abs(last_close - lower_at_end) / lower_at_end if lower_at_end else 1.0
             candidate = {
                 "type": "symmetric_triangle", "name": "Simetrik Üçgen", "emoji": "🟡",
                 "description": f"Son {w} barda hem tepe hem dip birbirine yaklaşıyor — fiyat sıkışıyor. Regresyon uyumu: {round(h_r2,2)}/{round(l_r2,2)}.",
                 "signal": "Kırılım yakın. Hacim eşliğinde güçlü yön hareketi bekleniyor.",
                 "direction": "neutral", "strength": "orta", "confidence": confidence,
+                "confirmed": False, "trigger_distance_pct": min(dist_up, dist_down),
+                "volume_confirmed": False, "pattern_age": 0,
                 "markers": [], "trendlines": [tl(h_slope, h_int), tl(l_slope, l_int)],
             }
         elif h_fall and l_flat:
@@ -436,6 +462,9 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
                 "description": f"Son {w} barda direnç çizgisi düşerken destek yatay. Sıkışma mevcut.",
                 "signal": "Genellikle aşağı kırılımla sonuçlanır. Destek kırılırsa satış artar.",
                 "direction": "bearish", "strength": "orta", "confidence": confidence,
+                "confirmed": False,
+                "trigger_distance_pct": abs(last_close - l_mean) / l_mean if l_mean else 1.0,
+                "volume_confirmed": False, "pattern_age": 0,
                 "markers": [], "trendlines": [tl(h_slope, h_int), [{"t": t_start, "v": round(l_mean,4)}, {"t": t_end, "v": round(l_mean,4)}]],
             }
         elif l_rise and h_flat:
@@ -444,6 +473,9 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
                 "description": f"Son {w} barda destek çizgisi yükselirken direnç yatay. Yükseliş baskısı artıyor.",
                 "signal": "Genellikle yukarı kırılımla sonuçlanır. Direnci geçerse güçlü alım gelir.",
                 "direction": "bullish", "strength": "orta", "confidence": confidence,
+                "confirmed": False,
+                "trigger_distance_pct": abs(last_close - h_mean) / h_mean if h_mean else 1.0,
+                "volume_confirmed": False, "pattern_age": 0,
                 "markers": [], "trendlines": [[{"t": t_start, "v": round(h_mean,4)}, {"t": t_end, "v": round(h_mean,4)}], tl(l_slope, l_int)],
             }
         elif h_rise and l_rise and h_spct > l_spct + thr:
@@ -452,6 +484,9 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
                 "description": f"Son {w} barda her iki çizgi yükseliyor ancak aralık daralıyor. Yükseliş ivmesi zayıflıyor.",
                 "signal": "Düşüş öncesi klasik formasyon. Aşağı kırılım ihtimali yüksek.",
                 "direction": "bearish", "strength": "orta", "confidence": confidence,
+                "confirmed": False,
+                "trigger_distance_pct": abs(last_close - lower_at_end) / lower_at_end if lower_at_end else 1.0,
+                "volume_confirmed": False, "pattern_age": 0,
                 "markers": [], "trendlines": [tl(h_slope, h_int), tl(l_slope, l_int)],
             }
         elif h_fall and l_fall and l_spct < h_spct - thr:
@@ -460,14 +495,15 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
                 "description": f"Son {w} barda her iki çizgi düşüyor ancak aralık daralıyor. Düşüş ivmesi zayıflıyor.",
                 "signal": "Yükseliş öncesi klasik formasyon. Yukarı kırılım beklentisi güçlü.",
                 "direction": "bullish", "strength": "orta", "confidence": confidence,
+                "confirmed": False,
+                "trigger_distance_pct": abs(last_close - upper_at_end) / upper_at_end if upper_at_end else 1.0,
+                "volume_confirmed": False, "pattern_age": 0,
                 "markers": [], "trendlines": [tl(h_slope, h_int), tl(l_slope, l_int)],
             }
 
         # Geçerlilik: fiyat hâlâ formasyon sınırları içinde mi?
         # Kırılım zaten gerçekleştiyse formasyon geçersizdir.
         if candidate is not None:
-            upper_at_end = h_int + h_slope * (w - 1)
-            lower_at_end = l_int + l_slope * (w - 1)
             cur = last_close
             BREAK_MARGIN = 0.025  # %2.5 dışarıya çıkmış = kırılım olmuş
             if cur > upper_at_end * (1 + BREAK_MARGIN) or cur < lower_at_end * (1 - BREAK_MARGIN):
@@ -509,6 +545,7 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
                     is_counter = flag_slope_pct < 0
                     confidence = "yüksek" if (pole_pct > 12 and is_counter and flag_rng < 4) else \
                                  "orta"   if (pole_pct > 9  and flag_rng < 5) else "düşük"
+                    flag_top = float(np.max(flag_high))
                     patterns.append({
                         "type": "bull_flag", "name": "Boğa Bayrağı", "emoji": "🟢",
                         "description": (
@@ -518,6 +555,9 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
                         ),
                         "signal": "Yukarı kırılım beklentisi yüksek. Hacim artışıyla kırılım teyitlenir.",
                         "direction": "bullish", "strength": "güçlü", "confidence": confidence,
+                        "confirmed": last_close > flag_top,
+                        "trigger_distance_pct": abs(last_close - flag_top) / flag_top if flag_top else 1.0,
+                        "volume_confirmed": False, "pattern_age": 0,
                         "markers": [], "trendlines": [],
                     })
 
@@ -525,6 +565,7 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
                     is_counter = flag_slope_pct > 0
                     confidence = "yüksek" if (pole_pct < -12 and is_counter and flag_rng < 4) else \
                                  "orta"   if (pole_pct < -9  and flag_rng < 5) else "düşük"
+                    flag_bottom = float(np.min(flag_low))
                     patterns.append({
                         "type": "bear_flag", "name": "Ayı Bayrağı", "emoji": "🔴",
                         "description": (
@@ -534,6 +575,9 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
                         ),
                         "signal": "Aşağı kırılım riski yüksek. Hacim artışıyla kırılım teyitlenir.",
                         "direction": "bearish", "strength": "güçlü", "confidence": confidence,
+                        "confirmed": last_close < flag_bottom,
+                        "trigger_distance_pct": abs(last_close - flag_bottom) / flag_bottom if flag_bottom else 1.0,
+                        "volume_confirmed": False, "pattern_age": 0,
                         "markers": [], "trendlines": [],
                     })
 
@@ -958,25 +1002,58 @@ def detect_auto_trendlines(df: pd.DataFrame) -> dict:
 
 # ── formasyon baskınlık analizi ──────────────────────────────────────────────
 
-_CONF_WEIGHT = {"yüksek": 3.0, "orta": 2.0, "düşük": 1.0}
-_STR_WEIGHT  = {"çok güçlü": 3.0, "güçlü": 2.0, "orta": 1.5, "zayıf": 1.0}
+_CONF_NORM   = {"yüksek": 1.0, "orta": 0.6, "düşük": 0.3}
 _DIR_TR      = {"bullish": "yükseliş", "bearish": "düşüş", "neutral": "nötr"}
+
+# Baskınlık ağırlıkları — her biri [0,1] normalize, toplam = 9.0
+_W_CONFIRMED = 3.0   # boyun/sınır zaten kırılmış mı (en belirleyici faktör)
+_W_PROXIMITY = 2.5   # fiyat tetikleyici seviyeye ne kadar yakın (kırılmadıysa)
+_W_QUALITY   = 2.0   # formasyon kalitesi (simetri / R² uyumu → confidence)
+_W_VOLUME    = 0.8   # hacim onayı (mevcutsa)
+_W_RECENCY   = 0.7   # formasyonun tazeliği
+_PROXIMITY_MAX_DIST = 0.10  # bu orandan uzaksa yakınlık puanı 0'a iner
+_RECENCY_MAX_AGE    = 25    # detect_patterns'daki age<=25 filtresiyle tutarlı
 
 
 def _pattern_dominance_score(p: Dict[str, Any]) -> float:
     """Bir formasyonun ne kadar baskın/olası olduğunu sayısallaştırır.
 
-    Güven (en ağırlıklı) + formasyon gücü + kırılım/teyit bonusu. Boyun çizgisi
-    kırılmış veya teyitlenmiş formasyonlar daha imminent kabul edilir."""
-    conf  = _CONF_WEIGHT.get(p.get("confidence", "orta"), 2.0)
-    stren = _STR_WEIGHT.get(p.get("strength", "orta"),   1.5)
-    score = conf * 2.5 + stren
+    Beş faktörün ağırlıklı toplamı:
+      1. Teyit  — boyun/sınır çizgisi zaten kırılmış mı (en ağırlıklı; kırılmış
+         bir formasyon her zaman kırılmamış olandan öncelikli sayılır).
+      2. Yakınlık — kırılmadıysa, fiyat tetikleyici seviyeye (boyun çizgisi,
+         üçgen/kama sınırı, bayrak aralığı) ne kadar yakın. Bu, önceden hiç
+         hesaba katılmayan ama en çok gözden kaçan faktördü: iki formasyon
+         aynı güven/güç etiketine sahip olsa bile kırılıma %1 kalan biri,
+         %8 uzaktaki formasyondan çok daha imminent'tir.
+      3. Kalite — omuz/tepe/dip simetrisi veya üçgen-kama regresyon uyumu
+         (confidence alanına yansımış durumda).
+      4. Hacim onayı — mevcutsa küçük bir bonus.
+      5. Tazelik — formasyonun son referans noktası ne kadar yeni.
+    """
+    confirmed = bool(p.get("confirmed", False))
+    confirmed_norm = 1.0 if confirmed else 0.0
 
-    blob = f"{p.get('description', '')} {p.get('signal', '')}"
-    if "kırıldı" in blob or "✅" in blob or "⚠️" in blob:
-        score += 1.5   # kırılım/teyit gerçekleşmiş → öncelikli
+    dist = p.get("trigger_distance_pct")
+    if confirmed or dist is None:
+        proximity_norm = 1.0
+    else:
+        proximity_norm = max(0.0, 1.0 - min(float(dist), _PROXIMITY_MAX_DIST) / _PROXIMITY_MAX_DIST)
 
-    return round(score, 2)
+    quality_norm = _CONF_NORM.get(p.get("confidence", "orta"), 0.6)
+    volume_norm  = 1.0 if p.get("volume_confirmed") else 0.0
+
+    age = p.get("pattern_age", 0) or 0
+    recency_norm = max(0.0, 1.0 - min(age, _RECENCY_MAX_AGE) / _RECENCY_MAX_AGE)
+
+    score = (
+        _W_CONFIRMED * confirmed_norm
+        + _W_PROXIMITY * proximity_norm
+        + _W_QUALITY * quality_norm
+        + _W_VOLUME * volume_norm
+        + _W_RECENCY * recency_norm
+    )
+    return round(score, 3)
 
 
 def _rank_patterns(patterns: List[Dict[str, Any]]) -> None:
@@ -1015,7 +1092,7 @@ def summarize_patterns(patterns: List[Dict[str, Any]]) -> Dict[str, Any] | None:
     second = patterns[1]
     second_dir = _DIR_TR.get(second.get("direction", "neutral"), "nötr")
     diff   = lead.get("dominance_score", 0.0) - second.get("dominance_score", 0.0)
-    margin = "belirgin biçimde" if diff >= 2.0 else "az farkla"
+    margin = "belirgin biçimde" if diff >= 1.5 else "az farkla"
     same_dir = lead.get("direction") == second.get("direction")
 
     if same_dir:
