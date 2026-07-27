@@ -42,16 +42,39 @@ def _cfg():
 
 
 def _send(to: str, subject: str, html: str, text: Optional[str] = None) -> bool:
+    """Yapılandırılmış sağlayıcıları sırayla dener (Brevo → SMTP → Resend).
+    Biri IP kısıtlaması / kota / geçici bir hata yüzünden başarısız olursa
+    sıradaki denenir — tek sağlayıcının kesintisi (örn. Brevo'nun IP
+    allowlist reddi) tüm doğrulama/şifre-sıfırlama/alarm e-postalarını
+    durdurmasın diye."""
     cfg = _cfg()
+    attempted = False
+
     if cfg["brevo_key"] and cfg["brevo_from"]:
+        attempted = True
         logger.info("E-posta Brevo üzerinden gönderiliyor: %s → %s", cfg["brevo_from"], to)
-        return _send_brevo(to, subject, html, text, cfg["brevo_key"], cfg["brevo_from"])
+        if _send_brevo(to, subject, html, text, cfg["brevo_key"], cfg["brevo_from"]):
+            return True
+        logger.warning("Brevo başarısız, sıradaki sağlayıcı deneniyor (varsa): %s", to)
+
     if cfg["smtp_host"] and cfg["smtp_user"] and cfg["smtp_pass"]:
+        attempted = True
         logger.info("E-posta SMTP üzerinden gönderiliyor: %s → %s", cfg["smtp_user"], to)
-        return _send_smtp(to, subject, html, text, cfg)
+        if _send_smtp(to, subject, html, text, cfg):
+            return True
+        logger.warning("SMTP başarısız, sıradaki sağlayıcı deneniyor (varsa): %s", to)
+
     if cfg["resend_key"]:
+        attempted = True
         logger.info("E-posta Resend üzerinden gönderiliyor → %s", to)
-        return _send_resend(to, subject, html, text, cfg["resend_key"])
+        if _send_resend(to, subject, html, text, cfg["resend_key"]):
+            return True
+        logger.warning("Resend de başarısız: %s", to)
+
+    if attempted:
+        logger.error("Tüm e-posta sağlayıcıları başarısız oldu: %s", to)
+        return False
+
     logger.warning("[DEV-EMAIL - HİÇBİR SAĞLAYICI YAPILANDIRILMADI] To=%s | %s\n%s", to, subject, text or html)
     return True
 
