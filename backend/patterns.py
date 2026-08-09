@@ -162,6 +162,7 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
             # Formasyon başarısız mı? Fiyat direncin üstüne kırıldıysa ikili tepe iptal
             # (düşüş beklenirken yukarı kırılım = ters yön, formasyon çökmüş).
             failed = last_close > resistance * 1.01
+            broken = last_close < neckline
             # Sinyal tükendi mi? Fiyat neckline'dan >%7 aşağıdaysa (kırılım fazlasıyla gerçekleşti).
             if not failed and last_close >= neckline * 0.93:
                 patterns.append({
@@ -172,15 +173,18 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
                         f"Fiyat iki kez ~{round(max(v1,v2),2)} direnç seviyesini test etti ve geri döndü. "
                         f"Tepeler arası benzerlik: %{round(sim*100,1)}. "
                         f"Boyun çizgisi: {neckline}."
+                        + (" ⚠️ Boyun çizgisi kırıldı." if broken else "")
                     ),
                     "signal": (
-                        "Düşüş sinyali — boyun çizgisi kırılırsa satış hızlanabilir."
+                        ("Düşüş sinyali gerçekleşti — boyun çizgisi kırıldı, satış baskısı sürebilir."
+                         if broken else
+                         "Düşüş sinyali — boyun çizgisi kırılırsa satış hızlanabilir.")
                         + (" Hacim T2'de azalmış, sinyal güvenilir." if vol_ok else "")
                     ),
                     "direction": "bearish",
                     "strength": strength,
                     "confidence": confidence,
-                    "confirmed": last_close < neckline,
+                    "confirmed": broken,
                     "trigger_distance_pct": abs(last_close - neckline) / neckline if neckline else 1.0,
                     "volume_confirmed": vol_ok,
                     "pattern_age": age,
@@ -221,6 +225,7 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
             # Formasyon başarısız mı? Fiyat desteğin altına kırıldıysa ikili dip iptal
             # (yükseliş beklenirken aşağı kırılım = ters yön, formasyon çökmüş).
             failed = last_close < support * 0.99
+            broken = last_close > neckline
             # Sinyal tükendi mi? Fiyat neckline'dan >%7 yukarıdaysa (kırılım fazlasıyla gerçekleşti).
             if not failed and last_close <= neckline * 1.07:
                 patterns.append({
@@ -231,15 +236,18 @@ def detect_patterns(df: pd.DataFrame, lookback: int = 120) -> List[Dict[str, Any
                         f"Fiyat iki kez ~{round(min(v1,v2),2)} destek seviyesinde dip yaptı. "
                         f"Dipler arası benzerlik: %{round(sim*100,1)}. "
                         f"Boyun çizgisi (direnç): {neckline}."
+                        + (" ✅ Boyun çizgisi kırıldı." if broken else "")
                     ),
                     "signal": (
-                        "Yükseliş sinyali — boyun çizgisi kırılırsa alım hızlanabilir."
+                        ("Yükseliş sinyali gerçekleşti — boyun çizgisi kırıldı, momentum sürebilir."
+                         if broken else
+                         "Yükseliş sinyali — boyun çizgisi kırılırsa alım hızlanabilir.")
                         + (" Hacim D2'de azalmış, dip oluşumu güvenilir." if vol_ok else "")
                     ),
                     "direction": "bullish",
                     "strength": strength,
                     "confidence": confidence,
-                    "confirmed": last_close > neckline,
+                    "confirmed": broken,
                     "trigger_distance_pct": abs(last_close - neckline) / neckline if neckline else 1.0,
                     "volume_confirmed": vol_ok,
                     "pattern_age": age,
