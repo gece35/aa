@@ -2894,7 +2894,8 @@
                     : 'Üye';
                 planBadge.classList.toggle('premium', isPremium);
             }
-            if (upgradeBtn) upgradeBtn.classList.toggle('hidden', user.plan === 'premium');
+            // Premium'a geç: şimdilik devre dışı, ileride tekrar açılacak.
+            if (upgradeBtn) upgradeBtn.classList.add('hidden');
             if (backtestTab) backtestTab.classList.toggle('hidden', !user.is_admin);
             if (verifyBanner) verifyBanner.classList.toggle('hidden', !!user.email_verified);
             if (betaBanner) betaBanner.classList.add('hidden');
@@ -3239,14 +3240,8 @@
         }
         if (planActionsEl) {
             planActionsEl.innerHTML = '';
-            if (u.plan !== 'premium') {
-                const btn = document.createElement('button');
-                btn.className = 'btn btn-primary';
-                btn.style.fontSize = '13px';
-                btn.textContent = "⭐ Premium'a Geç";
-                btn.addEventListener('click', () => { closeSettingsModal(); openPricingModal(); });
-                planActionsEl.appendChild(btn);
-            } else if (u.can_manage_billing) {
+            // Premium'a geç: şimdilik devre dışı, ileride tekrar açılacak.
+            if (u.plan === 'premium' && u.can_manage_billing) {
                 const btn = document.createElement('button');
                 btn.className = 'btn btn-ghost';
                 btn.style.fontSize = '13px';
