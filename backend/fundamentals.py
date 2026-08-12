@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 import pandas as pd
@@ -22,6 +23,11 @@ import yfinance as yf
 logger = logging.getLogger(__name__)
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+
+# Şirketler genelde çeyreklik bilanço açıklar (çeyrek sonundan ~1-2 ay sonra).
+# En son bilanço döneminin üzerinden bu kadar ay geçmişse veri "eski" sayılır
+# ve frontend'de uyarı rozeti gösterilir (analiz yine de yapılır/gösterilir).
+STALE_THRESHOLD_MONTHS = 6
 
 # yfinance kalem adları sürümden sürüme / hisseden hisseye değişebildiği için
 # her metrik için birden fazla olası satır adı (alias) deniyoruz.
@@ -82,6 +88,23 @@ def _yoy_pct(curr: Optional[float], prev: Optional[float]) -> Optional[float]:
     return (curr - prev) / abs(prev) * 100.0
 
 
+def _period_staleness(period: Optional[str]):
+    """Bilanço döneminin bugüne göre kaç ay eski olduğunu ve eşiği aşıp
+    aşmadığını döner. Tarih ayrıştırılamazsa (None, None) döner."""
+    if not period:
+        return None, None
+    try:
+        period_date = datetime.strptime(period[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None, None
+    now = datetime.now(timezone.utc)
+    months = (now.year - period_date.year) * 12 + (now.month - period_date.month)
+    if now.day < period_date.day:
+        months -= 1
+    months = max(months, 0)
+    return months, months >= STALE_THRESHOLD_MONTHS
+
+
 def fetch_fundamentals(symbol: str) -> Optional[Dict]:
     """Hissenin son bilanço + gelir tablosu metriklerini döner. Veri yoksa None."""
     symbol = (symbol or "").upper().strip()
@@ -134,8 +157,12 @@ def fetch_fundamentals(symbol: str) -> Optional[Dict]:
     except Exception:
         period = None
 
+    period_age_months, is_stale = _period_staleness(period)
+
     metrics = {
         "period": period,
+        "period_age_months": period_age_months,
+        "is_stale": is_stale,
         "total_assets": total_assets,
         "total_liabilities": total_liabilities,
         "equity": equity,

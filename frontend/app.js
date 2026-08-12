@@ -1174,7 +1174,9 @@
             <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
                 <span style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:999px;font-weight:700;font-size:14px;color:${v.color};border:1.5px solid ${v.color};">${v.icon} ${v.label}</span>
                 ${m.period ? `<span style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:999px;font-weight:600;font-size:13px;color:var(--text-1);border:1.5px solid var(--glass-brd-soft);background:rgba(255,255,255,.04);">📅 Bilanço Dönemi: ${escapeHtml(fmtPeriod(m.period))}</span>` : ''}
+                ${m.is_stale ? `<span style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:999px;font-weight:600;font-size:13px;color:var(--warn);border:1.5px solid rgba(255,184,107,.45);background:rgba(255,184,107,.12);">⚠️ Güncel olmayabilir${m.period_age_months != null ? ` (${m.period_age_months} ay önce)` : ''}</span>` : ''}
             </div>
+            ${m.is_stale ? `<div style="padding:10px 14px;border-radius:10px;background:rgba(255,184,107,.08);border:1px solid rgba(255,184,107,.3);font-size:12.5px;color:var(--text-2);line-height:1.5;margin-bottom:12px;">Bu hisse için şirket uzun süredir yeni bilanço açıklamamış olabilir. Aşağıdaki analiz elde edilebilen en güncel veriye dayanır, ancak şirketin güncel finansal durumunu yansıtmıyor olabilir.</div>` : ''}
             ${d.summary ? `<div style="padding:12px 14px;border-radius:10px;background:rgba(255,255,255,.03);border:1px solid var(--glass-brd-soft);font-size:13px;color:var(--text-2);line-height:1.6;">${escapeHtml(d.summary)}</div>` : ''}
             <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;">
                 ${(d.strengths && d.strengths.length) ? `<div style="flex:1;min-width:160px;">
