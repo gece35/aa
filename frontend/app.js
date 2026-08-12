@@ -1138,6 +1138,15 @@
             return val.toFixed(2);
         };
         const fmtRatio = (val) => (val == null ? '—' : val.toFixed(2));
+        const fmtPeriod = (val) => {
+            if (!val) return null;
+            const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(val);
+            if (!match) return val;
+            const aylar = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+            const [, y, mo, d] = match;
+            const ay = aylar[parseInt(mo, 10) - 1];
+            return ay ? `${parseInt(d, 10)} ${ay} ${y}` : val;
+        };
         const fmtPct = (val) => {
             if (val == null) return '—';
             const sign = val >= 0 ? '+' : '';
@@ -1164,7 +1173,7 @@
         return `
             <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
                 <span style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:999px;font-weight:700;font-size:14px;color:${v.color};border:1.5px solid ${v.color};">${v.icon} ${v.label}</span>
-                ${m.period ? `<span style="font-size:11px;color:var(--text-3);">Dönem: ${escapeHtml(m.period)}</span>` : ''}
+                ${m.period ? `<span style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:999px;font-weight:600;font-size:13px;color:var(--text-1);border:1.5px solid var(--glass-brd-soft);background:rgba(255,255,255,.04);">📅 Bilanço Dönemi: ${escapeHtml(fmtPeriod(m.period))}</span>` : ''}
             </div>
             ${d.summary ? `<div style="padding:12px 14px;border-radius:10px;background:rgba(255,255,255,.03);border:1px solid var(--glass-brd-soft);font-size:13px;color:var(--text-2);line-height:1.6;">${escapeHtml(d.summary)}</div>` : ''}
             <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;">
