@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request
 
+from .security import limiter
+
 logger = logging.getLogger(__name__)
 
 newsletter_bp = Blueprint("newsletter", __name__)
@@ -34,9 +36,10 @@ def _save(subscribers: list[dict]) -> None:
 
 
 @newsletter_bp.route("/api/newsletter", methods=["POST"])
+@limiter.limit("5 per hour")
 def subscribe():
     data = request.get_json(silent=True) or {}
-    email = (data.get("email") or "").strip().lower()
+    email = str(data.get("email") or "").strip().lower()[:254]
     kvkk = bool(data.get("kvkk_consent"))
 
     if not email or not _EMAIL_RE.match(email):
@@ -51,7 +54,7 @@ def subscribe():
     subscribers.append({
         "email": email,
         "subscribed_at": datetime.now(timezone.utc).isoformat(),
-        "source": data.get("source", "website"),
+        "source": str(data.get("source") or "website")[:32],
         "kvkk_consent": True,
     })
     try:

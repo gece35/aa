@@ -50,6 +50,15 @@ class User(UserMixin, db.Model):
     portfolio: Mapped[list["Portfolio"]] = relationship("Portfolio", back_populates="user", cascade="all, delete-orphan")
     email_tokens: Mapped[list["EmailToken"]] = relationship("EmailToken", back_populates="user", cascade="all, delete-orphan")
 
+    def get_id(self) -> str:
+        """Flask-Login oturum kimliği: `<id>:<parola parmak izi>`.
+
+        Parola değişince parmak izi değişir; eski oturumlar ve "beni hatırla"
+        çerezleri user_loader'da reddedilir (bkz. app.py load_user).
+        """
+        from .security import session_fingerprint
+        return f"{self.id}:{session_fingerprint(self.password_hash)}"
+
     @property
     def is_premium(self) -> bool:
         if self.plan != "premium":
@@ -176,11 +185,15 @@ class StockComment(db.Model):
 
     user: Mapped["User"] = relationship("User")
 
-    def to_dict(self) -> dict:
+    def to_dict(self, viewer_id: Optional[str] = None) -> dict:
+        """Yorumun herkese gösterilen hali. Yazarın dahili kimliği (UUID)
+        dışarı verilmez; yalnızca "bu yorum bakan kişinin mi?" bilgisi döner."""
+        email = self.user.email if self.user is not None else ""
+        masked = email[:3] + "***" + email[email.index("@"):] if "@" in email else "***"
         return {
             "id": self.id,
-            "user_email": self.user.email[:3] + "***" + self.user.email[self.user.email.index("@"):] if "@" in self.user.email else "***",
-            "user_id": self.user_id,
+            "user_email": masked,
+            "is_own": bool(viewer_id) and self.user_id == viewer_id,
             "body": self.body,
             "created_at": int(self.created_at.timestamp()) if self.created_at else None,
         }

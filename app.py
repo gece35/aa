@@ -15,7 +15,10 @@ import os
 import re
 import time
 
-from flask import Flask, Response, jsonify, request, send_from_directory
+import hmac
+import threading
+
+from flask import Flask, Response, abort, jsonify, redirect, request, send_from_directory
 from flask_cors import CORS
 from flask_login import LoginManager, current_user, login_required
 from sqlalchemy import text
@@ -47,13 +50,8 @@ from backend.fundamentals import GROQ_API_KEY, analyze_fundamentals
 from backend.backtest import run_backtest, run_signal_study
 from backend.scanner import build_index_summary, get_index_df, scan_market, scan_market_chunk
 from backend.scoring import compute_regime_ok, score_symbol_detailed
-from backend.tickers import MARKETS, market_of_symbol
-from backend.repetition import build_repetition_schedule
-from backend.security import limiter
-from backend.storage import (
-    add_lesson, delete_lesson, get_all_lessons, get_lesson,
-    get_upcoming_repetitions, update_synced_events,
-)
+from backend.security import limiter, session_fingerprint
+from backend.tickers import MARKETS, market_of_symbol, resolve_symbol
 
 logging.basicConfig(
     level=LOG_LEVEL,
@@ -82,10 +80,70 @@ STRICT_SCHEMA_HEALTH = False
 # doğrulama: rastgele/aşırı uzun string'lerin DB'ye yazılmasını (ve Postgres'te
 # String(32) sınırını aşınca 500 hatası almasını) önler.
 _SYMBOL_RE = re.compile(r'^[A-Z0-9.\-]{1,32}$')
+# Statik sayfa adı (legal/blog): yalnızca küçük harf, rakam, tire — yol
+# ayracı ve nokta içeremez, dolayısıyla dizin dışına çıkılamaz.
+_SLUG_RE = re.compile(r'^[a-z0-9-]{1,80}$')
+
+# Üyenin "zorla yenile" (force=1) isteği: tüm pazarı yeniden indirir. Kullanıcı +
+# pazar başına bu aralıkta en fazla bir kez; daha sık gelirse önbellekten yanıtlanır.
+_FORCE_MIN_INTERVAL = 300
+_SCAN_CHUNK_MAX = 60   # /api/scan tek istekte en fazla bu kadar hisse
+_force_last: dict = {}
+_force_lock = threading.Lock()
 
 
 def _is_admin_user() -> bool:
     return bool(current_user.is_authenticated and getattr(current_user, "is_admin", False))
+
+
+def _force_allowed(market: str) -> bool:
+    """force=1 şimdi uygulanabilir mi? Admin: her zaman. Üye: aralık dolduysa."""
+    if not current_user.is_authenticated:
+        return False
+    if _is_admin_user():
+        return True
+    key = f"{current_user.id}:{market}"
+    now = time.time()
+    with _force_lock:
+        if now - _force_last.get(key, 0.0) < _FORCE_MIN_INTERVAL:
+            return False
+        _force_last[key] = now
+        if len(_force_last) > 5000:
+            for k in [k for k, t in _force_last.items() if now - t > _FORCE_MIN_INTERVAL]:
+                _force_last.pop(k, None)
+        return True
+
+
+def _clean_symbol(raw: str):
+    """Yoldan gelen sembolü doğrular. Taranan evrendeki hisseler herkese açıktır
+    (kısa yazım kabul: THYAO → THYAO.IS); evren dışı ama biçimi geçerli
+    semboller yalnızca giriş yapmış kullanıcıya (portföy/alarm için). Geçersizse None."""
+    sym = (raw or "").upper().strip()
+    known = resolve_symbol(sym)
+    if known:
+        return known
+    if current_user.is_authenticated and _SYMBOL_RE.fullmatch(sym):
+        return sym
+    return None
+
+
+_ERROR_PAGE = """<!DOCTYPE html>
+<html lang="tr"><head><meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex" />
+<title>{code} — Nebula Scanner</title>
+<style>body{{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+background:#0f172a;color:#e2e8f0;font-family:Inter,Arial,sans-serif;text-align:center;padding:24px}}
+h1{{font-size:56px;margin:0 0 8px}}p{{color:#94a3b8;margin:0 0 24px}}
+a{{color:#fff;background:#2563eb;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600}}</style>
+</head><body><div><h1>{code}</h1><p>{message}</p><a href="/">Ana sayfaya dön</a></div></body></html>"""
+
+
+def _html_error(code: int, message: str) -> Response:
+    resp = Response(_ERROR_PAGE.format(code=code, message=message), status=code,
+                    mimetype="text/html; charset=utf-8")
+    resp.headers["X-Robots-Tag"] = "noindex"
+    return resp
 
 
 def _mask_entry_signal_one(d: dict) -> dict:
@@ -224,6 +282,8 @@ def create_app() -> Flask:
         resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         resp.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
         resp.headers.setdefault("Content-Security-Policy-Report-Only", _CSP_REPORT_ONLY)
+        if request.is_secure or request.headers.get("X-Forwarded-Proto", "").lower() == "https":
+            resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
         return resp
 
     login_manager = LoginManager()
@@ -231,7 +291,15 @@ def create_app() -> Flask:
 
     @login_manager.user_loader
     def load_user(user_id: str):
-        return db.session.get(User, user_id)
+        # Oturum kimliği "<id>:<parola parmak izi>" (User.get_id). Parmak izi
+        # tutmuyorsa (parola değişmiş ya da eski biçimli oturum) oturum geçersizdir.
+        uid, _, fingerprint = str(user_id).partition(":")
+        user = db.session.get(User, uid)
+        if user is None or not fingerprint:
+            return None
+        if not hmac.compare_digest(fingerprint, session_fingerprint(user.password_hash)):
+            return None
+        return user
 
     @login_manager.unauthorized_handler
     def _unauth():
@@ -245,10 +313,16 @@ def create_app() -> Flask:
     @flask_app.errorhandler(Exception)
     def handle_exception(e):
         from werkzeug.exceptions import HTTPException
+        is_api = request.path.startswith("/api/")
         if isinstance(e, HTTPException):
-            return jsonify({"error": e.name.lower().replace(" ", "_"), "message": e.description}), e.code
+            if is_api:
+                return jsonify({"error": e.name.lower().replace(" ", "_"), "message": e.description}), e.code
+            message = "Aradığınız sayfa bulunamadı." if e.code == 404 else "İstek işlenemedi."
+            return _html_error(e.code or 500, message)
         logger.exception("İşlenmeyen hata")
-        return jsonify({"error": "server_error", "message": "Bir hata oluştu, lütfen tekrar deneyin."}), 500
+        if is_api:
+            return jsonify({"error": "server_error", "message": "Bir hata oluştu, lütfen tekrar deneyin."}), 500
+        return _html_error(500, "Bir hata oluştu, lütfen tekrar deneyin.")
 
     # ── Statik sayfalar ────────────────────────────────────────────────────
 
@@ -274,24 +348,37 @@ def create_app() -> Flask:
     def faq_page():
         return _serve_html(FRONTEND_DIR, "faq.html")
 
+    def _static_page(directory: str, url_prefix: str, slug: str):
+        """`<dizin>/<slug>.html` dosyasını sunar. `slug.html` biçimi tek (uzantısız)
+        adrese 301 ile yönlenir; ad _SLUG_RE ile sınırlı olduğu için dizin dışına çıkılamaz."""
+        if slug.endswith(".html"):
+            stem = slug[:-5]
+            if _SLUG_RE.fullmatch(stem) and os.path.isfile(os.path.join(directory, f"{stem}.html")):
+                return redirect(f"{url_prefix}/{stem}", code=301)
+            abort(404)
+        if not _SLUG_RE.fullmatch(slug) or not os.path.isfile(os.path.join(directory, f"{slug}.html")):
+            abort(404)
+        return _serve_html(directory, f"{slug}.html")
+
     @flask_app.route("/blog/")
     @flask_app.route("/blog/<path:slug>")
-    def blog_page(slug="index.html"):
+    def blog_page(slug=""):
         blog_dir = os.path.join(FRONTEND_DIR, "blog")
-        fname = slug if slug.endswith(".html") else f"{slug}.html"
-        fpath = os.path.join(blog_dir, fname)
-        if not os.path.isfile(fpath):
-            return "Sayfa bulunamadı", 404
-        return _serve_html(blog_dir, fname)
+        if slug == "":
+            return _serve_html(blog_dir, "index.html")
+        if slug in ("index", "index.html"):
+            return redirect("/blog/", code=301)
+        return _static_page(blog_dir, "/blog", slug)
 
     @flask_app.route("/legal/<path:slug>")
     def legal_page(slug):
-        safe = slug.replace("..", "").strip("/")
         legal_dir = os.path.join(FRONTEND_DIR, "legal")
-        fpath = os.path.join(legal_dir, f"{safe}.html")
-        if not os.path.isfile(fpath):
-            return "Sayfa bulunamadi", 404
-        return _serve_html(legal_dir, f"{safe}.html")
+        # Bu rota /legal/ altındaki her şeyi yakaladığı için stil dosyasını da
+        # kendisi sunmalı (eskiden legal.css.html arayıp 404 dönüyordu —
+        # yasal sayfaların tamamı stilsiz görünüyordu).
+        if slug == "legal.css":
+            return send_from_directory(legal_dir, "legal.css")
+        return _static_page(legal_dir, "/legal", slug)
 
     # ── API: Admin ─────────────────────────────────────────────────────────
 
@@ -404,7 +491,9 @@ def create_app() -> Flask:
                 "upgrade_url": "/pricing",
             }), 402
 
-        force = force_raw and plan.get("allow_force_refresh", False)
+        # force=1 tüm pazarı yeniden indirir (pahalı): yalnızca planı izin veren
+        # üyeye ve belirli aralıkla; aksi halde sessizce önbellekten yanıtlanır.
+        force = bool(force_raw and plan.get("allow_force_refresh", False) and _force_allowed(market))
         if market == "bist":
             max_tickers = plan.get("max_bist_tickers")
         else:
@@ -413,19 +502,20 @@ def create_app() -> Flask:
         sort = request.args.get("sort", "score")
         try:
             if limit_raw is not None:
-                offset = int(offset_raw) if offset_raw else 0
-                limit = int(limit_raw)
+                offset = max(0, int(offset_raw)) if offset_raw else 0
+                limit = max(1, min(int(limit_raw), _SCAN_CHUNK_MAX))
                 payload = scan_market_chunk(
                         market=market, offset=offset, limit=limit,
                         force=force, sort=sort, max_tickers=max_tickers,
                     )
             else:
                 payload = scan_market(market=market, force=force, max_tickers=max_tickers)
-        except ValueError as exc:
-            return jsonify({"error": str(exc)}), 400
-        except Exception as exc:
+        except ValueError:
+            return jsonify({"error": "invalid_parameter", "message": "Geçersiz parametre."}), 400
+        except Exception:
             logger.exception("Tarama hatasi")
-            return jsonify({"error": str(exc)}), 500
+            return jsonify({"error": "scan_failed",
+                            "message": "Tarama şu an yapılamadı, lütfen biraz sonra tekrar deneyin."}), 500
 
         if not _is_admin_user():
             payload = dict(payload)
@@ -438,14 +528,17 @@ def create_app() -> Flask:
     @flask_app.route("/api/news")
     def api_news():
         market = request.args.get("market", "us").lower()
-        force = request.args.get("force", "0") in ("1", "true", "yes")
+        # force (6 RSS + çeviri çağrısı) yalnızca admin'e açık
+        force = request.args.get("force", "0") in ("1", "true", "yes") and _is_admin_user()
         if market not in MARKETS:
-            return jsonify({"error": f"unknown market: {market}"}), 400
+            return jsonify({"error": "unknown_market"}), 400
         return jsonify(fetch_news(market=market, force=force))
 
     @flask_app.route("/api/news/stock/<path:symbol>")
     def api_stock_news(symbol: str):
-        symbol = symbol.upper().strip()
+        symbol = _clean_symbol(symbol)
+        if symbol is None:
+            return jsonify({"error": "unknown_symbol", "items": []}), 404
         return jsonify(fetch_stock_news(symbol))
 
     # ── API: Hisse detay ───────────────────────────────────────────────────
@@ -453,8 +546,10 @@ def create_app() -> Flask:
     @flask_app.route("/api/stock/<path:symbol>")
     @quota("stock_detail", per="day")
     def api_stock(symbol: str):
-        symbol = symbol.upper().strip()
-        force = request.args.get("force", "0") in ("1", "true", "yes")
+        symbol = _clean_symbol(symbol)
+        if symbol is None:
+            return jsonify({"error": "unknown_symbol", "message": "Hisse bulunamadı."}), 404
+        force = request.args.get("force", "0") in ("1", "true", "yes") and _is_admin_user()
 
         cache_key = f"stock:{symbol}"
         if not force:
@@ -469,7 +564,8 @@ def create_app() -> Flask:
         data = download_ohlcv([symbol], period="2y", interval="1d")
         df = data.get(symbol)
         if df is None or df.empty:
-            return jsonify({"error": f"data unavailable for {symbol}"}), 404
+            return jsonify({"error": "data_unavailable",
+                            "message": "Bu hisse için veri şu an alınamıyor."}), 404
 
         symbol_market = market_of_symbol(symbol)
         index_df = get_index_df(symbol_market)
@@ -478,7 +574,8 @@ def create_app() -> Flask:
             market=symbol_market, regime_ok=compute_regime_ok(index_df),
         )
         if detail is None:
-            return jsonify({"error": f"insufficient data for {symbol}"}), 404
+            return jsonify({"error": "insufficient_data",
+                            "message": "Bu hisse için yeterli geçmiş veri yok."}), 404
 
         detail["generated_at"] = int(time.time())
         detail["cached"] = False
@@ -488,12 +585,15 @@ def create_app() -> Flask:
         return jsonify(detail)
 
     # ── API: AI destekli bilanço analizi ───────────────────────────────────
-    # Şimdilik herkese açık; ileride üyelere kısıtlamak için bu route'a
-    # @requires_plan("free") veya @quota("fundamentals", per="day") eklenir.
+    # Herkese açık ama her önbelleksiz çağrı ücretli bir LLM isteğidir: IP başına
+    # sınırlı ve yalnızca geçerli semboller için çalışır.
 
     @flask_app.route("/api/stock/<path:symbol>/fundamentals")
+    @limiter.limit("30 per hour")
     def api_stock_fundamentals(symbol: str):
-        symbol = symbol.upper().strip()
+        symbol = _clean_symbol(symbol)
+        if symbol is None:
+            return jsonify({"error": "unknown_symbol", "available": False}), 404
         if not GROQ_API_KEY:
             return jsonify({
                 "error": "config_error",
@@ -597,7 +697,7 @@ def create_app() -> Flask:
             "smtp_host": cfg["smtp_host"] or "(boş)",
             "smtp_user": cfg["smtp_user"] or "(boş)",
         }
-        to = request.get_json(silent=True, force=True).get("to", current_user.email) if request.data else current_user.email
+        to = (request.get_json(silent=True) or {}).get("to") or current_user.email
         ok = _send(to, "Nebula Scanner — E-posta test", "<p>Test maili başarıyla gönderildi.</p>", "Test maili başarıyla gönderildi.")
         return jsonify({"ok": ok, "config": config_info, "sent_to": to})
 
@@ -631,6 +731,9 @@ def create_app() -> Flask:
 
         if not symbol or not _SYMBOL_RE.fullmatch(symbol):
             return jsonify({"error": "Geçersiz sembol formatı"}), 400
+        # Bilinen hisseyi resmi sembolüne çevir (MGROS → MGROS.IS); aksi halde
+        # veri kaynağı sembolü bulamaz ve alarm hiç tetiklenmez.
+        symbol = resolve_symbol(symbol) or symbol
         if condition_type not in CONDITION_LABELS:
             return jsonify({"error": "Geçersiz kriter"}), 400
         if condition_value is None:
@@ -770,7 +873,9 @@ def create_app() -> Flask:
     @flask_app.route("/api/comments/<symbol>", methods=["GET"])
     @login_required
     def comments_list(symbol: str):
-        symbol = symbol.upper()
+        symbol = _clean_symbol(symbol)
+        if symbol is None:
+            return jsonify({"error": "unknown_symbol", "comments": []}), 404
         rows = (
             db.session.query(StockComment)
             .filter_by(symbol=symbol)
@@ -778,14 +883,17 @@ def create_app() -> Flask:
             .limit(50)
             .all()
         )
-        return jsonify({"comments": [c.to_dict() for c in rows]})
+        return jsonify({"comments": [c.to_dict(current_user.id) for c in rows]})
 
     @flask_app.route("/api/comments/<symbol>", methods=["POST"])
     @login_required
     @email_verified_required
+    @limiter.limit("10 per minute")
     def comments_add(symbol: str):
-        symbol = symbol.upper()
-        body = (request.get_json(silent=True, force=True) or {}).get("body", "").strip()
+        symbol = _clean_symbol(symbol)
+        if symbol is None:
+            return jsonify({"error": "unknown_symbol"}), 404
+        body = str((request.get_json(silent=True) or {}).get("body") or "").strip()
         if not body:
             return jsonify({"error": "empty"}), 400
         if len(body) > _COMMENT_MAX_LEN:
@@ -793,7 +901,7 @@ def create_app() -> Flask:
         comment = StockComment(user_id=current_user.id, symbol=symbol, body=body)
         db.session.add(comment)
         db.session.commit()
-        return jsonify({"ok": True, "comment": comment.to_dict()}), 201
+        return jsonify({"ok": True, "comment": comment.to_dict(current_user.id)}), 201
 
     @flask_app.route("/api/comments/<int:comment_id>", methods=["DELETE"])
     @login_required
@@ -858,80 +966,6 @@ def create_app() -> Flask:
 
         analysis_cache.set(cache_key, result)
         return jsonify(result)
-
-
-    # ── Spaced Repetition endpoints ─────────────────────────────────────────
-    @flask_app.route("/api/repetition/lessons", methods=["GET"])
-    def rep_list_lessons():
-        return jsonify({"lessons": get_all_lessons()})
-
-    @flask_app.route("/api/repetition/lessons", methods=["POST"])
-    def rep_add_lesson():
-        body = request.get_json(silent=True) or {}
-        topic = (body.get("topic") or "").strip()
-        subject = (body.get("subject") or "").strip()
-        study_date_str = (body.get("study_date") or "").strip()
-        if not topic:
-            return jsonify({"error": "topic gerekli"}), 400
-        from datetime import date
-        try:
-            study_date = date.fromisoformat(study_date_str) if study_date_str else date.today()
-        except ValueError:
-            return jsonify({"error": "study_date gecersiz (YYYY-MM-DD)"}), 400
-        schedule = build_repetition_schedule(topic, subject, study_date)
-        lesson = add_lesson(topic, subject, study_date.isoformat(), schedule)
-        sync_calendar = body.get("sync_calendar", False)
-        sync_result = {"synced": False, "event_ids": [], "error": None}
-        if sync_calendar:
-            try:
-                from backend.calendar_api import create_repetition_events, is_configured
-                if is_configured():
-                    event_ids = create_repetition_events(schedule)
-                    update_synced_events(lesson["id"], event_ids)
-                    lesson["synced_event_ids"] = event_ids
-                    sync_result = {"synced": True, "event_ids": event_ids, "error": None}
-                else:
-                    sync_result["error"] = "GOOGLE_CALENDAR_CREDENTIALS ayarlanmamis"
-            except Exception as exc:
-                sync_result["error"] = str(exc)
-        return jsonify({"lesson": lesson, "calendar_sync": sync_result}), 201
-
-    @flask_app.route("/api/repetition/lessons/<lesson_id>", methods=["GET"])
-    def rep_get_lesson(lesson_id: str):
-        lesson = get_lesson(lesson_id)
-        if not lesson:
-            return jsonify({"error": "bulunamadi"}), 404
-        return jsonify({"lesson": lesson})
-
-    @flask_app.route("/api/repetition/lessons/<lesson_id>", methods=["DELETE"])
-    def rep_delete_lesson(lesson_id: str):
-        lesson = get_lesson(lesson_id)
-        if not lesson:
-            return jsonify({"error": "bulunamadi"}), 404
-        event_ids = lesson.get("synced_event_ids", [])
-        if event_ids:
-            try:
-                from backend.calendar_api import delete_calendar_event
-                for eid in event_ids:
-                    delete_calendar_event(eid)
-            except Exception:
-                pass
-        delete_lesson(lesson_id)
-        return jsonify({"ok": True})
-
-    @flask_app.route("/api/repetition/upcoming")
-    def rep_upcoming():
-        days = int(request.args.get("days", 7))
-        return jsonify({"upcoming": get_upcoming_repetitions(days_ahead=days)})
-
-    @flask_app.route("/api/repetition/calendar-status")
-    def rep_calendar_status():
-        try:
-            from backend.calendar_api import is_configured
-            configured = is_configured()
-        except Exception:
-            configured = False
-        return jsonify({"configured": configured})
 
     return flask_app
 

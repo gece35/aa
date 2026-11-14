@@ -59,7 +59,7 @@ Railway'de **tek servis, tek süreç**: `web` (gunicorn, 1 süreç × 8 thread �
 - **Postgres + SQLAlchemy** — üretimde Postgres (`psycopg`), Flask-Migrate ile şema geçmişi (`migrations/`); lokal geliştirmede SQLite fallback
 - **Auth & abonelik** — Flask-Login ile oturum, e-posta doğrulama/şifre sıfırlama (`auth.py`); LemonSqueezy ile Premium abonelik (`billing.py`). İlk 100 kayıt ömür boyu ücretsiz Premium alır (`auth.py` → `signup`); sonrasında Premium, frontend'deki Ayarlar/Fiyatlandırma modallarından LemonSqueezy checkout ile satın alınır. Şu an Üye (ücretsiz) ve Premium arasında özellik farkı yok — bu ayrım ayrı bir iş olarak planlanıyor.
 - **Rate limiting & günlük kota** — hassas auth uçları (login/signup/forgot/resend-verify/password) `Flask-Limiter` ile IP başına sınırlanır (`security.py`, süreç belleğinde); ayrıca özellik başı günlük kullanım kotası (`limits.py`, `quota_store.py`)
-- **Güvenlik başlıkları** — `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` her yanıtta; `Content-Security-Policy` şimdilik Report-Only modda (`app.py`)
+- **Güvenlik** — rate-limit anahtarı gerçek istemci IP'sidir (`CF-Connecting-IP`, bkz. `security.client_ip`); parola değişince/sıfırlanınca diğer oturumlar düşer (`User.get_id` parmak izi); `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, HSTS her yanıtta; `Content-Security-Policy` şimdilik Report-Only modda (`app.py`)
 - **Toplu veri indirme** — `yfinance.download(..., threads=True)` ile tüm hisseler tek seferde
 - **TTL + LRU cache** (`backend/cache.py`) — `/api/scan`, `/api/stock`, `/api/news`, `/api/index/<market>` yanıtları süreç belleğinde, kayıt üst sınırıyla önbelleklenir; seans açıkken kısa ömür (10 dk), pazar kapalıyken bir sonraki açılışa kadar; `force=1` bypass eder
 - **Lexicon tabanlı sentiment** — Haber başlıklarını TR+EN kelime listesiyle pozitif/nötr/negatif sınıflandırır
@@ -70,7 +70,7 @@ Railway'de **tek servis, tek süreç**: `web` (gunicorn, 1 süreç × 8 thread �
 
 ## Aralıklı Tekrar Sistemi
 
-Projeden bağımsız, ders takibi için aralıklı tekrar (spaced repetition) aracı.
+Projeden bağımsız, ders takibi için komut satırı aracı (web sitesinin parçası değildir; sitedeki eski `/api/repetition/*` uçları kaldırıldı).
 
 ### CLI (`tekrar.py`)
 
@@ -84,12 +84,6 @@ python tekrar.py ics                         # .ics takvim dosyasını yeniden �
 
 Tekrar tarihleri: `+1 gün → +1 hafta → +1 ay → +3 ay`. `.ics` dosyası telefon takvimine aktarılabilir, 09:00'da otomatik alarm düşer.
 
-### API (`backend/repetition.py` + `backend/calendar_api.py`)
-
-- `build_repetition_schedule(topic, subject, start_date)` → takvim etkinliği listesi üretir
-- Google Calendar API entegrasyonu (service account); `GOOGLE_CALENDAR_CREDENTIALS` env var ile devreye girer
-- Hafta içi 17:00, hafta sonu 14:00 hatırlatma saatleri; her tekrar için farklı renk kodu
-
 ## Klasör Yapısı
 
 ```
@@ -102,8 +96,7 @@ backend/
   billing.py             # LemonSqueezy ödeme ve abonelik yönetimi
   newsletter.py          # Bülten aboneliği
   support.py             # Destek talepleri
-  cache.py               # TTL cache (scan/stock/news/index)
-  calendar_api.py        # Google Calendar API entegrasyonu
+  cache.py               # Süreç içi TTL + LRU cache (scan/stock/news/index)
   config.py              # Ortam değişkenleri ve sabitler
   data_fetcher.py        # yfinance batch OHLCV indirme
   db.py                  # SQLAlchemy + Flask-Migrate
@@ -113,17 +106,18 @@ backend/
   models.py              # User, Watchlist, Portfolio, StockComment
   news.py                # RSS haber toplayıcı
   patterns.py            # Formasyon tespiti v2 + otomatik trend çizgileri
-  quota_store.py         # Günlük kullanım sayacı (in-memory / Redis)
-  repetition.py          # Aralıklı tekrar zamanlama mantığı
+  market_hours.py        # BIST/ABD seans saatleri (zamanlayıcı + cache ömrü)
+  migrate_boot.py        # Açılışta otomatik şema bootstrap'ı (stamp + upgrade)
+  quota_store.py         # Günlük kullanım sayacı (süreç belleği)
   scanner.py             # Tarama orkestrasyonu + endeks özeti
   scoring.py             # Hibrit durum + kesişim tazeliği puanlama motoru
   sectors.py             # Sektör etiketleri
-  security.py            # Rate limiting ve güvenlik başlıkları
+  scheduler.py           # Süreç içi zamanlayıcı: fiyat alarmları + hesap temizliği
+  security.py            # Parola/token, gerçek istemci IP'si, rate limiting
   sentiment.py           # Lexicon tabanlı haber duygu analizi
-  storage.py             # Aralıklı tekrar için JSON tabanlı kalıcı depolama
   tickers.py             # BIST (162) + US (248) sembol listeleri
-  twitter_bot.py         # Twitter/X otomatik sinyal paylaşımı
-  worker.py              # Arka plan alarm kontrolü + Twitter paylaşımı
+  twitter_bot.py         # Twitter/X sinyal paylaşımı (şu an devre dışı, zamanlanmıyor)
+  worker.py              # Eski worker girişi: bekleme modu / `--once` tek geçiş
 frontend/
   index.html             # Ana tarayıcı arayüzü (glassmorphism / dark)
   rehber.html            # Kullanım kılavuzu
@@ -132,10 +126,11 @@ frontend/
   blog/                  # Blog yazıları
   legal/                 # Gizlilik, kullanım koşulları
   app.js                 # Vanilla JS etkileşim
-  repetition.js          # Aralıklı tekrar arayüz mantığı
   style.css              # Koyu mod + galaksi + neon
 migrations/              # Alembic (Flask-Migrate) veritabanı şema geçmişi
-requirements.txt
+tests/                   # pytest paketi (python -m pytest)
+gunicorn.conf.py         # Tek süreç + thread ayarı, zamanlayıcı kancası
+requirements.txt         # Sabitlenmiş sürümler (requirements-dev.txt: + pytest)
 nixpacks.toml            # Railway derleme konfigürasyonu
 ```
 
@@ -171,13 +166,13 @@ python app.py
 | `GET /api/markets` | — | Desteklenen pazarlar |
 | `GET /api/index/<market>` | — | Endeks özeti (BIST 100 / S&P 500) + rejim durumu + mini grafik verisi |
 | `GET /api/scan?market=bist&force=0` | — | Tarama (skora göre sıralı, chunk'lı yüklenir) |
-| `GET /api/stock/<symbol>` | Kota | Hisse detayı, skor, geçmiş, formasyonlar, trend çizgileri, SL/TP |
+| `GET /api/stock/<symbol>` | Kota | Hisse detayı, skor, geçmiş, formasyonlar, trend çizgileri, SL/TP (misafir: IP başına günde 5, yalnız taranan hisseler) |
 | `GET /api/stock/<symbol>/fundamentals` | — | AI destekli bilanço/temel analiz (Groq) |
 | `GET /api/news?market=bist` | — | Piyasa haberleri + sentiment |
 | `GET /api/news/stock/<symbol>` | — | Hisseye özel haberler |
 | `GET /api/exchange-rate` | — | USD/TRY kuru |
-| `GET /api/backtest?market=bist` | — | TDOV backtest sonuçları |
-| `GET /api/signal-study?market=bist` | — | Kesişim türlerinin tarihsel isabet etüdü |
+| `GET /api/backtest?market=bist` | Admin | TDOV backtest sonuçları |
+| `GET /api/signal-study?market=bist` | Admin | Kesişim türlerinin tarihsel isabet etüdü |
 | `GET /api/alerts` | Auth | Alarmları listele |
 | `POST /api/alerts` | Auth | Alarm oluştur |
 | `DELETE /api/alerts/<id>` | Auth | Alarm sil |
@@ -190,15 +185,11 @@ python app.py
 | `GET /api/portfolio` | Auth | Portföy pozisyonları |
 | `POST /api/portfolio` | Auth | Pozisyon ekle |
 | `DELETE /api/portfolio/<id>` | Auth | Pozisyon sil |
-| `GET /api/comments/<symbol>` | — | Topluluk yorumları |
+| `GET /api/comments/<symbol>` | Auth | Topluluk yorumları |
 | `POST /api/comments/<symbol>` | Auth | Yorum ekle |
 | `DELETE /api/comments/<id>` | Auth | Yorum sil |
-| `GET/POST /api/repetition/lessons` | Auth | Aralıklı tekrar planı listele/oluştur |
-| `DELETE /api/repetition/lessons/<id>` | Auth | Ders/tekrar planı sil |
-| `GET /api/repetition/upcoming` | Auth | Yaklaşan tekrarlar |
-| `GET /api/repetition/calendar-status` | Auth | Google Calendar senk. durumu |
 | `GET /api/config` | — | Ön yüz için ortam/konfig bilgisi (GA id vb.) |
-| `GET /api/health` | — | Sağlık kontrolü |
+| `GET /api/health` | — | Sağlık kontrolü: DB, şema revizyonu, zamanlayıcı durumu |
 | `POST /api/cache/clear` | Admin | Tüm cache temizle |
 | `GET /api/admin/stats` · `/api/admin/users` | Admin | Kullanıcı/istatistik paneli |
 

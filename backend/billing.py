@@ -101,9 +101,9 @@ def create_checkout():
         if not url:
             return jsonify({"error": "checkout_failed"}), 502
         return jsonify({"url": url})
-    except requests.RequestException as exc:
+    except requests.RequestException:
         logger.exception("LS checkout hatası")
-        return jsonify({"error": "checkout_failed", "detail": str(exc)}), 502
+        return jsonify({"error": "checkout_failed"}), 502
 
 
 @billing_bp.route("/portal", methods=["POST"])

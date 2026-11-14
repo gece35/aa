@@ -10,6 +10,8 @@ from pathlib import Path
 
 from flask import Blueprint, jsonify, request
 
+from .security import limiter
+
 logger = logging.getLogger(__name__)
 
 support_bp = Blueprint("support", __name__)
@@ -23,8 +25,8 @@ Kısa, net ve dostane yanıtlar ver. Teknik jargon kullanma.
 ## Nebula Scanner Hakkında
 
 **Ne yapar?**
-Nebula Scanner, BIST (Borsa İstanbul) ve ABD hisse senetlerini teknik analiz göstergeleriyle 0-5 arası puanlar.
-Hisseler RSI, MACD, Bollinger Bantları, hacim ve fiyat momentum gibi göstergeler kullanılarak değerlendirilir.
+Nebula Scanner, BIST (Borsa İstanbul) ve ABD hisse senetlerini teknik analiz göstergeleriyle 0-10 arası puanlar.
+Hisseler EMA trend hizalaması, RSI, MACD, Bollinger Bantları, ADX ve hacim gibi göstergelerle değerlendirilir.
 Puan ne kadar yüksekse, teknik görünüm o kadar olumlu demektir. Bu bir yatırım tavsiyesi değildir.
 
 **Üyelik**
@@ -34,21 +36,23 @@ Puan ne kadar yüksekse, teknik görünüm o kadar olumlu demektir. Bu bir yatı
 Kayıt olmak tamamen ücretsizdir. Sağ üstten "Üye Ol" düğmesine tıklayarak kayıt olabilirsiniz.
 
 **Tarama nasıl çalışır?**
-Ana sayfada BIST veya US sekmesini seçin. Hisseler puana göre sıralanır (5 = en iyi teknik görünüm).
-Filtreleme çubuğundan "≥ 3 Puan", "≥ 4 Puan" veya "Sadece 5/5" seçebilirsiniz.
-Hisse adına göre arama yapmak için arama kutusunu kullanın.
+Ana sayfada BIST veya US pazarını seçin. Hisseler puana göre sıralanır (10 = en iyi teknik görünüm).
+Filtreleme çubuğundan "≥ 5 Puan", "≥ 7 Puan" veya "≥ 9 Puan" seçebilir, "Sırala" menüsüyle günlük/haftalık/aylık değişime göre dizebilirsiniz.
+Hisse sembolüne göre arama yapmak için arama kutusunu kullanın. Puanın nasıl hesaplandığı "Rehber" sayfasında anlatılır.
 
 **Hisse detayı**
 Herhangi bir hisse kartına tıklayınca detay modalı açılır:
-- Fiyat grafiği (günlük/haftalık/aylık)
-- Teknik göstergeler (RSI, MACD, Bollinger, hacim)
-- Haber akışı
-- Teknik formasyonlar (baş-omuz, çift dip, vb.)
+- Mum grafiği, destek/direnç seviyeleri ve otomatik trend çizgileri
+- Teknik göstergeler (EMA, RSI, MACD, Bollinger, ADX, hacim)
+- Haber akışı ve yapay zekâ destekli bilanço özeti
+- Teknik formasyonlar (omuz-baş-omuz, ikili dip/tepe, üçgen, bayrak vb.)
+Hisse detayı yalnızca üyelere açıktır (üyelik ücretsiz).
 
 **Alarm kurma**
 "Alarmlar" sekmesine gidin → "+ Yeni Alarm" düğmesine tıklayın.
-Hisse sembolü, kriter (örn. RSI 30'un altı, fiyat belirli seviyenin üstü) seçin → "Alarm Kur".
-Alarm tetiklendiğinde e-posta ile bildirim alırsınız.
+Hisse sembolünü girin, "fiyat şu değerin üstüne çıkınca" ya da "altına düşünce" seçip hedef fiyatı yazın → "Alarm Kur".
+Yalnızca fiyat alarmı vardır (RSI/MACD gibi gösterge alarmı yoktur). Alarm kurmak için e-posta adresinizin doğrulanmış olması gerekir.
+Alarmlar borsa açıkken yaklaşık 5 dakikada bir kontrol edilir; tetiklenince e-posta gelir ve sitede bildirim görünür.
 
 **Portföy takibi**
 "Portföy" sekmesinden hisse ekleyebilir, alış fiyatı ve miktarı girebilirsiniz.
@@ -92,13 +96,16 @@ Eğer soruyu yanıtlayamıyorsan veya teknik bir sorunla karşılaştıysa, şun
 
 
 @support_bp.route("/api/support/chat", methods=["POST"])
+@limiter.limit("8 per minute; 60 per day")
 def chat():
     if not GROQ_API_KEY:
         return jsonify({"error": "config_error", "message": "Destek servisi şu an kullanılamıyor."}), 503
 
     data = request.get_json(silent=True) or {}
-    user_message = (data.get("message") or "").strip()
-    history = data.get("history") or []
+    user_message = str(data.get("message") or "").strip()
+    history = data.get("history")
+    if not isinstance(history, list):
+        history = []
 
     if not user_message:
         return jsonify({"error": "bad_request", "message": "Mesaj boş olamaz."}), 400
@@ -107,6 +114,8 @@ def chat():
 
     safe_history = []
     for turn in history[-10:]:
+        if not isinstance(turn, dict):
+            continue
         role = turn.get("role")
         content = str(turn.get("content") or "")[:500]
         if role in ("user", "assistant") and content:
@@ -139,11 +148,12 @@ _VALID_CATEGORIES = {"genel", "hata", "oneri", "diger"}
 
 
 @support_bp.route("/api/feedback", methods=["POST"])
+@limiter.limit("5 per hour")
 def submit_feedback():
     data = request.get_json(silent=True) or {}
-    category = (data.get("category") or "genel").strip().lower()
-    message = (data.get("message") or "").strip()
-    user_email = (data.get("email") or "").strip()[:200]
+    category = str(data.get("category") or "genel").strip().lower()
+    message = str(data.get("message") or "").strip()
+    user_email = str(data.get("email") or "").strip()[:200]
 
     if not message:
         return jsonify({"error": "bad_request", "message": "Mesaj boş olamaz."}), 400

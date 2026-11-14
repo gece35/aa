@@ -682,16 +682,27 @@
         return card;
     }
 
-    function escapeAttr(s) {
-        return String(s).replace(/"/g, '&quot;').replace(/</g, '&lt;');
-    }
-
     function escapeHtml(s) {
         return String(s || '')
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;');
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     }
+
+    // Attribute değerleri için de aynı tam kaçış kullanılır.
+    function escapeAttr(s) { return escapeHtml(s); }
+
+    // Dış kaynaktan gelen bağlantılar: yalnızca http(s). Aksi halde
+    // (javascript:, data: vb.) zararsız bir '#' döner.
+    function safeUrl(u) {
+        const v = String(u == null ? '' : u).trim();
+        return /^https?:\/\//i.test(v) ? v : '#';
+    }
+
+    // Hisse sembolü biçimi (sunucudaki _SYMBOL_RE ile aynı).
+    const SYMBOL_RE = /^[A-Z0-9.\-]{1,32}$/;
 
     // Normalize oran ≥ 0.5 ise aktif sayılır.
     const REASON_PHRASE = {
@@ -830,7 +841,7 @@
                 openAuthModal('signup');
                 return;
             }
-            if (data.error) throw new Error(data.error);
+            if (data.error) throw new Error(data.message || data.error);
             els.modalContent.innerHTML = renderStockDetail(data, newsData);
             wireDetailTabs(data);
             wireFundamentalsTab(data.symbol);
@@ -839,7 +850,7 @@
             wireModalPortfolioForm(data);
             loadAndWireComments(data.symbol);
         } catch (err) {
-            els.modalContent.innerHTML = `<div class="empty">Detay yuklenemedi: ${err.message}</div>`;
+            els.modalContent.innerHTML = `<div class="empty">Detay yüklenemedi: ${escapeHtml(err.message)}</div>`;
         }
     }
 
@@ -955,7 +966,7 @@
                 const dateStr = n.published
                     ? new Date(n.published * 1000).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' })
                     : '';
-                return `<a class="stock-news-item ${sentCls}" href="${escapeAttr(n.link)}" target="_blank" rel="noopener noreferrer">
+                return `<a class="stock-news-item ${sentCls}" href="${escapeAttr(safeUrl(n.link))}" target="_blank" rel="noopener noreferrer">
                     <span class="sn-source">${escapeHtml(n.publisher || 'Kaynak')}</span>
                     <span class="sn-title">${escapeHtml(n.title)}</span>
                     <span class="sn-meta">${dateStr}</span>
@@ -1988,7 +1999,7 @@
             }
             listEl.innerHTML = comments.map((c) => {
                 const date = c.created_at ? new Date(c.created_at * 1000).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
-                const isOwn = _currentUser && c.user_id === _currentUser.id;
+                const isOwn = Boolean(c.is_own) || Boolean(_currentUser && _currentUser.is_admin);
                 return `<div class="comment-item" data-id="${c.id}">
                     <div class="comment-meta">
                         <span class="comment-author">${escapeHtml(c.user_email)}</span>
@@ -2627,7 +2638,7 @@
         }
         if (isTyping) return;
         if (e.key === '/') { e.preventDefault(); els.searchInput.focus(); return; }
-        if (e.key === '?') { window.location.href = '/rehber.html'; return; }
+        if (e.key === '?') { window.location.href = '/rehber'; return; }
         if (e.key.toLowerCase() === 'r') loadScan(true);
     });
 
@@ -2993,8 +3004,9 @@
         loadIndices();
         pollTriggeredAlerts();
         // ?s=SYMBOL deeplink — paylaş butonu linklerini destekler
-        const deepSym = new URLSearchParams(location.search).get('s');
-        if (deepSym) openStockModal(deepSym.toUpperCase());
+        const deepParams = new URLSearchParams(location.search);
+        const deepSym = (deepParams.get('s') || deepParams.get('focus') || '').toUpperCase().trim();
+        if (deepSym && SYMBOL_RE.test(deepSym)) openStockModal(deepSym);
     });
 
     // Auth modal

@@ -9,7 +9,7 @@ from functools import wraps
 from email_validator import EmailNotValidError, validate_email
 from flask import Blueprint, jsonify, redirect, request, send_from_directory, url_for
 from flask_login import current_user, login_required, login_user, logout_user
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from .config import ADMIN_EMAILS, APP_BASE_URL
 from .db import db
@@ -209,7 +209,15 @@ def reset():
     if not user:
         return jsonify({"error": "invalid_token"}), 400
     user.password_hash = hash_password(new_password)
-    et.used_at = now_utc()
+    # Bu ve kullanıcının bekleyen diğer tüm sıfırlama bağlantıları tek kullanımlık:
+    # parola değişince hiçbiri bir daha çalışmaz. (Parola parmak izi değiştiği
+    # için açık oturumlar da düşer — bkz. User.get_id.)
+    db.session.execute(
+        update(EmailToken)
+        .where(EmailToken.user_id == user.id, EmailToken.kind == "reset",
+               EmailToken.used_at.is_(None))
+        .values(used_at=now_utc())
+    )
     db.session.commit()
     return jsonify({"ok": True})
 
@@ -372,6 +380,9 @@ def change_password():
 
     user.password_hash = hash_password(new_password)
     db.session.commit()
+    # Parola parmak izi değişti: diğer cihazlardaki oturumlar artık geçersiz.
+    # Bu cihazdaki oturumu yeni kimlikle yenile ki kullanıcı atılmasın.
+    login_user(user, remember=True)
     return jsonify({"ok": True})
 
 

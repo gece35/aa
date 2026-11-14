@@ -143,6 +143,30 @@ def get_index_symbol(market: str) -> str | None:
     return MARKETS.get(market, {}).get("index")
 
 
+_KNOWN_SYMBOLS = frozenset(
+    sym.upper() for cfg in MARKETS.values() for sym in cfg["tickers"]
+)
+
+
+def is_known_symbol(symbol: str) -> bool:
+    return str(symbol or "").strip().upper() in _KNOWN_SYMBOLS
+
+
+def resolve_symbol(raw: str) -> str | None:
+    """Kullanıcı girdisini taranan evrendeki resmi sembole çevirir; yoksa None.
+
+    BIST hisseleri kısa yazımla da kabul edilir: "thyao" → "THYAO.IS".
+    """
+    sym = str(raw or "").strip().upper()
+    if not sym or len(sym) > 32:
+        return None
+    if sym in _KNOWN_SYMBOLS:
+        return sym
+    if f"{sym}.IS" in _KNOWN_SYMBOLS:
+        return f"{sym}.IS"
+    return None
+
+
 def market_of_symbol(symbol: str) -> str:
     """Sembolden marketi cikarir (.IS -> bist, aksi -> us)."""
     return "bist" if str(symbol).upper().endswith(".IS") else "us"
