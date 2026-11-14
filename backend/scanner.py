@@ -3,18 +3,33 @@
 from __future__ import annotations
 
 import logging
+import os
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List
 
 from .cache import scan_cache, symbol_cache
 from .data_fetcher import download_ohlcv
+from .market_hours import cache_ttl
 from .scoring import compute_regime_ok, score_symbol
 from .tickers import MARKETS, get_index_symbol, get_tickers
 
 logger = logging.getLogger(__name__)
 
-SCAN_CACHE_TTL = 600  # 10 dakika (cache icinde zaten tanimli)
+SCAN_CACHE_TTL = 600  # seans acikken 10 dk; kapaliyken bir sonraki acilisa kadar (bkz. cache_ttl)
+
+# Puanlama saf pandas/numpy (GIL altinda): 4'ten fazla thread hiz kazandirmaz,
+# yalnizca ayni surecteki diger isteklerle CPU icin yarisir.
+SCORE_WORKERS = max(1, int(os.environ.get("SCORE_WORKERS", "4")))
+
+# Pazar basina tek "soguk" tarama: ayni anda gelen istekler ayni veriyi
+# tekrar tekrar indirmesin (tek surec, cok thread).
+_scan_locks: Dict[str, threading.Lock] = {m: threading.Lock() for m in MARKETS}
+
+
+def _ttl(market: str) -> int:
+    return cache_ttl(market, SCAN_CACHE_TTL)
 
 
 def _fetch_index_df(market: str):
@@ -37,7 +52,7 @@ def get_index_df(market: str):
         return cached
     idx = _fetch_index_df(market)
     if idx is not None:
-        symbol_cache.set(f"index:{market}", idx)
+        symbol_cache.set(f"index:{market}", idx, ttl=_ttl(market))
     return idx
 
 
@@ -90,7 +105,7 @@ def _compute_scores(data: Dict, index_df=None, market: str = "bist", regime_ok: 
     if not data:
         return results
 
-    with ThreadPoolExecutor(max_workers=16) as pool:
+    with ThreadPoolExecutor(max_workers=min(SCORE_WORKERS, len(data))) as pool:
         futures = {
             pool.submit(score_symbol, symbol, df, index_df, market, regime_ok): symbol
             for symbol, df in data.items()
@@ -109,6 +124,19 @@ def _compute_scores(data: Dict, index_df=None, market: str = "bist", regime_ok: 
     return results
 
 
+def _cached_scan(cache_key: str, max_tickers: int = None):
+    cached = scan_cache.get(cache_key)
+    if cached is None:
+        return None
+    cached = dict(cached)
+    cached["cached"] = True
+    cached["cache_age_remaining"] = scan_cache.age(cache_key)
+    if max_tickers is not None:
+        cached["results"] = cached.get("results", [])[:max_tickers]
+        cached["total"] = min(cached.get("total", 0), max_tickers)
+    return cached
+
+
 def scan_market(market: str, force: bool = False, max_tickers: int = None) -> dict:
     market = (market or "").lower()
     if market not in MARKETS:
@@ -116,54 +144,87 @@ def scan_market(market: str, force: bool = False, max_tickers: int = None) -> di
 
     cache_key = f"scan:{market}"
     if not force:
-        cached = scan_cache.get(cache_key)
+        cached = _cached_scan(cache_key, max_tickers)
         if cached is not None:
-            cached = dict(cached)
-            cached["cached"] = True
-            cached["cache_age_remaining"] = scan_cache.age(cache_key)
-            if max_tickers is not None:
-                cached["results"] = cached.get("results", [])[:max_tickers]
-                cached["total"] = min(cached.get("total", 0), max_tickers)
             return cached
 
-    info = MARKETS[market]
-    tickers = get_tickers(market)
     if max_tickers is not None:
-        tickers = tickers[:max_tickers]
+        # Plan limitiyle kirpilmis tarama: tum pazar cache'ini kirletmemek icin
+        # sembol bazli cache'i kullanan chunk yolundan gecer (her cagrida
+        # yeniden indirme yapmaz).
+        return _limited_scan(market, max_tickers, force)
 
-    started = time.time()
-    data = download_ohlcv(tickers, period="300d", interval="1d")
-    index_df = get_index_df(market)
-    regime_ok = compute_regime_ok(index_df)
-    download_secs = time.time() - started
+    with _scan_locks[market]:
+        # Kilidi beklerken baska bir istek taramayi bitirmis olabilir.
+        if not force:
+            cached = _cached_scan(cache_key, max_tickers)
+            if cached is not None:
+                return cached
 
-    compute_started = time.time()
-    results = _compute_scores(data, index_df, market, regime_ok)
-    compute_secs = time.time() - compute_started
+        info = MARKETS[market]
+        tickers = get_tickers(market)
 
-    payload = {
+        started = time.time()
+        data = download_ohlcv(tickers, period="300d", interval="1d")
+        index_df = get_index_df(market)
+        regime_ok = compute_regime_ok(index_df)
+        download_secs = time.time() - started
+
+        compute_started = time.time()
+        results = _compute_scores(data, index_df, market, regime_ok)
+        compute_secs = time.time() - compute_started
+
+        payload = {
+            "market": market,
+            "label": info["label"],
+            "currency": info["currency"],
+            "total": len(tickers),
+            "scored": len(results),
+            "results": results,
+            "regime_ok": regime_ok,
+            "generated_at": int(time.time()),
+            "timings": {
+                "download_secs": round(download_secs, 2),
+                "compute_secs": round(compute_secs, 2),
+            },
+            "cached": False,
+        }
+
+        ttl = _ttl(market)
+        scan_cache.set(cache_key, payload, ttl=ttl)
+        # full scan yapildi, tum sonuclari symbol_cache'e de yaz
+        for item in results:
+            symbol_cache.set(f"sym:{item['symbol']}", item, ttl=ttl)
+        out = dict(payload)
+        out["cache_age_remaining"] = scan_cache.age(cache_key)
+        return out
+
+
+def _limited_scan(market: str, max_tickers: int, force: bool) -> dict:
+    """Ilk `max_tickers` hisseyi tarar (misafir plani). Sonuc `scan:{market}`
+    anahtarina YAZILMAZ: aksi halde sonraki uye ayni anahtardan eksik liste alirdi."""
+    chunk = scan_market_chunk(
+        market=market, offset=0, limit=max_tickers, force=force, max_tickers=max_tickers,
+    )
+    results = sorted(
+        chunk["results"], key=lambda r: (r["score"], r["change_pct"]), reverse=True,
+    )
+    regime_ok = chunk.get("regime_ok")
+    if regime_ok is None:
+        regime_ok = compute_regime_ok(get_index_df(market))
+    return {
         "market": market,
-        "label": info["label"],
-        "currency": info["currency"],
-        "total": len(tickers),
+        "label": chunk["label"],
+        "currency": chunk["currency"],
+        "total": chunk["total"],
         "scored": len(results),
         "results": results,
         "regime_ok": regime_ok,
-        "generated_at": int(time.time()),
-        "timings": {
-            "download_secs": round(download_secs, 2),
-            "compute_secs": round(compute_secs, 2),
-        },
-        "cached": False,
+        "generated_at": chunk["generated_at"],
+        "timings": chunk["timings"],
+        "cached": chunk["cached"],
+        "cache_age_remaining": chunk["cache_ttl"],
     }
-
-    scan_cache.set(cache_key, payload)
-    # full scan yapildi, tum sonuclari symbol_cache'e de yaz
-    for item in results:
-        symbol_cache.set(f"sym:{item['symbol']}", item)
-    out = dict(payload)
-    out["cache_age_remaining"] = scan_cache.age(cache_key)
-    return out
 
 
 def _sort_tickers(tickers: List[str], sort: str) -> List[str]:
@@ -223,49 +284,60 @@ def scan_market_chunk(market: str, offset: int, limit: int, force: bool = False,
     chunk_symbols = tickers[offset : offset + limit]
 
     cached_map: Dict[str, dict] = {}
-    missing: List[str] = []
-    if not force:
-        for sym in chunk_symbols:
+
+    def _split_cached(symbols: List[str]) -> List[str]:
+        """Cache'te olanlari cached_map'e yazar, eksik kalanlari doner."""
+        absent: List[str] = []
+        for sym in symbols:
             c = symbol_cache.get(f"sym:{sym}")
             if c is not None:
                 cached_map[sym] = c
             else:
-                missing.append(sym)
-    else:
-        missing = list(chunk_symbols)
+                absent.append(sym)
+        return absent
+
+    missing: List[str] = list(chunk_symbols) if force else _split_cached(chunk_symbols)
+    fetched = len(missing)
 
     download_secs = 0.0
     compute_secs = 0.0
     regime_ok = None
 
     if missing:
-        started = time.time()
-        data = download_ohlcv(missing, period="300d", interval="1d")
-        # Endeksi (goreceli guc icin) market basina cache'le, her chunk'ta yeniden indirme
-        index_df = get_index_df(market)
-        regime_ok = compute_regime_ok(index_df)
-        download_secs = time.time() - started
+        with _scan_locks[market]:
+            # Kilidi beklerken baska bir istek ayni sembolleri doldurmus olabilir.
+            if not force:
+                missing = _split_cached(missing)
+                fetched = len(missing)
+            if missing:
+                started = time.time()
+                data = download_ohlcv(missing, period="300d", interval="1d")
+                # Endeksi (goreceli guc icin) market basina cache'le, her chunk'ta yeniden indirme
+                index_df = get_index_df(market)
+                regime_ok = compute_regime_ok(index_df)
+                download_secs = time.time() - started
 
-        compute_started = time.time()
-        if data:
-            with ThreadPoolExecutor(max_workers=min(16, len(data))) as pool:
-                futures = {
-                    pool.submit(score_symbol, symbol, df, index_df, market, regime_ok): symbol
-                    for symbol, df in data.items()
-                }
-                for fut in as_completed(futures):
-                    symbol = futures[fut]
-                    try:
-                        res = fut.result()
-                    except Exception:
-                        logger.exception("%s puanlama hatasi", symbol)
-                        continue
-                    if res is None:
-                        continue
-                    d = res.to_dict()
-                    cached_map[symbol] = d
-                    symbol_cache.set(f"sym:{symbol}", d)
-        compute_secs = time.time() - compute_started
+                compute_started = time.time()
+                if data:
+                    ttl = _ttl(market)
+                    with ThreadPoolExecutor(max_workers=min(SCORE_WORKERS, len(data))) as pool:
+                        futures = {
+                            pool.submit(score_symbol, symbol, df, index_df, market, regime_ok): symbol
+                            for symbol, df in data.items()
+                        }
+                        for fut in as_completed(futures):
+                            symbol = futures[fut]
+                            try:
+                                res = fut.result()
+                            except Exception:
+                                logger.exception("%s puanlama hatasi", symbol)
+                                continue
+                            if res is None:
+                                continue
+                            d = res.to_dict()
+                            cached_map[symbol] = d
+                            symbol_cache.set(f"sym:{symbol}", d, ttl=ttl)
+                compute_secs = time.time() - compute_started
 
     # input sirasina gore sirala
     results = [cached_map[s] for s in chunk_symbols if s in cached_map]
@@ -284,11 +356,12 @@ def scan_market_chunk(market: str, offset: int, limit: int, force: bool = False,
         "next_offset": offset + len(chunk_symbols),
         "regime_ok": regime_ok,
         "generated_at": int(time.time()),
+        "cache_ttl": _ttl(market),
         "timings": {
             "download_secs": round(download_secs, 2),
             "compute_secs": round(compute_secs, 2),
-            "cached_hits": len(chunk_symbols) - len(missing),
-            "fetched": len(missing),
+            "cached_hits": len(chunk_symbols) - fetched,
+            "fetched": fetched,
         },
-        "cached": len(missing) == 0,
+        "cached": fetched == 0,
     }

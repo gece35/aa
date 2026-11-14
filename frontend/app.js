@@ -397,7 +397,8 @@
             m.offset = data.next_offset != null ? data.next_offset : (m.offset + (data.limit || BATCH_SIZE));
             m.hasMore = Boolean(data.has_more);
             m.generatedAt = data.generated_at || m.generatedAt || Math.floor(Date.now() / 1000);
-            m.cacheRemaining = 600;
+            // Sunucu, pazar kapalıyken önbelleği bir sonraki açılışa kadar tutar.
+            m.cacheRemaining = data.cache_ttl || 600;
             m.loadedOnce = true;
             return true;
         } finally {
@@ -447,7 +448,11 @@
         }
         const remaining = Math.max(0, m.cacheRemaining);
         const loadedInfo = m.total ? ` &middot; ${m.results.length}/${m.total} yuklendi` : '';
-        if (remaining > 0) {
+        if (remaining > 3600) {
+            // Seans kapalı: veri bir sonraki açılışa kadar değişmez.
+            els.cacheState.innerHTML = `pazar kapalı &middot; son kapanış verisi${loadedInfo}`;
+            els.cacheState.style.color = '#22d3ee';
+        } else if (remaining > 0) {
             const mins = Math.floor(remaining / 60);
             const secs = remaining % 60;
             els.cacheState.innerHTML = `canli &middot; ${mins}:${String(secs).padStart(2, '0')} sonra yenile${loadedInfo}`;
@@ -2820,19 +2825,52 @@
         }
     });
 
-    // Tetiklenen alarmları periyodik kontrol (30 saniyede bir)
+    // Tetiklenen alarmlar: yalnızca oturum açıkken ve sekme görünürken, 2 dakikada
+    // bir sorulur. Sunucu ucu yalnızca veritabanını okur; alarm kontrolünü ve
+    // e-postayı sunucudaki zamanlayıcı yapar. Aynı alarm için yalnızca bir kez
+    // bildirim gösterilir (son görülen tetiklenme zamanı tarayıcıda saklanır).
+    const ALERT_POLL_MS = 120000;
+    let _lastAlertPoll = 0;
+    let _alertPollBusy = false;
+
+    function _alertSeenKey() {
+        return `nebula.alerts.lastSeen.v1:${_currentUser ? _currentUser.id : ''}`;
+    }
+
     async function pollTriggeredAlerts() {
+        if (!_currentUser || document.hidden || _alertPollBusy) return;
+        _alertPollBusy = true;
+        _lastAlertPoll = Date.now();
         try {
             const data = await API.alertsTriggered();
             const list = data.triggered || [];
+            const key = _alertSeenKey();
+            let lastSeen = 0;
+            try { lastSeen = parseInt(localStorage.getItem(key) || '0', 10) || 0; } catch (_) {}
+            let newest = lastSeen;
             list.forEach(a => {
-                showToast(`🔔 ${a.symbol} – ${a.label}`, 'warning', 8000);
+                const t = a.triggered_at || 0;
+                if (t > lastSeen) showToast(`${a.symbol} – ${a.label}`, 'warning', 8000);
+                if (t > newest) newest = t;
             });
+            if (newest > lastSeen) {
+                try { localStorage.setItem(key, String(newest)); } catch (_) {}
+            }
             const badge = document.getElementById('alertBadge');
-            if (badge && list.length > 0) { badge.textContent = list.length; badge.classList.remove('hidden'); }
-        } catch (_) {}
+            if (badge) {
+                if (list.length > 0) { badge.textContent = list.length; badge.classList.remove('hidden'); }
+                else badge.classList.add('hidden');
+            }
+        } catch (_) {
+            /* ağ hatası: bir sonraki turda tekrar denenir */
+        } finally {
+            _alertPollBusy = false;
+        }
     }
-    setInterval(pollTriggeredAlerts, 30000);
+    setInterval(pollTriggeredAlerts, ALERT_POLL_MS);
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && Date.now() - _lastAlertPoll > ALERT_POLL_MS) pollTriggeredAlerts();
+    });
 
     // ── Auth module ──────────────────────────────────────────────────────
     const Auth = {
@@ -2953,6 +2991,7 @@
         fetchExchangeRate();
         loadScan();
         loadIndices();
+        pollTriggeredAlerts();
         // ?s=SYMBOL deeplink — paylaş butonu linklerini destekler
         const deepSym = new URLSearchParams(location.search).get('s');
         if (deepSym) openStockModal(deepSym.toUpperCase());

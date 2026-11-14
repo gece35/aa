@@ -18,9 +18,11 @@ import time
 from flask import Flask, Response, jsonify, request, send_from_directory
 from flask_cors import CORS
 from flask_login import LoginManager, current_user, login_required
+from sqlalchemy import text
 
+from backend import migrate_boot, scheduler
 from backend.alerts import (
-    CONDITION_LABELS, check_alerts_for_user, count_active_alerts, create_alert,
+    CONDITION_LABELS, count_active_alerts, create_alert,
     delete_alert, dismiss_alert, get_triggered, list_alerts,
 )
 from backend.auth import admin_required, auth_bp, email_verified_required
@@ -28,16 +30,17 @@ from backend.billing import billing_bp
 from backend.newsletter import newsletter_bp
 from backend.support import support_bp
 from backend.cache import (
-    exchange_cache, fundamentals_cache, scan_cache, stock_cache, stock_news_cache,
-    symbol_cache,
+    analysis_cache, exchange_cache, fundamentals_cache, scan_cache, stock_cache,
+    stock_news_cache, symbol_cache,
 )
 from backend.config import (
     APP_BASE_URL, DATABASE_URL, DEBUG, GA_MEASUREMENT_ID, LEGAL_ENTITY_ADDRESS,
-    LEGAL_ENTITY_NAME, LOG_LEVEL, REDIS_URL, SECRET_KEY, SENTRY_DSN, SUPPORT_EMAIL,
+    LEGAL_ENTITY_NAME, LOG_LEVEL, SECRET_KEY, SENTRY_DSN, SUPPORT_EMAIL,
 )
 from backend.data_fetcher import download_ohlcv, fetch_exchange_rate
 from backend.db import db, migrate
 from backend.limits import PLANS, enforce_collection_limit, get_plan, quota, requires_plan
+from backend.market_hours import cache_ttl
 from backend.models import Portfolio, StockComment, TweetLog, User, Watchlist
 from backend.news import fetch_news, fetch_stock_news
 from backend.fundamentals import GROQ_API_KEY, analyze_fundamentals
@@ -58,7 +61,22 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "frontend")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
+MIGRATIONS_DIR = os.path.join(BASE_DIR, "migrations")
+
+# gunicorn, arbiter açılırken SERVER_SOFTWARE ortam değişkenini ayarlar; flask
+# CLI, pytest ve `python app.py` altında bu değer yoktur. Zamanlayıcının yalnızca
+# gerçek web sürecinde başlaması için kullanılır (RUN_SCHEDULER=1 lokal deneme).
+_SCHEDULER_HOST = (
+    os.environ.get("SERVER_SOFTWARE", "").lower().startswith("gunicorn")
+    or os.environ.get("RUN_SCHEDULER", "0").lower() in ("1", "true", "yes", "on")
+)
+
+# /api/health şema kontrolü: True iken DB revizyonu koddaki head'den farklıysa
+# 503 döner (Railway healthcheck bozuk şemalı sürümü yayına almaz). İlk
+# bootstrap canlıda doğrulanana kadar yalnızca raporlar.
+STRICT_SCHEMA_HEALTH = False
 
 # Hisse sembolü formatı — alerts/watchlist/portfolio uçlarının hepsinde aynı
 # doğrulama: rastgele/aşırı uzun string'lerin DB'ye yazılmasını (ve Postgres'te
@@ -123,7 +141,7 @@ def create_app() -> Flask:
                         event_level=logging.ERROR,
                     ),
                 ],
-                traces_sample_rate=0.1,
+                traces_sample_rate=0.0,  # yalnızca hata raporu; performans izleme kapalı
                 send_default_pii=False,
             )
         except Exception:
@@ -142,15 +160,21 @@ def create_app() -> Flask:
         REMEMBER_COOKIE_SECURE=not DEBUG and APP_BASE_URL.startswith("https"),
         PERMANENT_SESSION_LIFETIME=60 * 60 * 24 * 30,
     )
+    if DATABASE_URL.startswith("postgresql"):
+        # Tek süreç uzun yaşar: boşta kalan bağlantılar bayatlamasın (pre_ping),
+        # 8 istek thread'i + zamanlayıcı + kilit bağlantısı havuza sığsın.
+        flask_app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+            "pool_pre_ping": True,
+            "pool_recycle": 1800,
+            "pool_size": 10,
+            "max_overflow": 5,
+        }
 
     db.init_app(flask_app)
-    migrate.init_app(flask_app, db)
+    migrate.init_app(flask_app, db, directory=MIGRATIONS_DIR)
 
-    with flask_app.app_context():
-        try:
-            db.create_all()
-        except Exception:
-            logger.exception("db.create_all basarisiz — migration bekleniyor")
+    # Şema: db.create_all() yerine migration bootstrap'ı (bkz. backend/migrate_boot.py).
+    migrate_boot.ensure_schema(flask_app)
 
     CORS(
         flask_app,
@@ -163,10 +187,21 @@ def create_app() -> Flask:
     # sınırlanır). Buradaki varsayılan, tek bir IP'den gelen anormal trafiğe
     # karşı genel bir güvenlik ağıdır — normal kullanım (tarama, alarm polling
     # vb.) bu limitin çok altında kalır.
-    flask_app.config.setdefault("RATELIMIT_STORAGE_URI", REDIS_URL or "memory://")
+    # Depo süreç belleği: uygulama tek süreç çalıştığı için sayaçlar tutarlıdır,
+    # Redis'e gerek yoktur (REDIS_URL tanımlı olsa da kullanılmaz).
+    flask_app.config.setdefault("RATELIMIT_STORAGE_URI", "memory://")
     flask_app.config.setdefault("RATELIMIT_DEFAULT", "2000 per hour")
     flask_app.config.setdefault("RATELIMIT_HEADERS_ENABLED", True)
     limiter.init_app(flask_app)
+
+    if _SCHEDULER_HOST:
+        # Yedek başlatma: gunicorn.conf.py kancası çalışmadıysa (özel -c ayarı,
+        # --preload vb.) zamanlayıcı ilk istekte bu süreçte başlar. Çalışıyorsa
+        # yalnızca bir bayrak kontrolüdür.
+        @flask_app.before_request
+        def _ensure_scheduler():
+            if not scheduler.is_running():
+                scheduler.start(flask_app)
 
     # ── Güvenlik başlıkları ─────────────────────────────────────────────────
     # CSP şimdilik Report-Only: siteyi kırmadan tarayıcı konsolunda ihlalleri
@@ -447,7 +482,7 @@ def create_app() -> Flask:
 
         detail["generated_at"] = int(time.time())
         detail["cached"] = False
-        stock_cache.set(cache_key, detail)
+        stock_cache.set(cache_key, detail, ttl=cache_ttl(symbol_market, stock_cache.ttl))
         if not _is_admin_user():
             detail = _mask_entry_signal_one(detail)
         return jsonify(detail)
@@ -495,8 +530,33 @@ def create_app() -> Flask:
         return jsonify(payload)
 
     @flask_app.route("/api/health")
+    @limiter.exempt
     def health():
-        return jsonify({"ok": True, "ts": int(time.time())})
+        payload = {
+            "ok": True,
+            "ts": int(time.time()),
+            "db": False,
+            "schema": None,
+            "schema_head": None,
+            "schema_ok": None,
+            "migration": migrate_boot.state(),
+            "scheduler": scheduler.status(),
+        }
+        try:
+            db.session.execute(text("SELECT 1"))
+            payload["db"] = True
+        except Exception:
+            logger.exception("health: DB erişilemiyor")
+        if payload["db"]:
+            try:
+                payload["schema"] = migrate_boot.current_revision()
+                payload["schema_head"] = migrate_boot.expected_head(flask_app)
+                payload["schema_ok"] = payload["schema"] == payload["schema_head"]
+            except Exception:
+                logger.exception("health: şema revizyonu okunamadı")
+        healthy = payload["db"] and not (STRICT_SCHEMA_HEALTH and payload["schema_ok"] is False)
+        payload["ok"] = bool(healthy)
+        return jsonify(payload), (200 if healthy else 503)
 
     # Bu route yalnızca yerel geliştirmede (DEBUG=1) kaydedilir — prod'da
     # (Railway'de DEBUG hep 0) endpoint hiç var olmaz, DEV_SECRET yanlışlıkla
@@ -606,27 +666,18 @@ def create_app() -> Flask:
     @flask_app.route("/api/alerts/triggered", methods=["GET"])
     @login_required
     def api_alerts_triggered():
-        def _fetcher(symbol: str) -> dict:
-            cache_key = f"stock:{symbol}"
-            cached = stock_cache.get(cache_key)
-            if cached:
-                return cached
-            data = download_ohlcv([symbol], period="2y", interval="1d")
-            df = data.get(symbol)
-            if df is None or df.empty:
-                return {}
-            symbol_market = market_of_symbol(symbol)
-            index_df = get_index_df(symbol_market)
-            return score_symbol_detailed(
-                symbol, df, index_df=index_df,
-                market=symbol_market, regime_ok=compute_regime_ok(index_df),
-            ) or {}
+        """Tetiklenmiş (kapatılmamış) alarmlar — yalnızca DB okur.
 
-        try:
-            check_alerts_for_user(current_user.id, _fetcher)
-        except Exception:
-            logger.exception("Alarm kontrol hatası user=%s", current_user.id)
-        return jsonify({"triggered": get_triggered(current_user.id)})
+        Alarm kontrolünü ve e-postayı zamanlayıcı yapar (backend/scheduler.py).
+        Bu uç eskiden her çağrıda yfinance indirip alarmı kendisi tetikliyordu;
+        o yolla tetiklenen alarmın e-postası hiç gitmiyordu.
+        `?since=<unix ts>` verilirse yalnızca o andan sonra tetiklenenler döner.
+        """
+        triggered = get_triggered(current_user.id)
+        since = request.args.get("since", type=int)
+        if since:
+            triggered = [a for a in triggered if (a.get("triggered_at") or 0) > since]
+        return jsonify({"triggered": triggered, "ts": int(time.time())})
 
     @flask_app.route("/api/alerts/conditions", methods=["GET"])
     def api_alerts_conditions():
@@ -757,7 +808,8 @@ def create_app() -> Flask:
         return jsonify({"ok": True})
 
     # ── API: Backtest ──────────────────────────────────────────────────────────
-    _backtest_cache: dict = {}
+    # Sonuçlar analysis_cache'te (6 saat) tutulur: süreç ömrü boyunca
+    # sınırsız kalan sözlükler yerine.
 
     @flask_app.route("/api/backtest")
     @admin_required
@@ -767,8 +819,11 @@ def create_app() -> Flask:
         if market not in MARKETS:
             return jsonify({"hata": f"Bilinmeyen market: {market}"}), 400
 
-        if not force and market in _backtest_cache:
-            return jsonify(_backtest_cache[market])
+        cache_key = f"backtest:{market}"
+        if not force:
+            cached = analysis_cache.get(cache_key)
+            if cached is not None:
+                return jsonify(cached)
 
         try:
             result = run_backtest(market)
@@ -776,11 +831,10 @@ def create_app() -> Flask:
             logger.exception("Backtest hatası market=%s", market)
             return jsonify({"hata": "Backtest sırasında hata oluştu"}), 500
 
-        _backtest_cache[market] = result
+        analysis_cache.set(cache_key, result)
         return jsonify(result)
 
     # ── API: Sinyal İsabet Etüdü ────────────────────────────────────────────────
-    _signal_study_cache: dict = {}
 
     @flask_app.route("/api/signal-study")
     @admin_required
@@ -790,8 +844,11 @@ def create_app() -> Flask:
         if market not in MARKETS:
             return jsonify({"hata": f"Bilinmeyen market: {market}"}), 400
 
-        if not force and market in _signal_study_cache:
-            return jsonify(_signal_study_cache[market])
+        cache_key = f"signal-study:{market}"
+        if not force:
+            cached = analysis_cache.get(cache_key)
+            if cached is not None:
+                return jsonify(cached)
 
         try:
             result = run_signal_study(market)
@@ -799,7 +856,7 @@ def create_app() -> Flask:
             logger.exception("Sinyal etüdü hatası market=%s", market)
             return jsonify({"hata": "Sinyal etüdü sırasında hata oluştu"}), 500
 
-        _signal_study_cache[market] = result
+        analysis_cache.set(cache_key, result)
         return jsonify(result)
 
 

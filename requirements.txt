@@ -1,29 +1,35 @@
-Flask>=3.0.3
-flask-cors>=4.0.0
-yfinance>=0.2.50
-pandas>=2.0.0
-numpy>=1.24.0
-feedparser>=6.0.11
-requests>=2.32.0
-beautifulsoup4>=4.12.0
-lxml>=5.0.0
-gunicorn>=21.2.0
-deep-translator>=1.11.4
+# Sürümler sabittir: Railway her deploy'da aynı (lokalde test edilmiş) paketleri
+# kursun. Yükseltirken lokalde `python -m pytest` çalıştırıp birlikte güncelle.
 
-# Production stack
-SQLAlchemy>=2.0
-Flask-SQLAlchemy>=3.1
-Flask-Migrate>=4.0
-Flask-Login>=0.6.3
-Flask-Limiter>=3.5
-Flask-WTF>=1.2
-psycopg[binary]>=3.1
-redis>=5.0
-bcrypt>=4.0
-itsdangerous>=2.2
-python-dotenv>=1.0
-pydantic>=2.5
-email-validator>=2.1
-sentry-sdk[flask]>=2.0
-groq>=0.9
-tweepy>=4.14
+# Web
+Flask==3.1.3
+flask-cors==6.0.5
+Flask-Login==0.6.3
+Flask-Limiter==4.1.1
+gunicorn==26.0.0
+
+# Veri / analiz
+yfinance==1.4.1
+pandas==3.0.3
+numpy==2.5.0
+requests==2.34.2
+beautifulsoup4==4.15.0
+deep-translator==1.11.4
+tzdata==2026.2
+
+# Veritabanı
+SQLAlchemy==2.0.51
+Flask-SQLAlchemy==3.1.1
+Flask-Migrate==4.1.0
+alembic==1.18.5
+psycopg[binary]==3.3.4
+
+# Auth / yardımcılar
+bcrypt==5.0.0
+itsdangerous==2.2.0
+python-dotenv==1.2.2
+email-validator==2.3.0
+
+# İzleme / AI
+sentry-sdk[flask]==2.66.1
+groq==1.5.0

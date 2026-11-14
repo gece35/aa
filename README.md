@@ -50,19 +50,21 @@ Bir çizginin geçerli sayılması için hiçbir mum gövdesini delmemesi, günc
 
 ## Mimari
 
-Railway'de 3 süreç (Procfile): `web` (gunicorn, 2 worker), `worker` (arka plan döngüsü), `release` (`flask db upgrade`).
+Railway'de **tek servis, tek süreç**: `web` (gunicorn, 1 süreç × 8 thread — ayarlar `gunicorn.conf.py`). Ayrı worker servisi ve Redis yoktur; maliyet için bilinçli tercih.
+
+- **Süreç içi zamanlayıcı** (`backend/scheduler.py`) — web sürecindeki tek bir thread; yalnızca seans saatlerinde (`backend/market_hours.py`) 5 dakikada bir tüm aktif alarm sembollerinin fiyatını tek toplu indirmeyle kontrol eder, günde bir doğrulanmamış hesapları temizler. Yalnızca gunicorn altında başlar. `python -m backend.worker --once` aynı işleri bir kez elle çalıştırır.
+- **Açılışta otomatik migration** (`backend/migrate_boot.py`) — Railway `release` adımı çalıştırmadığı için şema açılışta güncellenir; `create_all` ile kurulmuş eski veritabanı doğru revizyona damgalanır. Durum `/api/health` yanıtında (`schema`, `migration`, `scheduler`) görünür.
 
 - **Factory pattern Flask app** — `create_app()` ile oluşturulan tek uygulama
 - **Postgres + SQLAlchemy** — üretimde Postgres (`psycopg`), Flask-Migrate ile şema geçmişi (`migrations/`); lokal geliştirmede SQLite fallback
 - **Auth & abonelik** — Flask-Login ile oturum, e-posta doğrulama/şifre sıfırlama (`auth.py`); LemonSqueezy ile Premium abonelik (`billing.py`). İlk 100 kayıt ömür boyu ücretsiz Premium alır (`auth.py` → `signup`); sonrasında Premium, frontend'deki Ayarlar/Fiyatlandırma modallarından LemonSqueezy checkout ile satın alınır. Şu an Üye (ücretsiz) ve Premium arasında özellik farkı yok — bu ayrım ayrı bir iş olarak planlanıyor.
-- **Rate limiting & günlük kota** — hassas auth uçları (login/signup/forgot/resend-verify/password) `Flask-Limiter` ile IP başına sınırlanır (`security.py`, `Redis` varsa Redis / yoksa in-memory storage); ayrıca özellik başı günlük kullanım kotası (`limits.py`, `quota_store.py`)
+- **Rate limiting & günlük kota** — hassas auth uçları (login/signup/forgot/resend-verify/password) `Flask-Limiter` ile IP başına sınırlanır (`security.py`, süreç belleğinde); ayrıca özellik başı günlük kullanım kotası (`limits.py`, `quota_store.py`)
 - **Güvenlik başlıkları** — `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` her yanıtta; `Content-Security-Policy` şimdilik Report-Only modda (`app.py`)
 - **Toplu veri indirme** — `yfinance.download(..., threads=True)` ile tüm hisseler tek seferde
-- **TTL cache** — `/api/scan`, `/api/stock`, `/api/news`, `/api/index/<market>` yanıtları önbelleklenir; `force=1` bypass eder
+- **TTL + LRU cache** (`backend/cache.py`) — `/api/scan`, `/api/stock`, `/api/news`, `/api/index/<market>` yanıtları süreç belleğinde, kayıt üst sınırıyla önbelleklenir; seans açıkken kısa ömür (10 dk), pazar kapalıyken bir sonraki açılışa kadar; `force=1` bypass eder
 - **Lexicon tabanlı sentiment** — Haber başlıklarını TR+EN kelime listesiyle pozitif/nötr/negatif sınıflandırır
 - **AI destekli bilanço analizi** — Groq (Llama 3.3) ile temel analiz sağlığı sınıflandırması (`fundamentals.py`); ABD hisselerinde güvenilir, BIST'te çoğu zaman veri yok
 - **Backtest motoru (TDOV)** — olay-tabanlı giriş (taze kesişim + trend onayı) + 3 aşamalı ATR trailing çıkış (`backtest.py`); canlı taramadaki "TDOV Eşleşti" rozeti aynı eşikleri kullanır (bkz. yukarı, `/rehber`)
-- **Arka plan worker'ı** (`worker.py`) — 60 saniyede bir fiyat alarmı kontrolü; 2 saatte bir BIST+ABD taraması yapıp Twitter/X'te otomatik sinyal paylaşımı (`twitter_bot.py`); günlük doğrulanmamış hesap temizliği
 - **Destek/Direnç seviyeleri** — Pivot tabanlı kümeleme ile `supports` / `resistances` + otomatik SL/TP hesabı
 - **Monitoring** — Sentry entegrasyonu (opsiyonel, `SENTRY_DSN`)
 

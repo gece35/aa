@@ -10,18 +10,22 @@ from alembic import context
 config = context.config
 
 # Interpret the config file for Python logging.
-# This line sets up loggers basically.
-fileConfig(config.config_file_name)
+# Uygulama zaten logging'i kurduysa (app.py basicConfig) dokunma: fileConfig
+# mevcut tüm logger'ları devre dışı bırakır ve kök seviyeyi WARN yapar; migration
+# uygulama açılışında süreç içinde çalıştığı için bu, tüm uygulama loglarını
+# sustururdu. Yalnızca çıplak `alembic` komutunda (handler yokken) uygulanır.
+if not logging.getLogger().handlers:
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 logger = logging.getLogger('alembic.env')
 
 
 def get_engine():
     try:
-        # this works with Flask-SQLAlchemy<3 and Alchemical
-        return current_app.extensions['migrate'].db.get_engine()
-    except (TypeError, AttributeError):
-        # this works with Flask-SQLAlchemy>=3
+        # Flask-SQLAlchemy>=3
         return current_app.extensions['migrate'].db.engine
+    except (TypeError, AttributeError):
+        # Flask-SQLAlchemy<3 ve Alchemical
+        return current_app.extensions['migrate'].db.get_engine()
 
 
 def get_engine_url():

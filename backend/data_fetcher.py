@@ -9,6 +9,7 @@ ve eksik ticker'lar icin otomatik retry (en fazla 3 deneme) uyguluyor.
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List
@@ -21,6 +22,11 @@ logger = logging.getLogger(__name__)
 CHUNK_SIZE = 25
 MAX_PARALLEL_CHUNKS = 3
 MAX_RETRIES = 3
+
+# Tum surec icin ayni anda en fazla bu kadar yf.download cagrisi. Tek surecte
+# birden cok istek thread'i + zamanlayici ayni anda indirme yapabilir; sinir
+# olmazsa Yahoo 429 doner ve yfinance'in surec-geneli oturum durumu yarisir.
+_DOWNLOAD_SLOTS = threading.BoundedSemaphore(MAX_PARALLEL_CHUNKS)
 
 
 def download_ohlcv(tickers: List[str], period: str = "200d", interval: str = "1d") -> Dict[str, pd.DataFrame]:
@@ -85,7 +91,8 @@ def _download_chunk_with_retry(tickers: List[str], period: str, interval: str) -
 def fetch_exchange_rate(base: str = "TRY=X") -> float | None:
     """USD/TRY kurunu döner (1 USD = X TRY). Hata durumunda None."""
     try:
-        raw = yf.download(base, period="5d", interval="1d", progress=False, auto_adjust=False)
+        with _DOWNLOAD_SLOTS:
+            raw = yf.download(base, period="5d", interval="1d", progress=False, auto_adjust=False)
         if raw is None or raw.empty:
             return None
         close = raw["Close"]
@@ -103,15 +110,16 @@ def _download_chunk(tickers: List[str], period: str, interval: str) -> Dict[str,
         return {}
 
     try:
-        raw = yf.download(
-            tickers=tickers,
-            period=period,
-            interval=interval,
-            group_by="ticker",
-            auto_adjust=False,
-            progress=False,
-            threads=False,
-        )
+        with _DOWNLOAD_SLOTS:
+            raw = yf.download(
+                tickers=tickers,
+                period=period,
+                interval=interval,
+                group_by="ticker",
+                auto_adjust=False,
+                progress=False,
+                threads=False,
+            )
     except Exception as exc:  # pragma: no cover
         logger.exception("Toplu indirme basarisiz: %s", exc)
         return {}
