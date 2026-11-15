@@ -10,13 +10,22 @@
     <meta property="og:title" content="Nebula Scanner | BIST ve ABD Hisse Tarama" />
     <meta property="og:description" content="Teknik analiz göstergeleriyle 0-10 hisse puanlaması. BIST ve ABD hisselerini ücretsiz tara, alarm kur, portföy takip et." />
     <meta property="og:url" content="https://nebulascanner.com/" />
-    <meta name="twitter:card" content="summary" />
+    <meta property="og:image" content="https://nebulascanner.com/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:locale" content="tr_TR" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://nebulascanner.com/og-image.png" />
+    <link rel="canonical" href="https://nebulascanner.com/" />
     <meta name="twitter:title" content="Nebula Scanner | BIST ve ABD Hisse Tarama" />
     <meta name="twitter:description" content="Teknik analiz ile 0-10 puanlama. Ücretsiz kayıt ol, tüm hisselere eriş." />
     <!-- Google Analytics 4: GA_MEASUREMENT_ID'yi kendi ölçüm kimliğinle değiştir -->
     <!-- <script async src="https://www.googletagmanager.com/gtag/js?id=GA_MEASUREMENT_ID"></script>
     <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','GA_MEASUREMENT_ID');</script> -->
     <link rel="icon" href="/logo.svg" type="image/svg+xml">
+    <meta name="theme-color" content="#0f172a" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <!-- Microsoft Clarity: app.js'te çerez rızası kabul edildikten sonra
          yüklenir (bkz. _loadClarity) — GA4 ile aynı rıza kuralına tabi. -->
     <!-- Schema.org Structured Data -->
@@ -74,14 +83,6 @@
     <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-    <div class="galaxy">
-        <div class="orb orb-1"></div>
-        <div class="orb orb-2"></div>
-        <div class="orb orb-3"></div>
-        <div class="orb orb-4"></div>
-        <div class="stars"></div>
-    </div>
-
     <!-- SPK Disclaimer Banner -->
     <div class="disclaimer-bar" id="disclaimerBar">
         <span>⚠ Nebula Scanner yatırım danışmanlığı hizmeti vermez. Tüm içerikler eğitim amaçlıdır. &nbsp;
@@ -223,7 +224,7 @@
             </div>
 
             <div class="filters glass">
-                <input type="search" id="searchInput" placeholder="Hisse ara ( / ile hızlı odakla)" />
+                <input type="search" id="searchInput" placeholder="Hisse ara ( / ile hızlı odakla)" aria-label="Hisse sembolü ara" />
                 <div class="chip-group" id="scoreFilters">
                     <button class="chip active" data-min="0">Tümü</button>
                     <button class="chip" data-min="5">&ge; 5 Puan</button>
@@ -304,22 +305,19 @@
     </main>
 
     <!-- Hisse detay modalı -->
-    <div id="stockModal" class="modal hidden" role="dialog">
+    <div id="stockModal" class="modal hidden" role="dialog" aria-modal="true">
         <div class="modal-backdrop"></div>
         <div class="modal-card glass">
-            <button class="modal-close" id="modalClose">&times;</button>
+            <button class="modal-close" id="modalClose" aria-label="Kapat">&times;</button>
             <div id="modalContent"></div>
         </div>
     </div>
 
-    <!-- TradingView Lightweight Charts -->
-    <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
-
     <!-- Portföy grafik analiz modalı -->
-    <div id="portChartModal" class="modal hidden" role="dialog">
+    <div id="portChartModal" class="modal hidden" role="dialog" aria-modal="true">
         <div class="modal-backdrop"></div>
         <div class="port-chart-card glass">
-            <button class="modal-close" id="portChartClose">&times;</button>
+            <button class="modal-close" id="portChartClose" aria-label="Kapat">&times;</button>
             <div id="portChartHeader"></div>
             <div id="portChartContainer" class="port-chart-wrap"></div>
             <div id="portTrendToolbar" style="display:none;padding:0 4px;"></div>
@@ -328,18 +326,18 @@
     </div>
 
     <!-- Alarm oluşturma modalı -->
-    <div id="alertModal" class="modal hidden" role="dialog">
+    <div id="alertModal" class="modal hidden" role="dialog" aria-modal="true">
         <div class="modal-backdrop" id="alertModalBackdrop"></div>
         <div class="modal-card glass" style="max-width:460px;width:95%;">
-            <button class="modal-close" id="alertModalClose">&times;</button>
+            <button class="modal-close" id="alertModalClose" aria-label="Kapat">&times;</button>
             <h3 style="margin:0 0 6px;font-family:'Inter';font-size:20px;">Yeni Alarm Oluştur</h3>
             <p style="margin:0 0 18px;font-size:13px;color:var(--text-3);">Bir hisse için hedef fiyat belirle, o seviyeye ulaşınca haber verelim.</p>
             <div class="alert-form">
-                <label class="af-label">Hisse Sembolü</label>
+                <label class="af-label" for="af-symbol">Hisse Sembolü</label>
                 <input id="af-symbol" class="af-input" type="text" placeholder="TSLA, MGROS, AAPL..." autocomplete="off" />
                 <label class="af-label">Ne zaman haber vereyim?</label>
                 <div class="af-direction-group" id="af-direction-group"></div>
-                <label class="af-label" id="af-value-label">Hedef Fiyat</label>
+                <label class="af-label" id="af-value-label" for="af-value">Hedef Fiyat</label>
                 <input id="af-value" class="af-input" type="number" step="any" min="0" placeholder="örn. 250" />
                 <div id="af-error" style="color:var(--danger);font-size:12px;margin-top:4px;display:none;"></div>
                 <button id="af-submit" class="btn btn-primary" style="width:100%;margin-top:12px;">Alarm Kur</button>
@@ -348,10 +346,10 @@
     </div>
 
     <!-- Auth modalı (Giriş / Kayıt) -->
-    <div id="authModal" class="modal hidden" role="dialog" aria-label="Giriş / Kayıt">
+    <div id="authModal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Giriş / Kayıt">
         <div class="modal-backdrop" id="authModalBackdrop"></div>
         <div class="modal-card glass auth-modal-card">
-            <button class="modal-close" id="authModalClose">&times;</button>
+            <button class="modal-close" id="authModalClose" aria-label="Kapat">&times;</button>
             <div class="auth-tabs">
                 <button class="auth-tab active" data-auth="login">Giriş Yap</button>
                 <button class="auth-tab" data-auth="signup">Üye Ol</button>
@@ -432,7 +430,7 @@
     </div>
 
     <!-- Hesap silme onay modalı -->
-    <div id="confirmDeleteModal" class="modal hidden" role="dialog">
+    <div id="confirmDeleteModal" class="modal hidden" role="dialog" aria-modal="true">
         <div class="modal-backdrop" id="confirmDeleteBackdrop"></div>
         <div class="modal-card glass confirm-modal-card">
             <h3>Hesabı Sil</h3>
@@ -448,10 +446,10 @@
     </div>
 
     <!-- Ayarlar modalı -->
-    <div id="settingsModal" class="modal hidden" role="dialog" aria-label="Ayarlar">
+    <div id="settingsModal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Ayarlar">
         <div class="modal-backdrop" id="settingsModalBackdrop"></div>
         <div class="modal-card glass settings-modal-card">
-            <button class="modal-close" id="settingsModalClose">&times;</button>
+            <button class="modal-close" id="settingsModalClose" aria-label="Kapat">&times;</button>
             <h3 style="margin:0 0 18px;font-family:'Inter';font-size:20px;">&#x2699; Ayarlar</h3>
 
             <div class="settings-section">
@@ -512,10 +510,10 @@
     </div>
 
     <!-- Premium pricing modalı -->
-    <div id="pricingModal" class="modal hidden" role="dialog" aria-label="Fiyatlandırma">
+    <div id="pricingModal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Fiyatlandırma">
         <div class="modal-backdrop" id="pricingModalBackdrop"></div>
         <div class="modal-card glass pricing-modal-card">
-            <button class="modal-close" id="pricingModalClose">&times;</button>
+            <button class="modal-close" id="pricingModalClose" aria-label="Kapat">&times;</button>
             <h3 style="margin:0 0 6px;font-family:'Inter';font-size:20px;">Premium'a Geç</h3>
             <p style="margin:0 0 20px;font-size:13px;color:var(--text-3);">İlk 100 üyeye ömür boyu ücretsiz Premium hakkı tanındı. Bu haktan sonra kayıt olanlar için Premium ücretlidir. Kesin fiyat, bir sonraki adımdaki güvenli ödeme sayfasında gösterilir.</p>
             <div class="pricing-cards">
@@ -534,7 +532,7 @@
 
     <!-- Çerez Banner -->
     <div id="cookieBanner" class="cookie-banner hidden">
-        <span>Ziyaret istatistikleri için Google Analytics kullanıyoruz.
+        <span>Ziyaret istatistikleri için Google Analytics, kullanım analizi (oturum kaydı ve ısı haritası) için Microsoft Clarity kullanıyoruz; yalnızca onay verirseniz yüklenirler.
         <a href="/legal/cerez" style="color:var(--accent);">Çerez Politikası</a></span>
         <div class="cookie-actions">
             <button id="cookieReject" class="btn cookie-btn-sm" style="background:transparent;border:1px solid var(--glass-brd);color:var(--text-2);">Reddet</button>
@@ -630,10 +628,10 @@
     </div>
 
     <!-- Admin kullanıcı listesi modalı -->
-    <div id="adminUsersModal" class="modal hidden" role="dialog" aria-label="Kullanıcı Listesi">
+    <div id="adminUsersModal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Kullanıcı Listesi">
         <div class="modal-backdrop" id="adminUsersBackdrop"></div>
         <div class="modal-card glass" style="max-width:860px;width:96%;max-height:85vh;display:flex;flex-direction:column;">
-            <button class="modal-close" id="adminUsersClose">&times;</button>
+            <button class="modal-close" id="adminUsersClose" aria-label="Kapat">&times;</button>
             <h3 style="margin:0 0 14px;font-size:18px;font-family:'Inter';">&#x1F465; Kayıtlı Kullanıcılar</h3>
             <div style="display:flex;gap:8px;margin-bottom:12px;">
                 <input id="adminUsersSearch" class="af-input" type="search" placeholder="E-posta ile ara..." style="flex:1;margin:0;" autocomplete="off" />

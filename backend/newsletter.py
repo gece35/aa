@@ -18,7 +18,7 @@ from typing import Optional, Tuple
 from flask import Blueprint, jsonify, render_template, request
 from sqlalchemy import func, or_, select, update
 
-from .config import APP_BASE_URL
+from .config import SITE_URL
 from .db import db
 from .models import NewsletterSubscriber, User
 from .security import limiter, now_utc
@@ -244,7 +244,7 @@ def build_weekly_digest() -> Optional[dict]:
 
 def render_digest(digest: dict, unsubscribe_url: str) -> Tuple[str, str]:
     """(html, text) üretir."""
-    base = APP_BASE_URL.rstrip("/")
+    base = SITE_URL
 
     def pct(v) -> str:
         return f"%{'+' if v > 0 else ''}{v:.2f}".replace(".", ",")
@@ -295,7 +295,7 @@ def render_digest(digest: dict, unsubscribe_url: str) -> Tuple[str, str]:
 
 
 def unsubscribe_url_for(token: str) -> str:
-    return f"{APP_BASE_URL.rstrip('/')}/newsletter/unsubscribe?token={token}"
+    return f"{SITE_URL}/newsletter/unsubscribe?token={token}"
 
 
 def _claim_issue(subscriber_id: int, issue: str) -> bool:

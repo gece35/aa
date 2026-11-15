@@ -778,6 +778,14 @@
             if (e.target.closest('.star-toggle') || e.target.closest('.scan-chart-btn')) return;
             openStockModal(r.symbol);
         });
+        // Klavye: kart odaklanabilir, Enter/Boşluk detayı açar
+        card.tabIndex = 0;
+        card.setAttribute('role', 'button');
+        card.setAttribute('aria-label', `${displaySymbol} detayını aç — puan ${r.score}/10`);
+        card.addEventListener('keydown', (e) => {
+            if (e.target !== card) return;
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openStockModal(r.symbol); }
+        });
 
         const starBtn = card.querySelector('.star-toggle');
         starBtn.addEventListener('click', (e) => {
@@ -2253,6 +2261,29 @@
         renderChartModal(d, null);
     }
 
+    // Grafik kütüphanesini (TradingView Lightweight Charts) gerektiğinde bir kez yükler.
+    const CHART_LIB_URL = 'https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js';
+    let _chartLibPromise = null;
+    function ensureChartLib() {
+        if (typeof LightweightCharts !== 'undefined') return Promise.resolve();
+        if (!_chartLibPromise) {
+            _chartLibPromise = new Promise((resolve, reject) => {
+                const tag = document.createElement('script');
+                tag.src = CHART_LIB_URL;
+                tag.async = true;
+                // Script indi ama global tanımlanmadıysa (engelleyici vb.) başarısız say:
+                // aksi halde çağıran taraf sonsuza dek yeniden denerdi.
+                tag.onload = () => {
+                    if (typeof LightweightCharts !== 'undefined') resolve();
+                    else { _chartLibPromise = null; reject(new Error('chart lib')); }
+                };
+                tag.onerror = () => { _chartLibPromise = null; reject(new Error('chart lib')); };
+                document.head.appendChild(tag);
+            });
+        }
+        return _chartLibPromise;
+    }
+
     function renderChartModal(d, pos) {
         const headerEl = document.getElementById('portChartHeader');
         const chartEl = document.getElementById('portChartContainer');
@@ -2318,7 +2349,17 @@
         }
 
         if (typeof LightweightCharts === 'undefined') {
-            chartEl.innerHTML = '<div style="padding:20px;color:var(--text-3);font-size:13px;">Grafik kütüphanesi yüklenemedi. İnternet bağlantısını kontrol edin.</div>';
+            // Kütüphane yalnızca ilk grafik açılışında indirilir (her sayfa
+            // görüntülemede ~160 KB'lık engelleyici script yüklenmesin).
+            chartEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-3);font-size:13px;">Grafik yükleniyor…</div>';
+            const args = arguments;
+            ensureChartLib().then(() => {
+                if (!chartEl.isConnected) return;
+                chartEl.innerHTML = '';
+                renderChartModal.apply(null, args);
+            }).catch(() => {
+                chartEl.innerHTML = '<div style="padding:20px;color:var(--text-3);font-size:13px;">Grafik kütüphanesi yüklenemedi. İnternet bağlantısını kontrol edin.</div>';
+            });
             return;
         }
 
@@ -2949,6 +2990,9 @@
             closePricingModal();
             confirmDeleteModal?.classList.add('hidden');
             accountPanel?.classList.add('hidden');
+            ['settingsModal', 'adminUsersModal', 'adminFeedbackModal', 'feedbackModal'].forEach((id) => {
+                document.getElementById(id)?.classList.add('hidden');
+            });
             return;
         }
         if (isTyping) return;
@@ -2966,6 +3010,32 @@
     });
 
     // bootstrap — Auth.me() önce beklenir, sonra watchlist/portfolio API'den çekilir
+
+    // ── Modal odak yönetimi (klavye / ekran okuyucu) ─────────────────────────
+    // Bir modal açılınca odak içine alınır; kapanınca açılmadan önceki öğeye döner.
+    (function initModalFocus() {
+        if (typeof MutationObserver === 'undefined') return;
+        const previous = new Map();
+        const onChange = (el) => {
+            const open = !el.classList.contains('hidden');
+            if (open && !previous.has(el)) {
+                previous.set(el, document.activeElement);
+                setTimeout(() => {
+                    if (el.classList.contains('hidden') || el.contains(document.activeElement)) return;
+                    const target = el.querySelector('.modal-close') || el.querySelector('button, [href], input, select, textarea');
+                    if (target) { try { target.focus({ preventScroll: true }); } catch (_) {} }
+                }, 50);
+            } else if (!open && previous.has(el)) {
+                const back = previous.get(el);
+                previous.delete(el);
+                if (back && back.isConnected && typeof back.focus === 'function') {
+                    try { back.focus({ preventScroll: true }); } catch (_) {}
+                }
+            }
+        };
+        const obs = new MutationObserver((muts) => muts.forEach((m) => onChange(m.target)));
+        document.querySelectorAll('.modal').forEach((el) => obs.observe(el, { attributes: true, attributeFilter: ['class'] }));
+    })();
 
     // ── Toast bildirimleri ────────────────────────────────────────────────────
 

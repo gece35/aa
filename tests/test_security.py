@@ -255,3 +255,40 @@ def test_comments_expose_ownership_not_user_id(app, make_user):
 
     assert reader.delete(f"/api/comments/{comment['id']}").status_code == 403
     assert author.delete(f"/api/comments/{comment['id']}").status_code == 200
+
+
+# ── Faz 5: tek adres, PWA dosyaları ──────────────────────────────────────────
+
+@pytest.mark.parametrize("path,target", [
+    ("/rehber.html", "/rehber"), ("/about.html", "/about"), ("/faq.html", "/faq"), ("/index.html", "/"),
+])
+def test_legacy_html_urls_redirect_to_clean_urls(client, path, target):
+    r = client.get(path)
+    assert r.status_code == 301 and r.headers["Location"].endswith(target)
+
+
+def test_pwa_and_verification_files(client):
+    manifest = client.get("/manifest.webmanifest")
+    assert manifest.status_code == 200 and "manifest+json" in manifest.content_type
+    data = manifest.get_json(force=True)
+    assert data["start_url"] == "/" and len(data["icons"]) >= 2
+    for icon in data["icons"]:
+        assert client.get(icon["src"]).status_code == 200
+    assert client.get("/og-image.png").status_code == 200
+    assert client.get("/icons/apple-touch-icon.png").status_code == 200
+
+    # Google Search Console doğrulama dosyası genel yönlendirmeye takılmamalı
+    g = client.get("/google43075d7795897bf5.html")
+    assert g.status_code == 200
+    assert g.get_data(as_text=True).strip() == "google-site-verification: google43075d7795897bf5.html"
+
+
+def test_main_pages_declare_canonical_and_share_image(client):
+    for path, canonical in (("/", "https://nebulascanner.com/"), ("/rehber", "https://nebulascanner.com/rehber"),
+                            ("/legal/risk", "https://nebulascanner.com/legal/risk"),
+                            ("/blog/", "https://nebulascanner.com/blog/")):
+        html = client.get(path).get_data(as_text=True)
+        assert f'rel="canonical" href="{canonical}"' in html, path
+        assert 'rel="manifest"' in html and 'name="theme-color"' in html, path
+    home = client.get("/").get_data(as_text=True)
+    assert "og-image.png" in home and "lightweight-charts" not in home    # grafik kütüphanesi tembel yüklenir

@@ -24,7 +24,7 @@ from xml.sax.saxutils import escape as xml_escape
 from flask import Blueprint, Response, abort, redirect, render_template
 
 from .cache import TTLCache, symbol_cache
-from .config import APP_BASE_URL
+from .config import SITE_URL
 from .sectors import get_sector, sector_label
 from .security import limiter
 from .tickers import MARKETS, get_tickers, market_of_symbol, resolve_symbol, strip_suffix
@@ -55,7 +55,7 @@ _STATIC_PAGES = [
 
 
 def site_url(path: str = "") -> str:
-    return APP_BASE_URL.rstrip("/") + path
+    return SITE_URL + path
 
 
 def slug_for(symbol: str) -> str:

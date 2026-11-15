@@ -17,3 +17,9 @@ instance/
 .pytest_cache/
 htmlcov/
 .coverage
+
+# Yerel veri / araclar
+data/
+newsletter_subscribers.json
+feedback.json
+node_modules/

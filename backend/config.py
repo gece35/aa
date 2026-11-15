@@ -31,6 +31,14 @@ if not _raw_secret:
 SECRET_KEY = _raw_secret
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:5000")
 DEBUG = _bool("DEBUG", False)
+
+# Sitenin herkese açık (kanonik) adresi: canonical etiketleri, sitemap ve bülten
+# bağlantıları için. APP_BASE_URL dağıtımın kendi adresi olabilir (ör. Railway'in
+# *.up.railway.app alan adı); arama motorlarına her zaman asıl alan adı verilmelidir.
+SITE_URL = (
+    os.environ.get("SITE_URL", "").strip().rstrip("/")
+    or (APP_BASE_URL.rstrip("/") if DEBUG else "https://nebulascanner.com")
+)
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 
 # Database — Postgres in prod, SQLite fallback for local dev

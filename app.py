@@ -338,6 +338,23 @@ def create_app() -> Flask:
     def robots_txt():
         return send_from_directory(FRONTEND_DIR, "robots.txt")
 
+    # Eski/çift adresler (/rehber.html vb. statik rota üzerinden de açılıyordu):
+    # arama motorları için tek adrese kalıcı yönlendirme. Yalnızca bilinen
+    # sayfalar — genel bir "*.html" kuralı Google doğrulama dosyasını bozardı.
+    @flask_app.route("/index.html")
+    @flask_app.route("/rehber.html")
+    @flask_app.route("/about.html")
+    @flask_app.route("/faq.html")
+    def legacy_html_redirect():
+        name = request.path[1:-5]
+        return redirect("/" if name == "index" else f"/{name}", code=301)
+
+    @flask_app.route("/manifest.webmanifest")
+    def web_manifest():
+        resp = send_from_directory(FRONTEND_DIR, "manifest.webmanifest")
+        resp.headers["Content-Type"] = "application/manifest+json"
+        return resp
+
     @flask_app.route("/rehber")
     def rehber_page():
         return _serve_html(FRONTEND_DIR, "rehber.html")

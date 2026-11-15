@@ -148,6 +148,10 @@ python app.py
 
 `http://localhost:5000` adresini tarayıcıyla aç.
 
+## SEO ve PWA
+
+Her sayfa canonical adres ve 1200×630 paylaşım görseli (`frontend/og-image.png`) bildirir; `.html` uzantılı eski adresler tek adrese 301 ile yönlenir. Canonical, sitemap ve bülten bağlantıları `SITE_URL` (varsayılan `https://nebulascanner.com`) üzerinden üretilir — `APP_BASE_URL` dağıtımın kendi adresi (ör. `*.up.railway.app`) olsa bile arama motorlarına asıl alan adı verilir. `frontend/manifest.webmanifest` ve `frontend/icons/` ile site ana ekrana eklenebilir. Grafik kütüphanesi (Lightweight Charts) yalnızca ilk grafik açılışında indirilir.
+
 ## Haftalık bülten
 
 Aboneler (`newsletter_subscribers` tablosu + pazarlama izni veren doğrulanmış üyeler) her Pazar 10:00'da (TSİ) BIST/ABD'nin en yüksek puanlı 10'ar hissesini içeren özet e-postasını alır. Gönderim **varsayılan kapalıdır**: `NEWSLETTER_ENABLED=1` ile açılır. Aynı sayı aynı kişiye iki kez gitmez (önce-sahiplen-sonra-gönder); günlük üst sınır `NEWSLETTER_DAILY_CAP` (varsayılan 250), kalanlar izleyen iki gün içinde gönderilir. Açmadan önce admin hesabıyla `POST /api/admin/newsletter/test` çağrılarak kendi adresinize deneme gönderilebilir.

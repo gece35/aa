@@ -7,7 +7,7 @@
     --glass-brd-soft: rgba(255, 255, 255, 0.07);
     --text-1: #f1f5f9;
     --text-2: #94a3b8;
-    --text-3: #64748b;
+    --text-3: #8b9bb4;  /* #1e293b üzerinde ~5,2:1 (WCAG AA) */
     --accent: #2563eb;
     --accent-dim: #1d4ed8;
     --accent-2: #3b82f6;
@@ -36,8 +36,6 @@ html, body {
     -webkit-font-smoothing: antialiased;
 }
 
-/* galaxy decoration — devre dışı */
-.galaxy { display: none; }
 
 /* kart stili */
 .glass {
@@ -178,7 +176,7 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
 }
 .summary { padding: 16px 20px; display: flex; flex-direction: column; gap: 6px; }
 .summary .s-label { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-3); }
-.summary .s-value { font-size: 28px; font-family: 'Outfit', 'Inter', sans-serif; font-weight: 700; color: var(--text-1); }
+.summary .s-value { font-size: 28px; font-family: 'Inter', sans-serif; font-weight: 700; color: var(--text-1); }
 
 /* index bar — BIST 100 / S&P 500 mini grafikleri */
 .index-bar {
@@ -196,7 +194,7 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
 .index-regime.regime-bad { color: var(--danger); }
 .index-card-body { display: flex; align-items: center; gap: 16px; }
 .index-price-block { display: flex; flex-direction: column; gap: 4px; min-width: 96px; }
-.index-price { font-size: 22px; font-weight: 700; font-family: 'Outfit', 'Inter', sans-serif; color: var(--text-1); }
+.index-price { font-size: 22px; font-weight: 700; font-family: 'Inter', sans-serif; color: var(--text-1); }
 .index-change { font-size: 13px; font-weight: 600; }
 .index-change.up { color: var(--neon); }
 .index-change.down { color: var(--danger); }
@@ -316,16 +314,16 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
     box-shadow: 0 24px 50px rgba(10, 0, 40, .55), 0 0 0 1px rgba(139,92,246,.2);
 }
 .stock-rank {
-    font-family: 'Outfit'; font-size: 22px; font-weight: 800;
+    font-family: 'Inter', sans-serif; font-size: 22px; font-weight: 800;
     background: rgba(255,255,255,.04); border: 1px solid var(--glass-brd-soft);
     border-radius: 14px; width: 52px; height: 52px;
     display: grid; place-items: center; color: var(--text-2);
 }
-.stock-symbol { font-family: 'Outfit'; font-weight: 800; font-size: 22px; letter-spacing: -.2px; }
+.stock-symbol { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 22px; letter-spacing: -.2px; }
 .stock-sub { color: var(--text-3); font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
 
 .price-block { display: flex; flex-direction: column; gap: 4px; }
-.price { font-weight: 700; font-size: 18px; font-family: 'Outfit'; }
+.price { font-weight: 700; font-size: 18px; font-family: 'Inter', sans-serif; }
 .change { font-weight: 600; font-size: 13px; }
 .change.up { color: var(--neon); }
 .change.down { color: var(--danger); }
@@ -772,7 +770,7 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
 .sl-tp-value {
     font-size: 18px;
     font-weight: 700;
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Inter', sans-serif;
     color: var(--text-1);
 }
 .sl-tp-item.stop-loss .sl-tp-value { color: var(--danger); }
@@ -943,7 +941,7 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
     flex-wrap: wrap;
 }
 .port-sym-block { display: flex; flex-direction: column; gap: 2px; min-width: 80px; }
-.port-sym { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 22px; letter-spacing: -.2px; }
+.port-sym { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 22px; letter-spacing: -.2px; }
 .port-sym-full { font-size: 11px; color: var(--text-3); letter-spacing: 1px; text-transform: uppercase; }
 .port-buy-info { display: flex; flex-direction: column; gap: 3px; font-size: 13px; color: var(--text-2); }
 .port-buy-date { font-size: 11px; color: var(--text-3); }
@@ -984,9 +982,9 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
     font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase;
     color: var(--text-3); margin-bottom: 4px;
 }
-.port-current-price { font-family: 'Outfit', sans-serif; font-size: 22px; font-weight: 700; }
+.port-current-price { font-family: 'Inter', sans-serif; font-size: 22px; font-weight: 700; }
 .port-pnl { text-align: right; }
-.port-pnl-main { font-family: 'Outfit', sans-serif; font-size: 22px; font-weight: 800; }
+.port-pnl-main { font-family: 'Inter', sans-serif; font-size: 22px; font-weight: 800; }
 .port-pnl-pct { font-size: 14px; font-weight: 700; opacity: .85; margin-top: 2px; }
 
 .port-levels-row { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -1114,7 +1112,7 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
     flex-wrap: wrap;
 }
 .chart-sym {
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Inter', sans-serif;
     font-size: 26px;
     font-weight: 800;
     color: var(--text-1);
@@ -1301,7 +1299,7 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
     flex-wrap: wrap;
 }
 .alert-sym {
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Inter', sans-serif;
     font-size: 16px;
     font-weight: 700;
     color: var(--text-1);
@@ -1527,7 +1525,7 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
 .pricing-card-featured { border-color: rgba(251,191,36,.4); box-shadow: 0 0 24px rgba(251,191,36,.12); }
 .price-label { font-size: 13px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; }
 .price-save { background: rgba(52,245,168,.15); color: var(--neon); padding: 2px 8px; border-radius: 20px; font-size: 11px; margin-left: 6px; }
-.price-amount { font-size: 32px; font-weight: 800; color: var(--text-1); line-height: 1; font-family: 'Outfit'; }
+.price-amount { font-size: 32px; font-weight: 800; color: var(--text-1); line-height: 1; font-family: 'Inter', sans-serif; }
 .price-period { font-size: 16px; font-weight: 400; color: var(--text-3); }
 .price-monthly-eq { font-size: 12px; color: var(--text-3); }
 .feature-list { display: flex; flex-direction: column; gap: 8px; }
@@ -2194,4 +2192,22 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
 @media (max-width: 600px) {
     .filter-field { flex: 1 1 100%; }
     .filter-field .sort-select { width: 100%; }
+}
+
+/* ── Erişilebilirlik ──────────────────────────────────────────────────────── */
+.stock-card:focus-visible,
+.chip:focus-visible,
+.btn:focus-visible,
+.tab-btn:focus-visible,
+.modal-close:focus-visible {
+    outline: 2px solid var(--accent-2);
+    outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
 }
