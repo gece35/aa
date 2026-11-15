@@ -2264,6 +2264,7 @@
     // Grafik kütüphanesini (TradingView Lightweight Charts) gerektiğinde bir kez yükler.
     const CHART_LIB_URL = 'https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js';
     let _chartLibPromise = null;
+    let _chartWaitSeq = 0;   // kütüphane beklenirken açılan son grafik isteği
     function ensureChartLib() {
         if (typeof LightweightCharts !== 'undefined') return Promise.resolve();
         if (!_chartLibPromise) {
@@ -2353,8 +2354,10 @@
             // görüntülemede ~160 KB'lık engelleyici script yüklenmesin).
             chartEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-3);font-size:13px;">Grafik yükleniyor…</div>';
             const args = arguments;
+            const seq = ++_chartWaitSeq;
             ensureChartLib().then(() => {
-                if (!chartEl.isConnected) return;
+                const modal = document.getElementById('portChartModal');
+                if (seq !== _chartWaitSeq || !modal || modal.classList.contains('hidden')) return;
                 chartEl.innerHTML = '';
                 renderChartModal.apply(null, args);
             }).catch(() => {
@@ -2726,6 +2729,7 @@
     function closePortChartModal() {
         const modal = document.getElementById('portChartModal');
         if (!modal) return;
+        _chartWaitSeq++;   // kütüphane yüklenirken kapatıldıysa bekleyen çizimi iptal et
         modal.classList.add('hidden');
         const chartEl = document.getElementById('portChartContainer');
         if (chartEl) {
@@ -3611,6 +3615,10 @@
                 applyUserState(d.user);
                 closeAuthModal();
                 showToast('Hesabınız oluşturuldu! Doğrulama e-postası gönderildi.', 'success', 6000);
+            } else if (d.ok) {
+                // Hesap açıldı; giriş için önce e-posta doğrulaması gerekiyor.
+                closeAuthModal();
+                showToast(d.message || 'Hesabınız oluşturuldu. Giriş yapabilmek için e-postanızdaki doğrulama bağlantısına tıklayın.', 'success', 10000);
             } else {
                 errEl.textContent = d.message || 'Kayıt başarısız.';
                 errEl.classList.remove('hidden');

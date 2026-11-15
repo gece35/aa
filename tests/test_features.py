@@ -270,3 +270,17 @@ def test_admin_newsletter_test_goes_only_to_admin(app, mailbox, make_user):
     assert body["active_subscribers"] == 1 and body["enabled"] is False
     assert [m[0] for m in mailbox] == ["admin@example.com"]      # aboneye gitmedi
     assert mailbox[0][1].startswith("[TEST]")
+
+
+def test_stock_page_does_not_block_threads_when_another_fetch_is_running(client, monkeypatch):
+    """Önbelleksiz hisse sayfası, başka bir indirme sürerken sınırsız beklemez."""
+    from backend import seo
+
+    monkeypatch.setattr(seo, "_FETCH_WAIT_SECONDS", 0.05)
+    assert seo._fetch_lock.acquire(timeout=1)
+    try:
+        r = client.get("/hisse/GARAN")
+    finally:
+        seo._fetch_lock.release()
+    assert r.status_code == 503 and r.headers["Retry-After"] == "120"
+    assert seo.seo_cache.get("miss:GARAN.IS") is None      # meşgul ≠ veri yok: negatif önbelleğe yazılmaz

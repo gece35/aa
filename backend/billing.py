@@ -15,7 +15,7 @@ from sqlalchemy import select
 
 from .config import (
     APP_BASE_URL, LS_API_KEY, LS_STORE_ID, LS_VARIANT_MONTHLY, LS_VARIANT_YEARLY,
-    LS_WEBHOOK_SECRET,
+    LS_WEBHOOK_SECRET, SITE_URL,
 )
 from .db import db
 from .email import send_payment_failed
@@ -83,7 +83,7 @@ def create_checkout():
                     "custom": {"user_id": current_user.id},
                 },
                 "product_options": {
-                    "redirect_url": f"{APP_BASE_URL}/?checkout=success",
+                    "redirect_url": f"{SITE_URL}/?checkout=success",
                 },
                 "checkout_options": {"embed": False, "media": False, "logo": True},
             },

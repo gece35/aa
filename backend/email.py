@@ -20,7 +20,9 @@ from typing import Optional
 
 import requests
 
-from .config import APP_BASE_URL, EMAIL_FROM
+# E-postalardaki bağlantılar her zaman sitenin asıl adresine (SITE_URL) gider;
+# APP_BASE_URL dağıtımın kendi adresi (ör. *.up.railway.app) olabilir.
+from .config import EMAIL_FROM, SITE_URL
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +162,7 @@ def _send_resend(to: str, subject: str, html: str, text: Optional[str], api_key:
 
 
 def send_verify_email(to: str, token: str) -> bool:
-    link = f"{APP_BASE_URL}/api/auth/verify?token={token}"
+    link = f"{SITE_URL}/api/auth/verify?token={token}"
     subject = "Nebula Scanner — E-posta doğrulama"
     html = f"""
     <div style="font-family:Inter,Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#111;">
@@ -178,7 +180,7 @@ def send_verify_email(to: str, token: str) -> bool:
 
 
 def send_password_reset(to: str, token: str) -> bool:
-    link = f"{APP_BASE_URL}/?reset_token={token}"
+    link = f"{SITE_URL}/?reset_token={token}"
     subject = "Nebula Scanner — Şifre sıfırlama"
     html = f"""
     <div style="font-family:Inter,Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#111;">
@@ -202,7 +204,7 @@ def send_alert_triggered(to: str, symbol: str, label: str) -> bool:
     safe_label = _html.escape(label)
     subject = f"Alarm: {symbol} — {label}"
     # Site derin bağlantıyı ?s=SEMBOL ile açar (eski ?focus= parametresi işlenmiyordu).
-    detail_url = f"{APP_BASE_URL}/?s={_quote(symbol)}"
+    detail_url = f"{SITE_URL}/?s={_quote(symbol)}"
     html_body = f"""
     <div style="font-family:Inter,Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#111;">
       <h2 style="margin-top:0;">{safe_symbol}</h2>
@@ -222,7 +224,7 @@ def send_alert_triggered(to: str, symbol: str, label: str) -> bool:
 
 def send_payment_failed(to: str) -> bool:
     # Kart güncelleme sitede Ayarlar → Abonelik altında (ayrı bir /account sayfası yok).
-    link = f"{APP_BASE_URL}/"
+    link = f"{SITE_URL}/"
     subject = "Nebula Scanner — Ödeme başarısız"
     html = f"""
     <div style="font-family:Inter,Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#111;">

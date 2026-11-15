@@ -60,22 +60,52 @@ def test_hsts_only_on_https(client):
 
 # ── İstemci IP'si ve hız sınırları ───────────────────────────────────────────
 
-def test_client_ip_prefers_cloudflare_then_forwarded(app):
-    from backend.security import client_ip
+CF_EDGE = "172.64.10.20"          # Cloudflare aralığında bir adres
 
-    with app.test_request_context(headers={"CF-Connecting-IP": "203.0.113.7",
-                                           "X-Forwarded-For": "198.51.100.1, 10.0.0.1"}):
+
+def via_cloudflare(ip):
+    """Cloudflare → Railway yolundan gelen istek: Railway edge X-Real-IP'ye
+    Cloudflare sunucusunu yazar, gerçek istemci CF-Connecting-IP'dedir."""
+    return {"X-Real-IP": CF_EDGE, "CF-Connecting-IP": ip}
+
+
+def direct(ip):
+    """Railway alan adına doğrudan (Cloudflare'siz) gelen istek."""
+    return {"X-Real-IP": ip}
+
+
+def test_client_ip_trusts_cloudflare_header_only_from_cloudflare(app):
+    from backend.security import client_ip, is_cloudflare_ip
+
+    assert is_cloudflare_ip("172.64.10.20") and is_cloudflare_ip("2606:4700::1")
+    assert not is_cloudflare_ip("203.0.113.7") and not is_cloudflare_ip("bozuk")
+
+    with app.test_request_context(headers=via_cloudflare("203.0.113.7")):
         assert client_ip() == "203.0.113.7"
-    with app.test_request_context(headers={"X-Forwarded-For": "198.51.100.1, 10.0.0.1"}):
-        assert client_ip() == "198.51.100.1"
-    with app.test_request_context(headers={"CF-Connecting-IP": "<script>", "X-Forwarded-For": "not-an-ip"},
+    # Cloudflare'i atlayıp başlığı uyduran istemci kendi adresiyle sayılır
+    with app.test_request_context(headers={"X-Real-IP": "198.51.100.9", "CF-Connecting-IP": "1.2.3.4",
+                                           "X-Forwarded-For": "5.6.7.8"}):
+        assert client_ip() == "198.51.100.9"
+    # X-Forwarded-For'un ilk değeri (istemci uydurabilir) kullanılmaz
+    with app.test_request_context(headers={"X-Forwarded-For": "198.51.100.1, 10.0.0.1"},
                                   environ_base={"REMOTE_ADDR": "192.0.2.9"}):
         assert client_ip() == "192.0.2.9"
+    with app.test_request_context(headers={"X-Real-IP": CF_EDGE, "CF-Connecting-IP": "<script>"}):
+        assert client_ip() == CF_EDGE
+
+
+def test_spoofed_cloudflare_header_cannot_bypass_limits(client):
+    attacker = "198.51.100.66"
+    for i in range(5):
+        h = {"X-Real-IP": attacker, "CF-Connecting-IP": f"10.0.0.{i}"}
+        assert client.post("/api/auth/signup", json={}, headers=h).status_code == 400
+    h = {"X-Real-IP": attacker, "CF-Connecting-IP": "10.0.0.99"}
+    assert client.post("/api/auth/signup", json={}, headers=h).status_code == 429
 
 
 def test_rate_limit_is_per_client_not_site_wide(client):
-    a = {"CF-Connecting-IP": "203.0.113.10"}
-    b = {"CF-Connecting-IP": "203.0.113.11"}
+    a = via_cloudflare("203.0.113.10")
+    b = via_cloudflare("203.0.113.11")
     for _ in range(5):                       # signup: IP başına saatte 5
         assert client.post("/api/auth/signup", json={}, headers=a).status_code == 400
     assert client.post("/api/auth/signup", json={}, headers=a).status_code == 429
@@ -103,7 +133,7 @@ def test_support_chat_is_rate_limited_and_tolerates_bad_history(client, monkeypa
     monkeypatch.setattr(support, "GROQ_API_KEY", "test-key")
     monkeypatch.setitem(sys.modules, "groq", types.SimpleNamespace(Groq=FakeGroq))
 
-    h = {"CF-Connecting-IP": "203.0.113.20"}
+    h = via_cloudflare("203.0.113.20")
     for bad in ("metin", [1, "x", None], {"a": 1}):
         r = client.post("/api/support/chat", json={"message": "selam", "history": bad}, headers=h)
         assert r.status_code == 200 and r.get_json()["reply"] == "Merhaba"
@@ -144,13 +174,13 @@ def test_guest_stock_detail_quota_is_enforced_per_ip(client):
     from backend.cache import stock_cache
 
     stock_cache.set("stock:THYAO.IS", {"symbol": "THYAO.IS", "score": 7, "entry_signal": False})
-    a = {"CF-Connecting-IP": "203.0.113.30"}
+    a = via_cloudflare("203.0.113.30")
     for _ in range(5):                                       # misafir: günde 5
         assert client.get("/api/stock/thyao", headers=a).status_code == 200
     blocked = client.get("/api/stock/THYAO.IS", headers=a)
     assert blocked.status_code == 401 and blocked.get_json()["error"] == "auth_required"
     # Başka IP'nin hakkı duruyor
-    assert client.get("/api/stock/THYAO.IS", headers={"CF-Connecting-IP": "203.0.113.31"}).status_code == 200
+    assert client.get("/api/stock/THYAO.IS", headers=direct("203.0.113.31")).status_code == 200
 
 
 def test_member_force_refresh_is_throttled_and_limit_clamped(client, make_user, login, monkeypatch):
@@ -292,3 +322,18 @@ def test_main_pages_declare_canonical_and_share_image(client):
         assert 'rel="manifest"' in html and 'name="theme-color"' in html, path
     home = client.get("/").get_data(as_text=True)
     assert "og-image.png" in home and "lightweight-charts" not in home    # grafik kütüphanesi tembel yüklenir
+
+
+# ── Tek alan adı ─────────────────────────────────────────────────────────────
+
+def test_railway_domain_pages_redirect_to_canonical_site(client):
+    host = {"Host": "aa-production-0db3.up.railway.app"}
+    r = client.get("/legal/risk?x=1", headers=host)
+    assert r.status_code == 301 and r.headers["Location"] == "http://localhost:5000/legal/risk?x=1"
+    r = client.get("/", headers=host)
+    assert r.status_code == 301 and r.headers["Location"] == "http://localhost:5000/"
+    # API çağrıları (healthcheck, webhook) ve POST'lar yönlendirilmez
+    assert client.get("/api/health", headers=host).status_code == 200
+    assert client.post("/api/newsletter", json={}, headers=host).status_code == 400
+    # Asıl alan adında yönlendirme yok
+    assert client.get("/legal/risk").status_code == 200

@@ -11,7 +11,7 @@ from flask import Blueprint, jsonify, redirect, request, send_from_directory, ur
 from flask_login import current_user, login_required, login_user, logout_user
 from sqlalchemy import select, update
 
-from .config import ADMIN_EMAILS, APP_BASE_URL
+from .config import ADMIN_EMAILS, SITE_URL  # doğrulama sonrası yönlendirme: asıl alan adı
 from .db import db
 from .email import send_password_reset, send_verify_email
 from .models import EmailToken, User
@@ -252,24 +252,24 @@ def verify_post():
 def verify_get():
     token = request.args.get("token", "")
     if not token:
-        return redirect(f"{APP_BASE_URL}/?verify=missing")
+        return redirect(f"{SITE_URL}/?verify=missing")
     et = db.session.execute(
         select(EmailToken).where(EmailToken.token_hash == hash_token(token), EmailToken.kind == "verify")
     ).scalar_one_or_none()
     if not et or et.used_at is not None:
-        return redirect(f"{APP_BASE_URL}/?verify=invalid")
+        return redirect(f"{SITE_URL}/?verify=invalid")
     expires = et.expires_at
     if expires.tzinfo is None:
         expires = expires.replace(tzinfo=timezone.utc)
     if expires < now_utc():
-        return redirect(f"{APP_BASE_URL}/?verify=expired")
+        return redirect(f"{SITE_URL}/?verify=expired")
     user = db.session.get(User, et.user_id)
     if not user:
-        return redirect(f"{APP_BASE_URL}/?verify=invalid")
+        return redirect(f"{SITE_URL}/?verify=invalid")
     user.email_verified_at = now_utc()
     et.used_at = now_utc()
     db.session.commit()
-    return redirect(f"{APP_BASE_URL}/?verify=ok")
+    return redirect(f"{SITE_URL}/?verify=ok")
 
 
 @auth_bp.route("/resend-verify-public", methods=["POST"])

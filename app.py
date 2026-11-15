@@ -40,7 +40,7 @@ from backend.cache import (
 )
 from backend.config import (
     APP_BASE_URL, DATABASE_URL, DEBUG, GA_MEASUREMENT_ID, LEGAL_ENTITY_ADDRESS,
-    LEGAL_ENTITY_NAME, LOG_LEVEL, SECRET_KEY, SENTRY_DSN, SUPPORT_EMAIL,
+    LEGAL_ENTITY_NAME, LOG_LEVEL, SECRET_KEY, SENTRY_DSN, SITE_URL, SUPPORT_EMAIL,
 )
 from backend.data_fetcher import download_ohlcv, fetch_exchange_rate
 from backend.db import db, migrate
@@ -252,7 +252,11 @@ def create_app() -> Flask:
     # Redis'e gerek yoktur (REDIS_URL tanımlı olsa da kullanılmaz).
     flask_app.config.setdefault("RATELIMIT_STORAGE_URI", "memory://")
     flask_app.config.setdefault("RATELIMIT_DEFAULT", "2000 per hour")
-    flask_app.config.setdefault("RATELIMIT_HEADERS_ENABLED", True)
+    # Kapalı: Flask-Limiter açıkken limitli HER yanıta `Retry-After` (pencere sonuna
+    # kalan süre, ör. 3600 sn) yazıp uygulamanın kendi değerini eziyordu (ör. hisse
+    # sayfasının "2 dk sonra tekrar dene" 503'ü). Arayüz X-RateLimit-* başlıklarını
+    # kullanmıyor.
+    flask_app.config.setdefault("RATELIMIT_HEADERS_ENABLED", False)
     limiter.init_app(flask_app)
 
     if _SCHEDULER_HOST:
@@ -263,6 +267,24 @@ def create_app() -> Flask:
         def _ensure_scheduler():
             if not scheduler.is_running():
                 scheduler.start(flask_app)
+
+    # ── Tek alan adı ────────────────────────────────────────────────────────
+    # Site Railway'in kendi adresinden (*.up.railway.app) de açılabiliyor: aynı
+    # içerik iki alan adında (SEO'da çift içerik) ve o adreste açılan oturum asıl
+    # sitede geçersiz. Sayfa isteklerini asıl adrese yönlendir. /api/* bilerek
+    # hariç: Railway healthcheck'i ve ödeme webhook'u gibi sunucu-sunucu
+    # çağrıları yönlendirme izlemeyebilir.
+    _site_host = SITE_URL.split("://", 1)[-1].split("/", 1)[0].lower()
+
+    @flask_app.before_request
+    def _canonical_host():
+        if request.method not in ("GET", "HEAD") or request.path.startswith("/api/"):
+            return None
+        host = (request.host or "").split(":", 1)[0].lower()
+        if host.endswith(".up.railway.app") and host != _site_host:
+            target = SITE_URL + request.full_path
+            return redirect(target[:-1] if target.endswith("?") else target, code=301)
+        return None
 
     # ── Güvenlik başlıkları ─────────────────────────────────────────────────
     # CSP şimdilik Report-Only: siteyi kırmadan tarayıcı konsolunda ihlalleri
@@ -691,6 +713,24 @@ def create_app() -> Flask:
         payload = {"rate": round(rate, 4), "pair": "USD/TRY", "ts": int(time.time())}
         exchange_cache.set(cache_key, payload)
         return jsonify(payload)
+
+    # GEÇİCİ tanı ucu: Railway/Cloudflare'in gerçekte hangi IP başlıklarını
+    # ilettiğini doğrulamak için. İsteyene yalnızca KENDİ isteğinin başlıklarını
+    # gösterir. Doğrulamadan sonra kaldırılacak.
+    @flask_app.route("/api/debug/client-ip")
+    @limiter.limit("20 per hour")
+    def api_debug_client_ip():
+        from backend.security import client_ip, is_cloudflare_ip, peer_ip
+        peer = peer_ip()
+        return jsonify({
+            "x_real_ip": request.headers.get("X-Real-IP"),
+            "x_forwarded_for": request.headers.get("X-Forwarded-For"),
+            "cf_connecting_ip": request.headers.get("CF-Connecting-IP"),
+            "remote_addr": request.remote_addr,
+            "peer": peer,
+            "peer_is_cloudflare": is_cloudflare_ip(peer),
+            "resolved_client_ip": client_ip(),
+        })
 
     @flask_app.route("/api/health")
     @limiter.exempt

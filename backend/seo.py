@@ -87,42 +87,65 @@ def _fmt_pct(value: Optional[float]) -> str:
 
 # ── Veri ─────────────────────────────────────────────────────────────────────
 
+class SnapshotBusy(Exception):
+    """Başka bir hisse sayfası için indirme sürüyor; istek bekletilmedi."""
+
+
+_FETCH_WAIT_SECONDS = 4
+
+
 def public_snapshot(symbol: str) -> Optional[dict]:
-    """Hissenin herkese açık özet verisi (tarama satırıyla aynı sözlük) ya da None."""
+    """Hissenin herkese açık özet verisi (tarama satırıyla aynı sözlük) ya da None.
+
+    Önbellekte yoksa indirme tek tek yapılır; sıra beklerken istek thread'i
+    en fazla _FETCH_WAIT_SECONDS bekler, sonra SnapshotBusy fırlatılır. Böylece
+    bir bot dalgası (aynı anda çok sayıda önbelleksiz hisse sayfası) sitenin
+    tüm istek thread'lerini indirme sırasında kilitleyemez.
+    """
     cached = symbol_cache.get(f"sym:{symbol}") or seo_cache.get(symbol)
     if cached is not None:
         return cached
     if seo_cache.get(f"miss:{symbol}"):
         return None
 
-    with _fetch_lock:  # aynı anda tek indirme: bot dalgası yfinance'i boğmasın
-        cached = symbol_cache.get(f"sym:{symbol}") or seo_cache.get(symbol)
-        if cached is not None:
-            return cached
-        if seo_cache.get(f"miss:{symbol}"):
-            return None
-        try:
-            from .data_fetcher import download_ohlcv
-            from .scanner import get_index_df
-            from .scoring import compute_regime_ok, score_symbol
+    if not _fetch_lock.acquire(timeout=_FETCH_WAIT_SECONDS):
+        raise SnapshotBusy(symbol)
+    try:
+        return _fetch_snapshot_locked(symbol)
+    finally:
+        _fetch_lock.release()
 
-            market = market_of_symbol(symbol)
-            df = download_ohlcv([symbol], period="300d", interval="1d").get(symbol)
-            result = None
-            if df is not None and not df.empty:
-                index_df = get_index_df(market)
-                result = score_symbol(symbol, df, index_df, market, compute_regime_ok(index_df))
-        except Exception:
-            logger.exception("seo: %s özeti üretilemedi", symbol)
-            result = None
 
-        if result is None:
-            seo_cache.set(f"miss:{symbol}", True, ttl=_MISS_TTL)
-            return None
-        snapshot = result.to_dict()
-        snapshot["sector"] = get_sector(symbol)
-        seo_cache.set(symbol, snapshot)
-        return snapshot
+def _fetch_snapshot_locked(symbol: str) -> Optional[dict]:
+    """public_snapshot'ın kilit altındaki kısmı: önbelleği yeniden kontrol edip
+    gerekirse tek hisselik veriyi indirir ve puanlar."""
+    cached = symbol_cache.get(f"sym:{symbol}") or seo_cache.get(symbol)
+    if cached is not None:
+        return cached
+    if seo_cache.get(f"miss:{symbol}"):
+        return None
+    try:
+        from .data_fetcher import download_ohlcv
+        from .scanner import get_index_df
+        from .scoring import compute_regime_ok, score_symbol
+
+        market = market_of_symbol(symbol)
+        df = download_ohlcv([symbol], period="300d", interval="1d").get(symbol)
+        result = None
+        if df is not None and not df.empty:
+            index_df = get_index_df(market)
+            result = score_symbol(symbol, df, index_df, market, compute_regime_ok(index_df))
+    except Exception:
+        logger.exception("seo: %s özeti üretilemedi", symbol)
+        result = None
+
+    if result is None:
+        seo_cache.set(f"miss:{symbol}", True, ttl=_MISS_TTL)
+        return None
+    snapshot = result.to_dict()
+    snapshot["sector"] = get_sector(symbol)
+    seo_cache.set(symbol, snapshot)
+    return snapshot
 
 
 def _related(symbol: str, market: str, sector: str, limit: int = 10) -> List[dict]:
@@ -244,11 +267,15 @@ def stock_page(symbol: str):
         # /hisse/thyao, /hisse/THYAO.IS → tek (kanonik) adres
         return redirect(f"/hisse/{canonical_slug}", code=301)
 
-    snap = public_snapshot(resolved)
+    retry_after = "3600"
+    try:
+        snap = public_snapshot(resolved)
+    except SnapshotBusy:
+        snap, retry_after = None, "120"   # sırada başka indirme var: kısa süre sonra tekrar
     ctx = _page_context(resolved, snap)
     if snap is None:
         resp = Response(render_template("hisse.html", **ctx), status=503, mimetype="text/html")
-        resp.headers["Retry-After"] = "3600"
+        resp.headers["Retry-After"] = retry_after
         resp.headers["X-Robots-Tag"] = "noindex"
         return resp
     resp = Response(render_template("hisse.html", **ctx), mimetype="text/html")

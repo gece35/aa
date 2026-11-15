@@ -25,28 +25,55 @@ def _valid_ip(value: str) -> Optional[str]:
         return None
 
 
-def client_ip() -> str:
-    """İsteği yapan gerçek istemcinin IP'si.
+# Cloudflare'in yayımladığı kenar sunucu aralıkları (https://www.cloudflare.com/ips-v4
+# ve /ips-v6, 2026-11 itibarıyla). Nadiren değişir; değişirse buraya eklenir.
+_CLOUDFLARE_NETS = tuple(ipaddress.ip_network(n) for n in (
+    "173.245.48.0/20", "103.21.244.0/22", "103.22.200.0/22", "103.31.4.0/22",
+    "141.101.64.0/18", "108.162.192.0/18", "190.93.240.0/20", "188.114.96.0/20",
+    "197.234.240.0/22", "198.41.128.0/17", "162.158.0.0/15", "104.16.0.0/13",
+    "104.24.0.0/14", "172.64.0.0/13", "131.0.72.0/22",
+    "2400:cb00::/32", "2606:4700::/32", "2803:f800::/32", "2405:b500::/32",
+    "2405:8100::/32", "2a06:98c0::/29", "2c0f:f248::/32",
+))
 
-    Site Cloudflare → Railway edge → gunicorn zincirinin arkasındadır;
-    `request.remote_addr` her zaman bir vekil sunucunun adresidir. Onu anahtar
-    alan rate-limit tüm ziyaretçileri tek kovaya koyuyordu (ör. "saatte 5
-    kayıt" site geneline uygulanıyordu). Sıra: Cloudflare'in verdiği
-    CF-Connecting-IP → X-Forwarded-For'un ilk (istemci) değeri → remote_addr.
 
-    Not: başlıklar yalnızca Cloudflare üzerinden gelen trafikte güvenilirdir;
-    origin'e doğrudan ulaşan biri bunları uydurabilir. Bu yüzden değer yalnızca
-    hız sınırlama/kota anahtarı olarak kullanılır, yetkilendirme için değil.
+def is_cloudflare_ip(ip: str) -> bool:
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    return any(addr in net for net in _CLOUDFLARE_NETS)
+
+
+def peer_ip() -> str:
+    """Railway kenar sunucusuna bağlanan tarafın IP'si.
+
+    Railway edge `X-Real-IP` başlığını her istekte kendisi yazar (istemcinin
+    gönderdiği değeri ezer); bu yüzden güvenilirdir. Başlık yoksa (lokal
+    geliştirme, testler) doğrudan bağlantının adresi kullanılır.
     """
-    ip = _valid_ip(request.headers.get("CF-Connecting-IP", ""))
-    if ip:
-        return ip
-    forwarded = request.headers.get("X-Forwarded-For", "")
-    if forwarded:
-        ip = _valid_ip(forwarded.split(",")[0])
-        if ip:
-            return ip
-    return request.remote_addr or "0.0.0.0"
+    return (_valid_ip(request.headers.get("X-Real-IP", ""))
+            or _valid_ip(request.remote_addr or "")
+            or "0.0.0.0")
+
+
+def client_ip() -> str:
+    """İsteği yapan gerçek istemcinin IP'si (hız sınırı / kota anahtarı).
+
+    Normal trafik Cloudflare → Railway edge → gunicorn yolunu izler: bağlanan
+    taraf bir Cloudflare sunucusudur ve gerçek istemci `CF-Connecting-IP`
+    başlığındadır. Ancak Railway'in kendi alan adı Cloudflare'i atlayarak
+    doğrudan erişilebilir ve bu başlığı herkes uydurabilir; bu yüzden ona
+    YALNIZCA bağlanan taraf gerçekten Cloudflare ise güvenilir. Aksi halde
+    bağlanan tarafın adresi kullanılır. X-Forwarded-For'un ilk değeri de
+    istemci tarafından uydurulabildiği için kullanılmaz.
+    """
+    peer = peer_ip()
+    if is_cloudflare_ip(peer):
+        cf = _valid_ip(request.headers.get("CF-Connecting-IP", ""))
+        if cf:
+            return cf
+    return peer
 
 
 # Tek `limiter` nesnesi burada oluşturulur (app'e bağlanmadan) — böylece

@@ -78,7 +78,9 @@ def _isolate(app):
             limiter.reset()
         except Exception:
             pass
-    for obj in vars(cache_mod).values():
+    from backend import seo as seo_mod
+
+    for obj in list(vars(cache_mod).values()) + [seo_mod.seo_cache]:
         if isinstance(obj, cache_mod.TTLCache):
             obj.clear()
     quota_store.reset()
