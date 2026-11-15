@@ -1,6 +1,6 @@
 # Nebula Scanner
 
-BIST (162 hisse) ve ABD borsası (248 hisse) hisselerini **hibrit durum + kesişim tazeliği motoru** ile tarayan ve **0-10** arası puanlayan Flask + Vanilla JS uygulaması. Railway üzerinde canlıya alınmıştır (web + worker + Postgres).
+BIST (162 hisse) ve ABD borsası (248 hisse) hisselerini **hibrit durum + kesişim tazeliği motoru** ile tarayan ve **0-10** arası puanlayan Flask + Vanilla JS uygulaması. Railway üzerinde canlıya alınmıştır (tek web servisi + Postgres; Cloudflare arkasında).
 
 ## Puanlama Motoru (0-10) — hibrit durum + kesişim tazeliği
 
