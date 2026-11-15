@@ -17,6 +17,7 @@ import time
 
 import hmac
 import threading
+from datetime import date
 
 from flask import Flask, Response, abort, jsonify, redirect, request, send_from_directory
 from flask_cors import CORS
@@ -72,9 +73,9 @@ _SCHEDULER_HOST = (
 )
 
 # /api/health şema kontrolü: True iken DB revizyonu koddaki head'den farklıysa
-# 503 döner (Railway healthcheck bozuk şemalı sürümü yayına almaz). İlk
-# bootstrap canlıda doğrulanana kadar yalnızca raporlar.
-STRICT_SCHEMA_HEALTH = False
+# 503 döner: Railway healthcheck, migration'ı uygulanamamış (şeması eksik) bir
+# sürümü yayına almaz, eski sürüm açık kalır.
+STRICT_SCHEMA_HEALTH = True
 
 # Hisse sembolü formatı — alerts/watchlist/portfolio uçlarının hepsinde aynı
 # doğrulama: rastgele/aşırı uzun string'lerin DB'ye yazılmasını (ve Postgres'te
@@ -141,7 +142,7 @@ a{{color:#fff;background:#2563eb;padding:10px 20px;border-radius:8px;text-decora
 
 def _html_error(code: int, message: str) -> Response:
     resp = Response(_ERROR_PAGE.format(code=code, message=message), status=code,
-                    mimetype="text/html; charset=utf-8")
+                    mimetype="text/html")
     resp.headers["X-Robots-Tag"] = "noindex"
     return resp
 
@@ -177,7 +178,7 @@ def _serve_html(directory: str, filename: str) -> Response:
     v = _asset_version()
     html = html.replace('src="app.js"', f'src="app.js?v={v}"')
     html = html.replace('href="style.css"', f'href="style.css?v={v}"')
-    resp = Response(html, mimetype="text/html; charset=utf-8")
+    resp = Response(html, mimetype="text/html")  # charset=utf-8 Flask tarafından eklenir
     resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     resp.headers["Pragma"] = "no-cache"
     resp.headers["Expires"] = "0"
@@ -385,16 +386,30 @@ def create_app() -> Flask:
     @flask_app.route("/api/admin/stats")
     @admin_required
     def api_admin_stats():
-        from backend.models import User as UserModel
-        from backend.newsletter import _load as load_newsletter
+        from backend.models import Feedback, User as UserModel
+        from backend.newsletter import active_count as newsletter_active_count
         total_users = db.session.query(UserModel).count()
         lifetime_users = db.session.query(UserModel).filter_by(subscription_status="lifetime").count()
         return jsonify({
             "total_users": total_users,
             "lifetime_users": lifetime_users,
             "lifetime_slots_left": max(0, 100 - lifetime_users),
-            "newsletter_subscribers": len(load_newsletter()),
+            "newsletter_subscribers": newsletter_active_count(),
+            "feedback_count": db.session.query(Feedback).count(),
         })
+
+    @flask_app.route("/api/admin/feedback")
+    @admin_required
+    def api_admin_feedback():
+        """Geri bildirim formundan gelen son kayıtlar (en yeni önce)."""
+        from backend.models import Feedback
+        rows = (
+            db.session.query(Feedback)
+            .order_by(Feedback.created_at.desc(), Feedback.id.desc())
+            .limit(200)
+            .all()
+        )
+        return jsonify({"feedback": [f.to_dict() for f in rows]})
 
     @flask_app.route("/api/admin/users")
     @admin_required
@@ -845,12 +860,22 @@ def create_app() -> Flask:
         currency = (body.get("currency") or "TRY").upper().strip()
         if not symbol or not _SYMBOL_RE.fullmatch(symbol) or qty <= 0 or avg_price <= 0 or len(currency) > 8:
             return jsonify({"error": "invalid_input"}), 400
+        # Alış tarihi isteğe bağlı (YYYY-AA-GG); geçersiz/gelecek tarih yok sayılır.
+        buy_date = None
+        raw_date = str(body.get("buy_date") or "").strip()[:10]
+        if raw_date:
+            try:
+                parsed = date.fromisoformat(raw_date)
+                if parsed <= date.today():
+                    buy_date = parsed
+            except ValueError:
+                buy_date = None
         err = enforce_collection_limit(current_user, "portfolio", len(current_user.portfolio))
         if err:
             return jsonify({"error": "plan_limit", "message": err, "upgrade_url": "/pricing"}), 402
         p = Portfolio(
             user_id=current_user.id, symbol=symbol,
-            qty=qty, avg_price=avg_price, currency=currency,
+            qty=qty, avg_price=avg_price, currency=currency, buy_date=buy_date,
         )
         db.session.add(p)
         db.session.commit()

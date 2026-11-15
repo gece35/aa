@@ -37,6 +37,7 @@ _LADDER = [
     ("2c546aa52be9", {"users", "webhook_events", "alerts", "email_tokens", "portfolio", "watchlist"}),
     ("a1b2c3d4e5f6", {"stock_comments"}),
     ("b3c4d5e6f7a8", {"tweet_logs"}),
+    ("c4d5e6f7a8b9", {"newsletter_subscribers", "feedback"}),  # + portfolio.buy_date kolonu
 ]
 
 _state = {"ran": False, "action": None, "error": None, "head": None}

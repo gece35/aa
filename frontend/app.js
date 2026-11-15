@@ -117,6 +117,39 @@
             searchInput.onkeydown = (e) => { if (e.key === 'Enter') openAdminUsers(1, searchInput.value.trim()); };
         }
     }
+    // ── Admin: geri bildirim listesi modalı ──────────────────────────────────
+    function openAdminFeedback() {
+        const modal = document.getElementById('adminFeedbackModal');
+        const list = document.getElementById('adminFeedbackList');
+        if (!modal || !list) return;
+        modal.classList.remove('hidden');
+        const close = () => modal.classList.add('hidden');
+        document.getElementById('adminFeedbackClose').onclick = close;
+        document.getElementById('adminFeedbackBackdrop').onclick = close;
+        list.innerHTML = '<p style="text-align:center;padding:20px;color:var(--text-3);">Yükleniyor…</p>';
+
+        const labels = { genel: 'Genel', hata: 'Hata', oneri: 'Öneri', diger: 'Diğer' };
+        fetch('/api/admin/feedback').then(r => r.json()).then(data => {
+            const rows = data.feedback || [];
+            if (!rows.length) {
+                list.innerHTML = '<p style="text-align:center;padding:24px;color:var(--text-3);">Henüz geri bildirim yok.</p>';
+                return;
+            }
+            list.innerHTML = rows.map(f => {
+                const when = f.created_at ? new Date(f.created_at * 1000).toLocaleString('tr-TR') : '';
+                return `<div style="padding:10px 4px;border-bottom:1px solid var(--glass-brd);">
+                    <div style="display:flex;gap:10px;flex-wrap:wrap;color:var(--text-3);font-size:12px;margin-bottom:4px;">
+                        <strong style="color:var(--accent);">${escapeHtml(labels[f.category] || f.category)}</strong>
+                        <span>${escapeHtml(when)}</span>
+                        <span>${escapeHtml(f.email || 'anonim')}</span>
+                    </div>
+                    <div style="white-space:pre-wrap;word-break:break-word;">${escapeHtml(f.message)}</div>
+                </div>`;
+            }).join('');
+        }).catch(() => {
+            list.innerHTML = '<p style="text-align:center;padding:20px;color:var(--danger);">Veriler yüklenemedi.</p>';
+        });
+    }
     // ─────────────────────────────────────────────────────────────────────────
 
     const WATCHLIST_KEY = 'nebula.watchlist.v1';
@@ -219,7 +252,7 @@
         } else {
             try {
                 const raw = localStorage.getItem(WATCHLIST_KEY);
-                if (raw) state.watchlist = new Set(JSON.parse(raw));
+                state.watchlist = new Set(raw ? JSON.parse(raw) : []);
             } catch (_) { state.watchlist = new Set(); }
         }
     }
@@ -366,7 +399,7 @@
             hideSkeletons();
             const empty = document.createElement('div');
             empty.className = 'empty glass';
-            empty.textContent = `Tarama yuklenemedi: ${err.message}`;
+            empty.textContent = `Tarama yüklenemedi: ${err.message}`;
             els.resultsArea.appendChild(empty);
             return;
         }
@@ -383,7 +416,7 @@
         m.loading = true;
         try {
             const data = await API.scanChunk(market, m.offset, BATCH_SIZE, force, state.sort);
-            if (data.error) throw new Error(data.error);
+            if (data.error) throw new Error(data.message || data.error);
 
             const incoming = data.results || [];
             for (const r of incoming) {
@@ -447,7 +480,7 @@
             return;
         }
         const remaining = Math.max(0, m.cacheRemaining);
-        const loadedInfo = m.total ? ` &middot; ${m.results.length}/${m.total} yuklendi` : '';
+        const loadedInfo = m.total ? ` &middot; ${m.results.length}/${m.total} yüklendi` : '';
         if (remaining > 3600) {
             // Seans kapalı: veri bir sonraki açılışa kadar değişmez.
             els.cacheState.innerHTML = `pazar kapalı &middot; son kapanış verisi${loadedInfo}`;
@@ -455,10 +488,10 @@
         } else if (remaining > 0) {
             const mins = Math.floor(remaining / 60);
             const secs = remaining % 60;
-            els.cacheState.innerHTML = `canli &middot; ${mins}:${String(secs).padStart(2, '0')} sonra yenile${loadedInfo}`;
+            els.cacheState.innerHTML = `canlı &middot; ${mins}:${String(secs).padStart(2, '0')} sonra yenile${loadedInfo}`;
             els.cacheState.style.color = '#22d3ee';
         } else {
-            els.cacheState.innerHTML = `cache suresi doldu${loadedInfo}`;
+            els.cacheState.innerHTML = `önbellek süresi doldu${loadedInfo}`;
             els.cacheState.style.color = '#ffb86b';
         }
     }
@@ -493,6 +526,36 @@
         return copy;
     }
 
+    // sembol → { card, sig, drawn }. Kart yalnızca içeriğini etkileyen bir şey
+    // değiştiğinde (fiyat, puan, kilit, favori, para birimi, oturum) yeniden kurulur.
+    const _cardCache = new Map();
+
+    function cardSignature(r, locked) {
+        return [
+            r.price, r.score, r.change_pct, r.volume, locked ? 1 : 0,
+            state.watchlist.has(r.symbol) ? 1 : 0,
+            state.currency, state.showUsd ? 1 : 0, state.usdRate || 0,
+            _currentUser ? (_currentUser.is_admin ? 2 : 1) : 0,
+        ].join('|');
+    }
+
+    function drawCardSparkline(entry, r) {
+        const canvas = entry.card.querySelector('canvas');
+        if (!canvas) return;
+        drawSparkline(canvas, r.sparkline || [], r.change_pct >= 0);
+        // Sekme gizliyken genişlik 0 gelir; görünür olduğunda tekrar çizilsin.
+        entry.drawn = canvas.getBoundingClientRect().width > 0;
+    }
+
+    function redrawSparklines() {
+        const m = ms();
+        els.resultsArea.querySelectorAll('.stock-card').forEach((card) => {
+            const r = m.bySymbol.get(card.dataset.symbol);
+            const entry = r && _cardCache.get(r.symbol);
+            if (entry) drawCardSparkline(entry, r);
+        });
+    }
+
     function renderResults() {
         hideSkeletons();
         const m = ms();
@@ -515,13 +578,26 @@
             empty.textContent = state.onlyWatched
                 ? 'Favori listenizde bu pazardan hisse yok.'
                 : m.hasMore
-                    ? 'Daha fazla hisse yukleniyor...'
-                    : 'Secili filtrelere uygun hisse bulunamadi.';
+                    ? 'Daha fazla hisse yükleniyor...'
+                    : 'Seçili filtrelere uygun hisse bulunamadı.';
             els.resultsArea.appendChild(empty);
         } else {
             const frag = document.createDocumentFragment();
+            const toDraw = [];
             filtered.forEach((r, idx) => {
-                const card = buildStockCard(r, idx);
+                const locked = !_currentUser && idx >= 5;
+                const sig = cardSignature(r, locked);
+                let entry = _cardCache.get(r.symbol);
+                if (!entry || entry.sig !== sig) {
+                    entry = { card: buildStockCard(r, idx), sig, drawn: false };
+                    entry.card.dataset.symbol = r.symbol;
+                    _cardCache.set(r.symbol, entry);
+                } else {
+                    const rank = entry.card.querySelector('.stock-rank');
+                    if (rank) rank.textContent = idx + 1;
+                }
+                if (!entry.drawn) toDraw.push([entry, r]);
+                const card = entry.card;
                 frag.appendChild(card);
                 if (!_currentUser && idx === 4 && filtered.length > 5) {
                     const remaining = (state.marketTickerCount[state.market] || m.fullTotal || m.total || filtered.length) - 5;
@@ -537,17 +613,14 @@
             });
             els.resultsArea.appendChild(frag);
 
-            filtered.forEach((r) => {
-                const canvas = document.getElementById(`spark-${cssSafe(r.symbol)}`);
-                if (canvas) drawSparkline(canvas, r.sparkline || [], r.change_pct >= 0);
-            });
+            toDraw.forEach(([entry, r]) => drawCardSparkline(entry, r));
         }
 
         if (m.hasMore) {
             const sentinel = document.createElement('div');
             sentinel.className = 'loader-sentinel';
             sentinel.innerHTML = `<div class="loader-dot"></div><div class="loader-dot"></div><div class="loader-dot"></div>
-                <span class="loader-text">${m.loading ? 'Yukleniyor...' : `Daha fazlasi... (${m.results.length}/${m.total})`}</span>`;
+                <span class="loader-text">${m.loading ? 'Yükleniyor...' : `Daha fazlası... (${m.results.length}/${m.total})`}</span>`;
             els.resultsArea.appendChild(sentinel);
             observeSentinel(sentinel);
         } else if (m.loadedOnce) {
@@ -586,6 +659,11 @@
 
     function cssSafe(s) { return String(s).replace(/[^a-zA-Z0-9_-]/g, '_'); }
 
+    // Sunucudaki market_of_symbol ile aynı kural: .IS → BIST, aksi → ABD.
+    function marketOfSymbol(symbol) {
+        return String(symbol || '').toUpperCase().endsWith('.IS') ? 'bist' : 'us';
+    }
+
     function buildStockCard(r, idx) {
         const isGuestLocked = !_currentUser && idx >= 5;
         const card = document.createElement('div');
@@ -599,10 +677,10 @@
         const monthCls = (r.change_month_pct || 0) >= 0 ? 'up' : 'down';
 
         const spikeBadge = r.volume_spike
-            ? `<span class="badge volume-spike" title="Son 10 gun ortalamasinin 1.5x uzeri hacim">&#128640; Hacim Patlamasi</span>`
+            ? `<span class="badge volume-spike" title="Son 10 gün ortalamasının 1,5 katı üzeri hacim">&#128640; Hacim Patlaması</span>`
             : '';
         const nearPeakBadge = r.near_peak
-            ? `<span class="badge near-peak" title="52 haftalik zirveye %5 icinde">&#9650; Tepe</span>`
+            ? `<span class="badge near-peak" title="52 haftalık zirveye %5 içinde">&#9650; Tepe</span>`
             : '';
         const entryBadge = r.entry_signal
             ? `<span class="badge entry-signal" title="Bu hisse TDOV'un geçmiş test verisinde gözlemlenen koşul setiyle eşleşiyor: taze kesişim + trend onayı + yeterli hacim + 52 haftalık zirveye yakınlık (bkz. Rehber → Basit Anlatım). Bu bir alım tavsiyesi değildir, yalnızca geçmiş veri modeline dayalı bir eşleşme bilgisidir.">&#127919; TDOV Eşleşti</span>`
@@ -822,9 +900,12 @@
     }
 
     // --- modal ---
+    let _stockModalReq = 0;
+
     async function openStockModal(symbol) {
+        const reqId = ++_stockModalReq;
         els.modal.classList.remove('hidden');
-        els.modalContent.innerHTML = '<div class="empty">Yukleniyor...</div>';
+        els.modalContent.innerHTML = '<div class="empty">Yükleniyor...</div>';
         try {
             // Misafir hisse detayına tıklayınca login modal açılır
             if (!_currentUser) {
@@ -836,6 +917,7 @@
                 API.stock(symbol),
                 API.stockNews(symbol).catch(() => ({ items: [] })),
             ]);
+            if (reqId !== _stockModalReq) return;   // bu arada başka hisse açıldı / modal kapandı
             if (data.error === 'auth_required') {
                 els.modal.classList.add('hidden');
                 openAuthModal('signup');
@@ -850,6 +932,7 @@
             wireModalPortfolioForm(data);
             loadAndWireComments(data.symbol);
         } catch (err) {
+            if (reqId !== _stockModalReq) return;
             els.modalContent.innerHTML = `<div class="empty">Detay yüklenemedi: ${escapeHtml(err.message)}</div>`;
         }
     }
@@ -899,15 +982,15 @@
         const change = Number(d.change_pct || 0);
         const isWatched = state.watchlist.has(d.symbol);
         const spikeHtml = d.volume_spike
-            ? `<span class="badge volume-spike" style="margin-left:8px;">&#128640; Hacim Patlamasi</span>`
+            ? `<span class="badge volume-spike" style="margin-left:8px;">&#128640; Hacim Patlaması</span>`
             : '';
         const nearPeakHtml = d.near_peak
-            ? `<span class="badge near-peak" style="margin-left:8px;" title="Fiyat 52 haftalik zirveye %5 icinde">&#9650; Tepeye Yakin</span>`
+            ? `<span class="badge near-peak" style="margin-left:8px;" title="Fiyat 52 haftalık zirveye %5 içinde">&#9650; Tepeye Yakın</span>`
             : '';
         const reason = buildScoreReason(d);
 
         const price = d.price;
-        const ccy = state.currency;
+        const ccy = marketOfSymbol(d.symbol) === 'bist' ? 'TRY' : 'USD';
 
         // --- Support / Resistance ---
         const sups = (d.supports || []).filter(s => s < price * 1.05).slice(-4).reverse();
@@ -972,7 +1055,7 @@
                     <span class="sn-meta">${dateStr}</span>
                 </a>`;
             }).join('')
-            : `<div style="color:var(--text-3);font-size:13px;padding:10px 0;">Bu hisse icin guncel haber bulunamadi.</div>`;
+            : `<div style="color:var(--text-3);font-size:13px;padding:10px 0;">Bu hisse için güncel haber bulunamadı.</div>`;
 
         return `
             <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
@@ -999,11 +1082,11 @@
             <!-- ÖZET paneli -->
             <div id="dtab-ozet" class="dtab-panel" style="padding-top:14px;">
                 <div class="detail-row"><span class="k">Fiyat</span><span>${fmtPrice(d.price, ccy)}</span></div>
-                <div class="detail-row"><span class="k">Gunluk Degisim</span><span style="color:${change >= 0 ? 'var(--neon)' : 'var(--danger)'}">${fmtChange(change)}</span></div>
-                <div class="detail-row"><span class="k">Haftalik Degisim</span><span style="color:${(d.change_week_pct || 0) >= 0 ? 'var(--neon)' : 'var(--danger)'}">${fmtChange(d.change_week_pct)}</span></div>
-                <div class="detail-row"><span class="k">Aylik Degisim</span><span style="color:${(d.change_month_pct || 0) >= 0 ? 'var(--neon)' : 'var(--danger)'}">${fmtChange(d.change_month_pct)}</span></div>
-                <div class="detail-row"><span class="k">52 Hafta Yuksek</span><span>${fmtPrice(d.high_52w, ccy)}</span></div>
-                <div class="detail-row"><span class="k">52 Hafta Dusuk</span><span>${fmtPrice(d.low_52w, ccy)}</span></div>
+                <div class="detail-row"><span class="k">Günlük Değişim</span><span style="color:${change >= 0 ? 'var(--neon)' : 'var(--danger)'}">${fmtChange(change)}</span></div>
+                <div class="detail-row"><span class="k">Haftalık Değişim</span><span style="color:${(d.change_week_pct || 0) >= 0 ? 'var(--neon)' : 'var(--danger)'}">${fmtChange(d.change_week_pct)}</span></div>
+                <div class="detail-row"><span class="k">Aylık Değişim</span><span style="color:${(d.change_month_pct || 0) >= 0 ? 'var(--neon)' : 'var(--danger)'}">${fmtChange(d.change_month_pct)}</span></div>
+                <div class="detail-row"><span class="k">52 Hafta Yüksek</span><span>${fmtPrice(d.high_52w, ccy)}</span></div>
+                <div class="detail-row"><span class="k">52 Hafta Düşük</span><span>${fmtPrice(d.low_52w, ccy)}</span></div>
                 <div class="detail-row"><span class="k">20g Ort. Hacim</span><span>${fmtVolume(d.avg_volume_20d || 0)}</span></div>
                 ${slTpHtml}
                 ${srHtml}
@@ -1211,7 +1294,7 @@
         `;
     }
 
-    function closeModal() { els.modal.classList.add('hidden'); }
+    function closeModal() { _stockModalReq++; els.modal.classList.add('hidden'); }
 
     // --- portfolio ---
     const PORTFOLIO_KEY = 'nebula.portfolio.v2';
@@ -1225,7 +1308,7 @@
                     id: p.id,
                     symbol: p.symbol,
                     market: p.currency === 'TRY' ? 'bist' : 'us',
-                    buyDate: '',
+                    buyDate: p.buy_date || '',
                     buyPrice: p.avg_price,
                     qty: p.qty,
                 }));
@@ -1233,7 +1316,7 @@
         } else {
             try {
                 const raw = localStorage.getItem(PORTFOLIO_KEY);
-                if (raw) port.positions = JSON.parse(raw);
+                port.positions = raw ? JSON.parse(raw) : [];
             } catch (_) { port.positions = []; }
         }
         updatePortBadge();
@@ -1262,13 +1345,14 @@
                     qty: parseFloat(qty) || 1,
                     avg_price: parseFloat(buyPrice),
                     currency,
+                    buy_date: buyDate || null,
                 });
                 if (d.ok && d.position) {
                     port.positions.push({
                         id: d.position.id,
                         symbol: d.position.symbol,
                         market,
-                        buyDate,
+                        buyDate: d.position.buy_date || buyDate || '',
                         buyPrice: d.position.avg_price,
                         qty: d.position.qty,
                     });
@@ -1974,7 +2058,7 @@
             const qty = parseFloat(qtyInput?.value);
             if (!date || !price || isNaN(price) || price <= 0) { priceInput?.focus(); return; }
             if (!qty || isNaN(qty) || qty <= 0) { qtyInput?.focus(); return; }
-            addPosition(data.symbol, state.market, date, price, qty);
+            addPosition(data.symbol, marketOfSymbol(data.symbol), date, price, qty);
             form?.classList.add('hidden');
             if (toggle) {
                 const n = port.positions.filter(p => p.symbol === data.symbol).length;
@@ -2012,7 +2096,9 @@
             listEl.querySelectorAll('.comment-delete-btn').forEach((btn) => {
                 btn.addEventListener('click', async () => {
                     const id = parseInt(btn.dataset.id);
-                    await API.commentsDelete(id);
+                    let res = null;
+                    try { res = await API.commentsDelete(id); } catch (_) {}
+                    if (!res || !res.ok) { showToast('Yorum silinemedi.', 'danger'); return; }
                     btn.closest('.comment-item').remove();
                     if (!listEl.querySelector('.comment-item')) {
                         listEl.innerHTML = `<div style="color:var(--text-3);font-size:13px;padding:8px 0;">Henüz yorum yok. İlk yorumu sen yap!</div>`;
@@ -2059,13 +2145,23 @@
                         </div>`;
                         const item = newHtml.firstChild;
                         item.querySelector('.comment-delete-btn').addEventListener('click', async () => {
-                            await API.commentsDelete(c.id);
+                            let delRes = null;
+                            try { delRes = await API.commentsDelete(c.id); } catch (_) {}
+                            if (!delRes || !delRes.ok) { showToast('Yorum silinemedi.', 'danger'); return; }
                             item.remove();
                         });
                         if (!existing.length) listEl.innerHTML = '';
                         listEl.insertBefore(item, listEl.firstChild);
+                    } else if (res.error === 'email_not_verified') {
+                        showToast('Yorum yapmak için önce e-posta adresinizi doğrulayın.', 'warning', 7000);
+                    } else if (res.error === 'too_long') {
+                        showToast('Yorum en fazla 500 karakter olabilir.', 'warning');
+                    } else {
+                        showToast('Yorum gönderilemedi, lütfen tekrar deneyin.', 'danger');
                     }
-                } catch (_) {}
+                } catch (_) {
+                    showToast('Bağlantı hatası: yorum gönderilemedi.', 'danger');
+                }
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Yorum Yap';
             });
@@ -2154,7 +2250,7 @@
             recHtml = rec ? `<div class="port-rec ${recClass}" style="margin-top:0;flex-shrink:0;"><span class="rec-badge">${escapeHtml(rec.label)}</span></div>` : '';
         } else {
             const reason = d ? buildScoreReason(d) : '';
-            const spikeHtml = d && d.volume_spike ? `<span class="badge volume-spike">&#128640; Hacim Patlamasi</span>` : '';
+            const spikeHtml = d && d.volume_spike ? `<span class="badge volume-spike">&#128640; Hacim Patlaması</span>` : '';
             contextHtml = `
                 <div class="chart-pos-context" style="align-items:center;gap:8px;">
                     ${spikeHtml}
@@ -2642,8 +2738,12 @@
         if (e.key.toLowerCase() === 'r') loadScan(true);
     });
 
+    // Yeniden boyutlandırmada (mobilde adres çubuğu her gizlenip göründüğünde
+    // tetiklenir) kartları baştan kurma; yalnızca mini grafikleri yeniden çiz.
+    let _resizeTimer = null;
     window.addEventListener('resize', () => {
-        if (ms().results.length) renderResults();
+        clearTimeout(_resizeTimer);
+        _resizeTimer = setTimeout(() => { if (ms().results.length) redrawSparklines(); }, 200);
     });
 
     // bootstrap — Auth.me() önce beklenir, sonra watchlist/portfolio API'den çekilir
@@ -2963,9 +3063,11 @@
                 if (user.is_admin) {
                     adminBar.classList.remove('hidden');
                     fetch('/api/admin/stats').then(r => r.json()).then(s => {
-                        adminBar.innerHTML = `<span>👤 Kullanıcı: <strong>${s.total_users}</strong></span><span>🎁 Lifetime: <strong>${s.lifetime_users}/100</strong> (${s.lifetime_slots_left} yer kaldı)</span><span>📬 Newsletter: <strong>${s.newsletter_subscribers}</strong></span><button id="adminUsersBtn" class="btn btn-ghost" style="font-size:12px;padding:3px 10px;margin-left:8px;">👥 Kullanıcılar</button>`;
+                        adminBar.innerHTML = `<span>👤 Kullanıcı: <strong>${s.total_users}</strong></span><span>🎁 Lifetime: <strong>${s.lifetime_users}/100</strong> (${s.lifetime_slots_left} yer kaldı)</span><span>📬 Bülten: <strong>${Number(s.newsletter_subscribers) || 0}</strong></span><button id="adminUsersBtn" class="btn btn-ghost" style="font-size:12px;padding:3px 10px;margin-left:8px;">👥 Kullanıcılar</button><button id="adminFeedbackBtn" class="btn btn-ghost" style="font-size:12px;padding:3px 10px;">💬 Geri bildirimler (${Number(s.feedback_count) || 0})</button>`;
                         const btn = document.getElementById('adminUsersBtn');
                         if (btn) btn.addEventListener('click', () => openAdminUsers());
+                        const fbBtn = document.getElementById('adminFeedbackBtn');
+                        if (fbBtn) fbBtn.addEventListener('click', () => openAdminFeedback());
                     }).catch(() => { adminBar.innerHTML = '<span>Admin verileri yüklenemedi.</span>'; });
                 } else {
                     adminBar.classList.add('hidden');
@@ -2984,6 +3086,69 @@
         }
     }
 
+    // Misafirken tarayıcıda biriken favori/portföyü ilk girişte hesaba taşır.
+    async function migrateGuestData() {
+        if (!_currentUser) return;
+        try {
+            const raw = localStorage.getItem(WATCHLIST_KEY);
+            const symbols = raw ? JSON.parse(raw) : [];
+            if (Array.isArray(symbols) && symbols.length) {
+                let failed = false;
+                for (const sym of symbols.slice(0, 100)) {
+                    try {
+                        const res = await API.watchlistAdd(String(sym));
+                        if (!res || !res.ok) failed = true;
+                    } catch (_) { failed = true; }
+                }
+                if (!failed) localStorage.removeItem(WATCHLIST_KEY);
+            }
+        } catch (_) {}
+        try {
+            const raw = localStorage.getItem(PORTFOLIO_KEY);
+            const positions = raw ? JSON.parse(raw) : [];
+            if (Array.isArray(positions) && positions.length) {
+                let failed = false;
+                for (const pos of positions.slice(0, 50)) {
+                    try {
+                        const res = await API.portfolioAdd({
+                            symbol: String(pos.symbol || '').toUpperCase(),
+                            qty: parseFloat(pos.qty) || 1,
+                            avg_price: parseFloat(pos.buyPrice),
+                            currency: pos.market === 'bist' ? 'TRY' : 'USD',
+                            buy_date: pos.buyDate || null,
+                        });
+                        if (!res || !res.ok) failed = true;
+                    } catch (_) { failed = true; }
+                }
+                if (!failed) localStorage.removeItem(PORTFOLIO_KEY);
+            }
+        } catch (_) {}
+    }
+
+    // Oturum durumu değişince (giriş/çıkış) ekrandaki her şeyi yeni kullanıcıya göre
+    // yeniden yükler. Eskiden yeni giriş yapan üye sayfayı elle yenileyene kadar
+    // misafir görünümünü (30 hisse, bulanık kartlar) görmeye devam ediyordu.
+    async function refreshAfterAuthChange() {
+        if (!_currentUser && state.market !== 'bist') {
+            // Misafir yalnızca BIST görebilir (aksi halde "premium_required" hatası)
+            state.market = 'bist';
+            try { localStorage.setItem(MARKET_KEY, 'bist'); } catch (_) {}
+        }
+        if (state.prefetchTimer) clearTimeout(state.prefetchTimer);
+        state.byMarket = { us: newMarketState(), bist: newMarketState() };
+        _cardCache.clear();
+        const alertBadge = document.getElementById('alertBadge');
+        if (alertBadge && !_currentUser) alertBadge.classList.add('hidden');
+        try {
+            await Promise.all([loadWatchlist(), loadPortfolio()]);
+            await loadMarkets();
+        } catch (_) {}
+        updateCurrencyToggle();
+        loadScan(true);
+        if (_currentUser) { loadAlerts(); pollTriggeredAlerts(); }
+        if (!document.getElementById('tab-portfolio').classList.contains('hidden')) renderPortfolioTab();
+    }
+
     document.getElementById('betaBannerClose')?.addEventListener('click', () => {
         document.getElementById('betaBanner')?.classList.add('hidden');
         sessionStorage.setItem('betaBannerClosed', '1');
@@ -2996,6 +3161,10 @@
             applyUserState(d.user);
         } else {
             applyUserState(null);
+            if (state.market !== 'bist') {
+                state.market = 'bist';
+                try { localStorage.setItem(MARKET_KEY, 'bist'); } catch (_) {}
+            }
         }
         await Promise.all([loadWatchlist(), loadPortfolio()]);
         await loadMarkets();
@@ -3096,6 +3265,8 @@
                 applyUserState(d.user);
                 closeAuthModal();
                 showToast('Giriş yapıldı.', 'success');
+                await migrateGuestData();
+                refreshAfterAuthChange();
             } else if (d.error === 'email_not_verified') {
                 errEl.innerHTML = '';
                 const msg = document.createTextNode('E-posta adresiniz henüz doğrulanmamış. ');
@@ -3249,6 +3420,7 @@
         await Auth.logout();
         applyUserState(null);
         showToast('Çıkış yapıldı.', 'info');
+        refreshAfterAuthChange();
     });
 
     // ── Hesap Paneli ─────────────────────────────────────────────────────
@@ -3417,7 +3589,7 @@
     document.getElementById('exportDataBtn')?.addEventListener('click', async () => {
         try {
             const r = await fetch('/api/auth/export');
-            if (!r.ok) { showToast('Veriler alınamadı.', 'error'); return; }
+            if (!r.ok) { showToast('Veriler alınamadı.', 'danger'); return; }
             const data = await r.json();
             const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
@@ -3425,7 +3597,7 @@
             a.href = url; a.download = 'nebula_verilerim.json'; a.click();
             URL.revokeObjectURL(url);
             showToast('Verileriniz indirildi.', 'success');
-        } catch { showToast('İndirme başarısız.', 'error'); }
+        } catch { showToast('İndirme başarısız.', 'danger'); }
     });
 
     // Hesap silme
@@ -3679,20 +3851,28 @@
             if (!message) { textarea.focus(); return; }
             submitBtn.disabled = true;
             try {
-                await fetch('/api/feedback', {
+                const res = await fetch('/api/feedback', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         category: select.value,
                         message,
-                        email: state.user?.email || '',
+                        email: _currentUser ? _currentUser.email : '',
                     }),
                 });
+                if (!res.ok) {
+                    showToast(res.status === 429
+                        ? 'Çok fazla geri bildirim gönderdiniz, lütfen daha sonra tekrar deneyin.'
+                        : 'Geri bildirim gönderilemedi, lütfen tekrar deneyin.', 'danger');
+                    submitBtn.disabled = false;
+                    return;
+                }
                 success.classList.remove('hidden');
                 textarea.value = '';
                 counter.textContent = '0';
                 setTimeout(close, 2500);
             } catch {
+                showToast('Bağlantı hatası: geri bildirim gönderilemedi.', 'danger');
                 submitBtn.disabled = false;
             }
         });

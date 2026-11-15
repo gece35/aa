@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import os
-from datetime import datetime, timezone
-from pathlib import Path
 
 from flask import Blueprint, jsonify, request
+from flask_login import current_user
 
+from .db import db
+from .models import Feedback
 from .security import limiter
 
 logger = logging.getLogger(__name__)
@@ -143,7 +143,6 @@ def chat():
     return jsonify({"reply": reply, "needs_escalation": needs_escalation})
 
 
-_FEEDBACK_FILE = Path(os.environ.get("DATA_DIR", "/tmp")) / "feedback.json"
 _VALID_CATEGORIES = {"genel", "hata", "oneri", "diger"}
 
 
@@ -162,18 +161,18 @@ def submit_feedback():
     if category not in _VALID_CATEGORIES:
         category = "genel"
 
-    entry = {
-        "ts": datetime.now(timezone.utc).isoformat(),
-        "category": category,
-        "message": message,
-        "email": user_email,
-    }
+    # Giriş yapmış kullanıcıda e-postayı oturumdan al (istemcinin gönderdiğine güvenme).
+    if current_user.is_authenticated:
+        user_email = current_user.email
 
+    # Veritabanına yazılır (eskiden /tmp/feedback.json — her deploy'da siliniyor
+    # ve kimse okuyamıyordu). Admin: GET /api/admin/feedback
     try:
-        existing = json.loads(_FEEDBACK_FILE.read_text()) if _FEEDBACK_FILE.exists() else []
-        existing.append(entry)
-        _FEEDBACK_FILE.write_text(json.dumps(existing, ensure_ascii=False, indent=2))
+        db.session.add(Feedback(category=category, message=message, email=user_email or None))
+        db.session.commit()
     except Exception:
-        logger.exception("Feedback dosyasına yazılamadı")
+        db.session.rollback()
+        logger.exception("Geri bildirim kaydedilemedi")
+        return jsonify({"error": "server_error", "message": "Geri bildirim kaydedilemedi."}), 500
 
     return jsonify({"ok": True})

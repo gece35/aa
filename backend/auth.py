@@ -359,6 +359,11 @@ def export_data():
         "alerts": [a.to_dict() for a in u.alerts],
         "watchlist": [{"symbol": w.symbol} for w in u.watchlist],
         "portfolio": [p.to_dict() for p in u.portfolio],
+        "comments": [
+            {"symbol": c.symbol, "body": c.body,
+             "created_at": c.created_at.isoformat() if c.created_at else None}
+            for c in u.comments
+        ],
     })
 
 

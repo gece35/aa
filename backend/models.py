@@ -8,7 +8,7 @@ from typing import Optional
 
 from flask_login import UserMixin
 from sqlalchemy import (
-    Boolean, DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text,
+    Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text,
     UniqueConstraint, func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -49,6 +49,7 @@ class User(UserMixin, db.Model):
     watchlist: Mapped[list["Watchlist"]] = relationship("Watchlist", back_populates="user", cascade="all, delete-orphan")
     portfolio: Mapped[list["Portfolio"]] = relationship("Portfolio", back_populates="user", cascade="all, delete-orphan")
     email_tokens: Mapped[list["EmailToken"]] = relationship("EmailToken", back_populates="user", cascade="all, delete-orphan")
+    comments: Mapped[list["StockComment"]] = relationship("StockComment", back_populates="user", cascade="all, delete-orphan")
 
     def get_id(self) -> str:
         """Flask-Login oturum kimliği: `<id>:<parola parmak izi>`.
@@ -149,6 +150,7 @@ class Portfolio(db.Model):
     qty: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     avg_price: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     currency: Mapped[str] = mapped_column(String(8), nullable=False, default="TRY")
+    buy_date: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     user: Mapped["User"] = relationship("User", back_populates="portfolio")
@@ -160,6 +162,7 @@ class Portfolio(db.Model):
             "qty": self.qty,
             "avg_price": self.avg_price,
             "currency": self.currency,
+            "buy_date": self.buy_date.isoformat() if self.buy_date else None,
         }
 
 
@@ -183,7 +186,7 @@ class StockComment(db.Model):
     body: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    user: Mapped["User"] = relationship("User")
+    user: Mapped["User"] = relationship("User", back_populates="comments")
 
     def to_dict(self, viewer_id: Optional[str] = None) -> dict:
         """Yorumun herkese gösterilen hali. Yazarın dahili kimliği (UUID)
@@ -225,3 +228,43 @@ class EmailToken(db.Model):
     used_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     user: Mapped["User"] = relationship("User", back_populates="email_tokens")
+
+
+class NewsletterSubscriber(db.Model):
+    """Bülten abonesi. Eskiden konteyner diskindeki bir JSON dosyasında tutuluyor
+    ve her deploy'da siliniyordu."""
+    __tablename__ = "newsletter_subscribers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    source: Mapped[str] = mapped_column(String(32), nullable=False, default="website")
+    subscribed_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    # E-postadaki "abonelikten çık" bağlantısı için tahmin edilemez anahtar
+    unsubscribe_token: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    unsubscribed_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # En son gönderilen sayı ("2026-W47"): aynı sayı aynı kişiye iki kez gitmesin
+    last_issue_key: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+
+    @property
+    def is_active(self) -> bool:
+        return self.unsubscribed_at is None
+
+
+class Feedback(db.Model):
+    """Site içi geri bildirim formu kayıtları (eskiden /tmp/feedback.json)."""
+    __tablename__ = "feedback"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    category: Mapped[str] = mapped_column(String(16), nullable=False, default="genel")
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "created_at": int(self.created_at.timestamp()) if self.created_at else None,
+            "category": self.category,
+            "message": self.message,
+            "email": self.email or "",
+        }

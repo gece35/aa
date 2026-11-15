@@ -624,6 +624,16 @@
         </div>
     </div>
 
+    <!-- Admin: geri bildirim listesi -->
+    <div id="adminFeedbackModal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Geri Bildirimler">
+        <div class="modal-backdrop" id="adminFeedbackBackdrop"></div>
+        <div class="modal-card glass" style="max-width:720px;width:96%;max-height:85vh;display:flex;flex-direction:column;">
+            <button class="modal-close" id="adminFeedbackClose" aria-label="Kapat">&times;</button>
+            <h3 style="margin:0 0 14px;font-size:18px;font-family:'Inter';">&#x1F4AC; Geri Bildirimler</h3>
+            <div id="adminFeedbackList" style="overflow:auto;flex:1;font-size:13px;"></div>
+        </div>
+    </div>
+
     <script src="app.js"></script>
 </body>
 </html>
