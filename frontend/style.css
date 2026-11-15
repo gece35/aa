@@ -2173,3 +2173,25 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 28px 60px; }
     margin-left: 4px;
 }
 .comment-delete-btn:hover { color: var(--danger); background: rgba(239,68,68,.1); }
+
+/* ── Gelişmiş filtre paneli + CSV ─────────────────────────────────────────── */
+.filter-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.filter-count {
+    display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px;
+    border-radius: 9px; background: var(--accent-2, #22d3ee); color: #0b1020;
+    font-size: 11px; font-weight: 700; line-height: 18px; text-align: center;
+}
+.filter-panel {
+    display: flex; flex-wrap: wrap; gap: 14px 18px; align-items: flex-end;
+    padding: 14px 16px; margin: 10px 0 0; border-radius: 14px;
+}
+.filter-panel.hidden { display: none; }
+.filter-field { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--text-2); }
+.filter-field .sort-select { min-width: 170px; }
+.filter-check { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--text-1); padding-bottom: 6px; cursor: pointer; }
+.filter-check input { width: 16px; height: 16px; accent-color: var(--accent-2, #22d3ee); }
+.port-toolbar { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+@media (max-width: 600px) {
+    .filter-field { flex: 1 1 100%; }
+    .filter-field .sort-select { width: 100%; }
+}

@@ -178,6 +178,8 @@
         onlyWatched: false,
         search: '',
         sort: 'score',
+        // Gelişmiş filtreler (istemci tarafında, yüklenmiş sonuçlar üzerinde)
+        filters: { sector: '', rsi: '', change: '', spike: false, peak: false },
         watchlist: new Set(),
         byMarket: { us: newMarketState(), bist: newMarketState() },
         scrollObserver: null,
@@ -556,19 +558,52 @@
         });
     }
 
+    function rsiOf(r) {
+        const ind = (r.indicators || []).find((i) => i.key === 'rsi');
+        return ind && ind.value != null ? Number(ind.value) : null;
+    }
+
+    function matchesAdvancedFilters(r) {
+        const f = state.filters;
+        if (f.sector && r.sector !== f.sector) return false;
+        if (f.rsi) {
+            const v = rsiOf(r);
+            if (v == null) return false;
+            if (f.rsi === 'lt30' && !(v < 30)) return false;
+            if (f.rsi === '30-50' && !(v >= 30 && v < 50)) return false;
+            if (f.rsi === '50-70' && !(v >= 50 && v <= 70)) return false;
+            if (f.rsi === 'gt70' && !(v > 70)) return false;
+        }
+        if (f.change) {
+            const c = Number(r.change_pct || 0);
+            if (f.change === 'up3' && !(c >= 3)) return false;
+            if (f.change === 'up' && !(c > 0)) return false;
+            if (f.change === 'down' && !(c < 0)) return false;
+            if (f.change === 'down3' && !(c <= -3)) return false;
+        }
+        if (f.spike && !r.volume_spike) return false;
+        if (f.peak && !r.near_peak) return false;
+        return true;
+    }
+
+    // Ekranda gösterilen (süzülmüş + sıralanmış) liste
+    function getFilteredResults() {
+        const m = ms();
+        const q = state.search.toLowerCase();
+        const filtered = m.results.filter((r) => {
+            if (r.score < state.minScore) return false;
+            if (state.onlyWatched && !state.watchlist.has(r.symbol)) return false;
+            if (q && !r.symbol.toLowerCase().includes(q)) return false;
+            return matchesAdvancedFilters(r);
+        });
+        return sortResults(filtered);
+    }
+
     function renderResults() {
         hideSkeletons();
         const m = ms();
-        let filtered = m.results.filter((r) => {
-            if (r.score < state.minScore) return false;
-            if (state.onlyWatched && !state.watchlist.has(r.symbol)) return false;
-            if (state.search) {
-                return r.symbol.toLowerCase().includes(state.search.toLowerCase());
-            }
-            return true;
-        });
-
-        filtered = sortResults(filtered);
+        refreshSectorOptions();
+        const filtered = getFilteredResults();
 
         els.resultsArea.querySelectorAll('.stock-card, .empty, .loader-sentinel, .plan-gate-banner, .guest-teaser-banner').forEach((x) => x.remove());
 
@@ -955,7 +990,7 @@
         btn.addEventListener('click', () => {
             const display = symbol.replace('.IS', '');
             const text = `${display} şu an Nebula Scanner'da ${score}/10 puan aldı 🌌`;
-            const url = `${location.origin}/?s=${encodeURIComponent(symbol)}`;
+            const url = `${location.origin}/hisse/${encodeURIComponent(display)}`;
             const fullText = `${text}\n${url}`;
             if (navigator.share) {
                 navigator.share({ title: `${display} — Nebula Scanner`, text, url }).catch(() => {});
@@ -2691,6 +2726,190 @@
         state.search = e.target.value.trim();
         renderResults();
     });
+
+    // ── Gelişmiş filtreler ───────────────────────────────────────────────
+    const filterEls = {
+        toggle: document.getElementById('filterToggle'),
+        panel: document.getElementById('filterPanel'),
+        count: document.getElementById('filterCount'),
+        sector: document.getElementById('fSector'),
+        rsi: document.getElementById('fRsi'),
+        change: document.getElementById('fChange'),
+        spike: document.getElementById('fSpike'),
+        peak: document.getElementById('fPeak'),
+        clear: document.getElementById('filterClear'),
+    };
+    let _sectorLabels = {};
+    let _sectorOptionsKey = '';
+    const FILTER_URL_KEYS = { sector: 'sektor', rsi: 'rsi', change: 'degisim', spike: 'hacim', peak: 'zirve' };
+    const RSI_VALUES = ['lt30', '30-50', '50-70', 'gt70'];
+    const CHANGE_VALUES = ['up3', 'up', 'down', 'down3'];
+
+    function activeFilterCount() {
+        const f = state.filters;
+        return (f.sector ? 1 : 0) + (f.rsi ? 1 : 0) + (f.change ? 1 : 0) + (f.spike ? 1 : 0) + (f.peak ? 1 : 0);
+    }
+
+    // Sektör seçenekleri yüklenmiş sonuçlardan üretilir (pazara göre değişir).
+    function refreshSectorOptions() {
+        if (!filterEls.sector) return;
+        const keys = [...new Set(ms().results.map((r) => r.sector).filter(Boolean))];
+        if (state.filters.sector && !keys.includes(state.filters.sector)) keys.push(state.filters.sector);
+        keys.sort((a, b) => (_sectorLabels[a] || a).localeCompare(_sectorLabels[b] || b, 'tr'));
+        const key = state.market + '|' + keys.join(',') + '|' + Object.keys(_sectorLabels).length;
+        if (key === _sectorOptionsKey) return;
+        _sectorOptionsKey = key;
+        filterEls.sector.innerHTML = '<option value="">Tümü</option>' + keys.map((k) =>
+            `<option value="${escapeAttr(k)}">${escapeHtml(_sectorLabels[k] || k)}</option>`).join('');
+        filterEls.sector.value = state.filters.sector;
+    }
+
+    function syncFilterControls() {
+        const f = state.filters;
+        if (filterEls.sector) filterEls.sector.value = f.sector;
+        if (filterEls.rsi) filterEls.rsi.value = f.rsi;
+        if (filterEls.change) filterEls.change.value = f.change;
+        if (filterEls.spike) filterEls.spike.checked = f.spike;
+        if (filterEls.peak) filterEls.peak.checked = f.peak;
+        const n = activeFilterCount();
+        if (filterEls.count) {
+            filterEls.count.textContent = n;
+            filterEls.count.classList.toggle('hidden', n === 0);
+        }
+        if (filterEls.toggle) filterEls.toggle.classList.toggle('active', n > 0);
+    }
+
+    // Filtreler adres çubuğunda saklanır: bağlantı paylaşılınca aynı süzme açılır.
+    function writeFiltersToUrl() {
+        try {
+            const url = new URL(location.href);
+            const f = state.filters;
+            const set = (k, v) => { if (v) url.searchParams.set(k, v); else url.searchParams.delete(k); };
+            set(FILTER_URL_KEYS.sector, f.sector);
+            set(FILTER_URL_KEYS.rsi, f.rsi);
+            set(FILTER_URL_KEYS.change, f.change);
+            set(FILTER_URL_KEYS.spike, f.spike ? '1' : '');
+            set(FILTER_URL_KEYS.peak, f.peak ? '1' : '');
+            history.replaceState(null, '', url.pathname + (url.search || '') + url.hash);
+        } catch (_) {}
+    }
+
+    function readFiltersFromUrl() {
+        try {
+            const q = new URLSearchParams(location.search);
+            const f = state.filters;
+            const sector = q.get(FILTER_URL_KEYS.sector) || '';
+            f.sector = /^[a-z_]{1,32}$/.test(sector) ? sector : '';
+            const rsi = q.get(FILTER_URL_KEYS.rsi) || '';
+            f.rsi = RSI_VALUES.includes(rsi) ? rsi : '';
+            const change = q.get(FILTER_URL_KEYS.change) || '';
+            f.change = CHANGE_VALUES.includes(change) ? change : '';
+            f.spike = q.get(FILTER_URL_KEYS.spike) === '1';
+            f.peak = q.get(FILTER_URL_KEYS.peak) === '1';
+        } catch (_) {}
+    }
+
+    function onFilterChange() {
+        const f = state.filters;
+        f.sector = filterEls.sector ? filterEls.sector.value : '';
+        f.rsi = filterEls.rsi ? filterEls.rsi.value : '';
+        f.change = filterEls.change ? filterEls.change.value : '';
+        f.spike = Boolean(filterEls.spike && filterEls.spike.checked);
+        f.peak = Boolean(filterEls.peak && filterEls.peak.checked);
+        syncFilterControls();
+        writeFiltersToUrl();
+        renderResults();
+    }
+
+    function setFilterPanelOpen(open) {
+        if (!filterEls.panel || !filterEls.toggle) return;
+        filterEls.panel.classList.toggle('hidden', !open);
+        filterEls.toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+
+    readFiltersFromUrl();
+    syncFilterControls();
+    if (activeFilterCount() > 0) setFilterPanelOpen(true);
+    if (filterEls.toggle) {
+        filterEls.toggle.addEventListener('click', () => setFilterPanelOpen(filterEls.panel.classList.contains('hidden')));
+    }
+    [filterEls.sector, filterEls.rsi, filterEls.change, filterEls.spike, filterEls.peak].forEach((el) => {
+        if (el) el.addEventListener('change', onFilterChange);
+    });
+    if (filterEls.clear) {
+        filterEls.clear.addEventListener('click', () => {
+            state.filters = { sector: '', rsi: '', change: '', spike: false, peak: false };
+            syncFilterControls();
+            writeFiltersToUrl();
+            renderResults();
+        });
+    }
+    fetch('/api/config').then((r) => r.json()).then((cfg) => {
+        _sectorLabels = cfg.sector_labels || {};
+        refreshSectorOptions();
+    }).catch(() => {});
+
+    // ── CSV dışa aktarım ─────────────────────────────────────────────────
+    // Türkçe Excel ile uyumlu: UTF-8 BOM, ';' ayraç, ondalıkta virgül.
+    function csvCell(v) {
+        if (v == null) return '';
+        if (typeof v === 'number') {
+            return isFinite(v) ? v.toLocaleString('tr-TR', { useGrouping: false, maximumFractionDigits: 4 }) : '';
+        }
+        let t = String(v);
+        if (/^[=+\-@\t\r]/.test(t)) t = "'" + t;   // tabloda formül olarak çalışmasın
+        return /[";\n\r]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+    }
+
+    function downloadCsv(filename, rows) {
+        const body = rows.map((cols) => cols.map(csvCell).join(';')).join('\r\n');
+        const blob = new Blob(['\ufeff' + body], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    function todayStamp() { return new Date().toISOString().slice(0, 10); }
+
+    function exportScanCsv() {
+        if (!_currentUser) { openAuthModal('signup'); return; }
+        const list = getFilteredResults();
+        if (!list.length) { showToast('Dışa aktarılacak hisse yok.', 'info'); return; }
+        const rows = [['Sembol', 'Sektör', 'Puan', 'Fiyat', 'Günlük %', 'Haftalık %', 'Aylık %', 'RSI', 'Hacim',
+                       '52H Yüksek', '52H Düşük', 'Hacim Patlaması', 'Zirveye Yakın']];
+        list.forEach((r) => rows.push([
+            r.symbol, _sectorLabels[r.sector] || r.sector || '', r.score, r.price, r.change_pct,
+            r.change_week_pct, r.change_month_pct, rsiOf(r), r.volume, r.high_52w, r.low_52w,
+            r.volume_spike ? 'Evet' : 'Hayır', r.near_peak ? 'Evet' : 'Hayır',
+        ]));
+        downloadCsv(`nebula-tarama-${state.market}-${todayStamp()}.csv`, rows);
+    }
+
+    function exportPortfolioCsv() {
+        if (!port.positions.length) { showToast('Portföyünüz boş.', 'info'); return; }
+        const rows = [['Sembol', 'Pazar', 'Adet', 'Alış Fiyatı', 'Alış Tarihi', 'Güncel Fiyat', 'Para Birimi',
+                       'Maliyet', 'Güncel Değer', 'Kâr/Zarar', 'Kâr/Zarar %']];
+        port.positions.forEach((pos) => {
+            const d = port.details[pos.symbol];
+            const cost = pos.buyPrice * pos.qty;
+            const value = d ? d.price * pos.qty : null;
+            rows.push([
+                pos.symbol, pos.market === 'bist' ? 'BIST' : 'ABD', pos.qty, pos.buyPrice, pos.buyDate || '',
+                d ? d.price : null, pos.market === 'bist' ? 'TRY' : 'USD', cost, value,
+                value == null ? null : value - cost,
+                value == null || !cost ? null : ((value - cost) / cost) * 100,
+            ]);
+        });
+        downloadCsv(`nebula-portfoy-${todayStamp()}.csv`, rows);
+    }
+
+    document.getElementById('csvExportBtn')?.addEventListener('click', exportScanCsv);
+    document.getElementById('portCsvBtn')?.addEventListener('click', exportPortfolioCsv);
 
     els.scoreFilters.querySelectorAll('.chip').forEach((c) => {
         c.addEventListener('click', () => {

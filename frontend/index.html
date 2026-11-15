@@ -243,6 +243,37 @@
                         <option value="symbol">Sembol (A-Z)</option>
                     </select>
                 </div>
+                <div class="filter-actions">
+                    <button id="filterToggle" class="chip" type="button" aria-expanded="false" aria-controls="filterPanel">&#9881; Filtreler <span id="filterCount" class="filter-count hidden"></span></button>
+                    <button id="csvExportBtn" class="chip" type="button" title="Görünen listeyi CSV olarak indir">&#11015; CSV</button>
+                </div>
+            </div>
+
+            <div id="filterPanel" class="filter-panel glass hidden">
+                <label class="filter-field" for="fSector">Sektör
+                    <select id="fSector" class="sort-select"><option value="">Tümü</option></select>
+                </label>
+                <label class="filter-field" for="fRsi">RSI
+                    <select id="fRsi" class="sort-select">
+                        <option value="">Tümü</option>
+                        <option value="lt30">30 altı (aşırı satım)</option>
+                        <option value="30-50">30 – 50</option>
+                        <option value="50-70">50 – 70</option>
+                        <option value="gt70">70 üstü (aşırı alım)</option>
+                    </select>
+                </label>
+                <label class="filter-field" for="fChange">Günlük değişim
+                    <select id="fChange" class="sort-select">
+                        <option value="">Tümü</option>
+                        <option value="up3">%+3 ve üzeri</option>
+                        <option value="up">Yükselenler</option>
+                        <option value="down">Düşenler</option>
+                        <option value="down3">%−3 ve altı</option>
+                    </select>
+                </label>
+                <label class="filter-check" for="fSpike"><input type="checkbox" id="fSpike" /> Hacim patlaması</label>
+                <label class="filter-check" for="fPeak"><input type="checkbox" id="fPeak" /> 52 hafta zirvesine yakın</label>
+                <button id="filterClear" class="btn btn-ghost" type="button">Temizle</button>
             </div>
 
             <div id="resultsArea" class="results-area">
@@ -251,6 +282,9 @@
         </section>
 
         <section id="tab-portfolio" class="hidden">
+            <div class="port-toolbar">
+                <button id="portCsvBtn" class="chip" type="button" title="Portföyü CSV olarak indir">&#11015; CSV</button>
+            </div>
             <div id="portOverview"></div>
             <div id="portList" class="port-list"></div>
         </section>
@@ -542,6 +576,7 @@
             <a href="/about">Hakkımızda</a> &bull;
             <a href="/faq">SSS</a> &bull;
             <a href="/blog/">Blog</a> &bull;
+            <a href="/hisseler">Tüm Hisseler</a> &bull;
             <a href="mailto:destek@nebulascanner.com">destek@nebulascanner.com</a> &bull;
             <a href="/legal/kosullar">Kullanım Koşulları</a> &bull;
             <a href="/legal/gizlilik">Gizlilik / KVKK</a> &bull;

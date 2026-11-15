@@ -13,6 +13,7 @@ from .cache import scan_cache, symbol_cache
 from .data_fetcher import download_ohlcv
 from .market_hours import cache_ttl
 from .scoring import compute_regime_ok, score_symbol
+from .sectors import get_sector
 from .tickers import MARKETS, get_index_symbol, get_tickers
 
 logger = logging.getLogger(__name__)
@@ -30,6 +31,13 @@ _scan_locks: Dict[str, threading.Lock] = {m: threading.Lock() for m in MARKETS}
 
 def _ttl(market: str) -> int:
     return cache_ttl(market, SCAN_CACHE_TTL)
+
+
+def _result_dict(res) -> dict:
+    """Tarama satırı: skor sonucu + sektör anahtarı (arayüzdeki sektör filtresi için)."""
+    d = res.to_dict()
+    d["sector"] = get_sector(d["symbol"])
+    return d
 
 
 def _fetch_index_df(market: str):
@@ -118,7 +126,7 @@ def _compute_scores(data: Dict, index_df=None, market: str = "bist", regime_ok: 
                 logger.exception("%s puanlama hatasi", symbol)
                 continue
             if res is not None:
-                results.append(res.to_dict())
+                results.append(_result_dict(res))
 
     results.sort(key=lambda r: (r["score"], r["change_pct"]), reverse=True)
     return results
@@ -334,7 +342,7 @@ def scan_market_chunk(market: str, offset: int, limit: int, force: bool = False,
                                 continue
                             if res is None:
                                 continue
-                            d = res.to_dict()
+                            d = _result_dict(res)
                             cached_map[symbol] = d
                             symbol_cache.set(f"sym:{symbol}", d, ttl=ttl)
                 compute_secs = time.time() - compute_started

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>{{ title }}</title>
+<meta name="description" content="{{ description }}" />
+{% if not available %}<meta name="robots" content="noindex" />{% endif %}
+<meta property="og:type" content="website" />
+<meta property="og:title" content="{{ title }}" />
+<meta property="og:description" content="{{ description }}" />
+<meta property="og:url" content="{{ canonical }}" />
+<meta name="twitter:card" content="summary" />
+<link rel="canonical" href="{{ canonical }}" />
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/legal/legal.css" />
+{% if json_ld %}<script type="application/ld+json">{{ json_ld|tojson }}</script>{% endif %}
+<style>
+  .breadcrumb{font-size:13px;color:#8b949e;margin-bottom:24px}
+  .breadcrumb a{color:#8b949e;text-decoration:none}
+  .breadcrumb a:hover{text-decoration:underline}
+  .stock-head{display:flex;gap:20px;align-items:center;flex-wrap:wrap;margin:8px 0 28px}
+  .score-ring{flex:0 0 auto;width:104px;height:104px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    background:linear-gradient(135deg,rgba(139,92,246,.25),rgba(34,211,238,.15));border:1px solid rgba(139,92,246,.45)}
+  .score-ring b{font-size:34px;line-height:1;color:#f0f6fc}
+  .score-ring span{font-size:12px;color:#8b949e;margin-top:4px}
+  .price-line{font-size:26px;font-weight:700;color:#f0f6fc}
+  .up{color:#4ade80}.down{color:#f87171}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:20px 0}
+  .cell{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:12px 14px}
+  .cell .k{font-size:12px;color:#8b949e;display:block}
+  .cell .v{font-size:16px;font-weight:600;color:#e6edf3}
+  table.ind{width:100%;border-collapse:collapse;margin:12px 0 24px;font-size:14px}
+  table.ind th,table.ind td{text-align:left;padding:10px 8px;border-bottom:1px solid #21262d;vertical-align:top}
+  table.ind th{color:#8b949e;font-weight:500;font-size:12px}
+  .pill{display:inline-block;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:600;white-space:nowrap}
+  .pill.on{background:rgba(34,197,94,.15);color:#4ade80}
+  .pill.off{background:rgba(100,116,139,.18);color:#94a3b8}
+  .pill.penalty{background:rgba(239,68,68,.15);color:#f87171}
+  .cta-box{background:linear-gradient(135deg,rgba(139,92,246,.15),rgba(99,102,241,.1));border:1px solid rgba(139,92,246,.3);border-radius:12px;padding:24px;text-align:center;margin:32px 0}
+  .cta-box p{margin:0 0 16px;font-size:14px;color:#9ca3af}
+  .btn-cta{display:inline-block;background:linear-gradient(135deg,#8b5cf6,#6366f1);color:#fff;text-decoration:none;padding:11px 28px;border-radius:8px;font-weight:600;font-size:14px}
+  .related{display:flex;flex-wrap:wrap;gap:8px;padding:0;margin:8px 0 0;list-style:none}
+  .related a{display:inline-block;border:1px solid #30363d;border-radius:8px;padding:6px 12px;text-decoration:none;font-size:13px}
+  .related a:hover{border-color:#5b8def}
+</style>
+</head>
+<body>
+<div class="page">
+  <nav class="breadcrumb" aria-label="Sayfa yolu">
+    <a href="/">Nebula Scanner</a> › <a href="/hisseler">Hisseler</a> › {{ name }}
+  </nav>
+
+  <h1>{{ name }} Hisse Teknik Analiz Puanı</h1>
+  <div class="meta">{{ market_label }} &bull; {{ sector_label }}{% if available %} &bull; Son güncelleme: {{ updated }}{% endif %}</div>
+
+  {% if available %}
+  <div class="stock-head">
+    <div class="score-ring" aria-label="Teknik puan {{ score }} üzerinden 10">
+      <b>{{ score }}</b><span>/ 10 puan</span>
+    </div>
+    <div>
+      <div class="price-line">{{ price }}
+        <span class="{{ 'up' if day_up else 'down' }}" style="font-size:16px;font-weight:600;">{{ change_day }}</span>
+      </div>
+      <div style="font-size:13px;color:#8b949e;">Son kapanış fiyatı ve günlük değişim</div>
+    </div>
+  </div>
+
+  <p>
+    <strong>{{ name }}</strong> hissesi, Nebula Scanner'ın teknik analiz puanlamasında 10 üzerinden
+    <strong>{{ score }}</strong> puan alıyor ve bu puana göre {{ score_comment }} sahip. Puan; trend (EMA hizalaması),
+    momentum (RSI ve MACD), Bollinger bantları, ADX trend gücü ve hacim göstergelerinin birleşiminden hesaplanır.
+    {% if volume_spike %}Son işlem gününde hacim, ortalamasının belirgin biçimde üzerinde gerçekleşti.{% endif %}
+    {% if near_peak %}Fiyat, 52 haftalık zirvesine yakın seyrediyor.{% endif %}
+  </p>
+
+  <div class="grid">
+    <div class="cell"><span class="k">Haftalık değişim</span><span class="v {{ 'up' if week_up else 'down' }}">{{ change_week }}</span></div>
+    <div class="cell"><span class="k">Aylık değişim</span><span class="v {{ 'up' if month_up else 'down' }}">{{ change_month }}</span></div>
+    <div class="cell"><span class="k">52 hafta en yüksek</span><span class="v">{{ high_52w }}</span></div>
+    <div class="cell"><span class="k">52 hafta en düşük</span><span class="v">{{ low_52w }}</span></div>
+  </div>
+
+  <h2>{{ name }} gösterge özeti</h2>
+  <table class="ind">
+    <thead><tr><th>Gösterge</th><th>Durum</th><th>Yorum</th></tr></thead>
+    <tbody>
+      {% for ind in indicators %}
+      <tr>
+        <td>{{ ind.name }}</td>
+        <td><span class="pill {{ ind.css }}">{{ ind.state }}</span></td>
+        <td>{{ ind.detail }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="info-box">
+    {{ name }} için güncel veri şu an alınamıyor. Lütfen biraz sonra tekrar deneyin ya da
+    <a href="/">ana sayfadaki taramadan</a> hisseyi açın.
+  </div>
+  {% endif %}
+
+  <div class="cta-box">
+    <h3 style="margin:0 0 8px;">{{ name }} için tam analiz</h3>
+    <p>Mum grafiği, destek/direnç seviyeleri, formasyonlar, haberler, bilanço özeti ve fiyat alarmı için ücretsiz üye olun.</p>
+    <a class="btn-cta" href="{{ app_url }}">{{ name }} detayını aç →</a>
+  </div>
+
+  {% if related %}
+  <h2>{{ sector_label }} sektöründen diğer hisseler</h2>
+  <ul class="related">
+    {% for r in related %}<li><a href="/hisse/{{ r.slug }}">{{ r.name }}</a></li>{% endfor %}
+  </ul>
+  {% endif %}
+
+  <div class="warning-box" style="margin-top:36px;">
+    ⚠ Bu sayfa yatırım tavsiyesi değildir. Puan ve yorumlar yalnızca geçmiş fiyat verisine dayalı teknik
+    göstergelerin otomatik özetidir; eğitim ve bilgilendirme amaçlıdır. Veriler gecikmeli olabilir.
+    Ayrıntılar için <a href="/legal/risk">Risk Uyarısı</a>.
+  </div>
+
+  <footer class="legal-footer">
+    &copy; {{ year }} Nebula Scanner &bull; <a href="/">Ana Sayfa</a> &bull; <a href="/hisseler">Tüm Hisseler</a> &bull;
+    <a href="/rehber">Puan nasıl hesaplanır?</a> &bull; <a href="/blog/">Blog</a>
+  </footer>
+</div>
+</body>
+</html>

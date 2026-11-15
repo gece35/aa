@@ -171,7 +171,7 @@ def run_due_jobs(force: bool = False) -> dict:
     (`python -m backend.worker --once` ve testler için).
     """
     global _last_cleanup
-    out = {"skipped": False, "alerts_fired": 0, "cleaned": 0}
+    out = {"skipped": False, "alerts_fired": 0, "cleaned": 0, "newsletter_sent": 0}
     with _job_lock() as got:
         if not got:
             out["skipped"] = True
@@ -183,6 +183,15 @@ def run_due_jobs(force: bool = False) -> dict:
         except Exception:
             db.session.rollback()
             logger.exception("scheduler: alarm kontrolü hatası")
+
+        # Haftalık bülten: NEWSLETTER_ENABLED=1 ise ve Pazar penceresindeyse gönderir.
+        # `force` bilerek iletilmez: elle tetikleme abonelere takvim dışı e-posta atmasın.
+        try:
+            from .newsletter import send_weekly_issue
+            out["newsletter_sent"] = send_weekly_issue().get("sent", 0)
+        except Exception:
+            db.session.rollback()
+            logger.exception("scheduler: bülten hatası")
 
         now_ts = time.time()
         if force or now_ts - _last_cleanup >= _CLEANUP_INTERVAL:

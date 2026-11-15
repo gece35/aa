@@ -173,6 +173,37 @@ _US_SECTORS = {
 }
 
 
+# Arayüzde ve hisse sayfalarında gösterilen Türkçe sektör adları.
+SECTOR_LABELS = {
+    "bank": "Bankacılık",
+    "finance": "Finans",
+    "aviation": "Havacılık ve Ulaştırma",
+    "auto_transport": "Otomotiv ve Ulaştırma",
+    "auto_consumer": "Otomotiv ve Dayanıklı Tüketim",
+    "tech": "Teknoloji",
+    "holding": "Holding",
+    "energy": "Enerji",
+    "utility": "Kamu Hizmetleri",
+    "metal_cement": "Metal, Çimento ve Cam",
+    "materials": "Temel Malzeme ve Kimya",
+    "chemical_health": "Kimya ve Sağlık",
+    "health": "Sağlık",
+    "retail_food": "Perakende ve Gıda",
+    "retail": "Perakende",
+    "consumer_goods": "Tüketim Ürünleri",
+    "real_estate": "Gayrimenkul",
+    "industrial": "Sanayi",
+    "textile": "Tekstil",
+    "telecom_media": "Telekom ve Medya",
+    "media_comm": "Medya ve İletişim",
+    "other": "Diğer",
+}
+
+
+def sector_label(key: str) -> str:
+    return SECTOR_LABELS.get(key or "other", SECTOR_LABELS["other"])
+
+
 def get_sector(symbol: str) -> str:
     """Sembolün sektörünü döndürür. Bilinmeyenler 'other'."""
     if not symbol:

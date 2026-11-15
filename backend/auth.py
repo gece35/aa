@@ -399,5 +399,11 @@ def update_consent():
     marketing = bool(body.get("marketing_consent"))
     u = current_user._get_current_object()
     u.marketing_consent_at = now_utc() if marketing else None
+    # İzin bülten aboneliğiyle birlikte yürür: verilince abone, geri alınınca çıkış.
+    from .newsletter import subscribe_email, unsubscribe_email
+    if marketing and u.email_verified_at:
+        subscribe_email(u.email, "member")
+    elif not marketing:
+        unsubscribe_email(u.email)
     db.session.commit()
     return jsonify({"ok": True, "marketing_consent": marketing})

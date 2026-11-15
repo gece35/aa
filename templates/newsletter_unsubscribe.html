@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex" />
+<title>Bülten aboneliği — Nebula Scanner</title>
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/legal/legal.css" />
+<style>
+  .box{max-width:460px;margin:12vh auto 0;text-align:center}
+  .btn{display:inline-block;background:#2563eb;color:#fff;border:0;border-radius:8px;padding:11px 24px;font-weight:600;font-size:14px;cursor:pointer;text-decoration:none}
+  .btn.ghost{background:transparent;border:1px solid #30363d;color:#c9d1d9}
+</style>
+</head>
+<body>
+<div class="page box">
+  {% if state == "confirm" %}
+    <h1>Bültenden çıkmak istiyor musunuz?</h1>
+    <p>Onaylarsanız haftalık piyasa özeti e-postaları artık gönderilmez.</p>
+    <form method="post" action="/newsletter/unsubscribe" style="margin-top:24px;">
+      <input type="hidden" name="token" value="{{ token }}" />
+      <button class="btn" type="submit">Abonelikten çık</button>
+      <a class="btn ghost" href="/" style="margin-left:8px;">Vazgeç</a>
+    </form>
+  {% elif state == "done" %}
+    <h1>Abonelikten çıktınız</h1>
+    <p>Haftalık bülten artık bu adrese gönderilmeyecek. Fikrinizi değiştirirseniz ana sayfadan yeniden abone olabilirsiniz.</p>
+    <p style="margin-top:24px;"><a class="btn" href="/">Ana sayfaya dön</a></p>
+  {% else %}
+    <h1>Bağlantı geçersiz</h1>
+    <p>Bu abonelikten çıkış bağlantısı tanınmadı. E-postadaki bağlantıyı eksiksiz kopyaladığınızdan emin olun.</p>
+    <p style="margin-top:24px;"><a class="btn" href="/">Ana sayfaya dön</a></p>
+  {% endif %}
+</div>
+</body>
+</html>

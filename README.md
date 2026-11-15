@@ -94,7 +94,7 @@ backend/
   auth.py                # Kayıt, giriş, e-posta doğrulama, şifre sıfırlama
   backtest.py            # TDOV backtest motoru (olay-tabanlı giriş/çıkış, ATR trailing)
   billing.py             # LemonSqueezy ödeme ve abonelik yönetimi
-  newsletter.py          # Bülten aboneliği
+  newsletter.py          # Bülten: aboneler (DB), haftalık özet gönderimi, abonelikten çıkış
   support.py             # Destek talepleri
   cache.py               # Süreç içi TTL + LRU cache (scan/stock/news/index)
   config.py              # Ortam değişkenleri ve sabitler
@@ -114,6 +114,7 @@ backend/
   sectors.py             # Sektör etiketleri
   scheduler.py           # Süreç içi zamanlayıcı: fiyat alarmları + hesap temizliği
   security.py            # Parola/token, gerçek istemci IP'si, rate limiting
+  seo.py                 # /hisse/<sembol>, /hisseler, dinamik /sitemap.xml
   sentiment.py           # Lexicon tabanlı haber duygu analizi
   tickers.py             # BIST (162) + US (248) sembol listeleri
   twitter_bot.py         # Twitter/X sinyal paylaşımı (şu an devre dışı, zamanlanmıyor)
@@ -127,6 +128,7 @@ frontend/
   legal/                 # Gizlilik, kullanım koşulları
   app.js                 # Vanilla JS etkileşim
   style.css              # Koyu mod + galaksi + neon
+templates/               # Jinja şablonları (hisse sayfaları, bülten çıkış sayfası)
 migrations/              # Alembic (Flask-Migrate) veritabanı şema geçmişi
 tests/                   # pytest paketi (python -m pytest)
 gunicorn.conf.py         # Tek süreç + thread ayarı, zamanlayıcı kancası
@@ -145,6 +147,14 @@ python app.py
 ```
 
 `http://localhost:5000` adresini tarayıcıyla aç.
+
+## Haftalık bülten
+
+Aboneler (`newsletter_subscribers` tablosu + pazarlama izni veren doğrulanmış üyeler) her Pazar 10:00'da (TSİ) BIST/ABD'nin en yüksek puanlı 10'ar hissesini içeren özet e-postasını alır. Gönderim **varsayılan kapalıdır**: `NEWSLETTER_ENABLED=1` ile açılır. Aynı sayı aynı kişiye iki kez gitmez (önce-sahiplen-sonra-gönder); günlük üst sınır `NEWSLETTER_DAILY_CAP` (varsayılan 250), kalanlar izleyen iki gün içinde gönderilir. Açmadan önce admin hesabıyla `POST /api/admin/newsletter/test` çağrılarak kendi adresinize deneme gönderilebilir.
+
+## Tarama filtreleri ve CSV
+
+Tarama sekmesindeki **Filtreler** paneli (sektör, RSI aralığı, günlük değişim, hacim patlaması, 52 hafta zirvesine yakın) tamamen tarayıcıda, yüklenmiş sonuçlar üzerinde çalışır ve seçimleri adres çubuğuna yazar (`?sektor=bank&rsi=50-70`), böylece süzülmüş liste bağlantıyla paylaşılabilir. **CSV** butonları görünen tarama listesini ve portföyü Türkçe Excel uyumlu (UTF-8 BOM, `;` ayraç) dosya olarak indirir.
 
 ## Planlar
 
@@ -188,10 +198,14 @@ python app.py
 | `GET /api/comments/<symbol>` | Auth | Topluluk yorumları |
 | `POST /api/comments/<symbol>` | Auth | Yorum ekle |
 | `DELETE /api/comments/<id>` | Auth | Yorum sil |
-| `GET /api/config` | — | Ön yüz için ortam/konfig bilgisi (GA id vb.) |
+| `GET /api/config` | — | Ön yüz için ortam/konfig bilgisi (GA id, sektör etiketleri vb.) |
+| `GET /hisse/<SEMBOL>` | — | Sunucuda render edilen, indekslenebilir hisse özeti (BIST'te `.IS` eksiz: `/hisse/THYAO`) |
+| `GET /hisseler` · `/sitemap.xml` | — | Tüm hisselerin sektör dizini · dinamik sitemap (statik + blog + yasal + hisse sayfaları) |
+| `GET/POST /newsletter/unsubscribe?token=` | — | Bülten aboneliğinden çıkış (GET onay sayfası, POST çıkış) |
 | `GET /api/health` | — | Sağlık kontrolü: DB, şema revizyonu, zamanlayıcı durumu |
 | `POST /api/cache/clear` | Admin | Tüm cache temizle |
-| `GET /api/admin/stats` · `/api/admin/users` | Admin | Kullanıcı/istatistik paneli |
+| `GET /api/admin/stats` · `/api/admin/users` · `/api/admin/feedback` | Admin | Kullanıcı/istatistik paneli, geri bildirimler |
+| `GET /api/admin/newsletter/preview` · `POST /api/admin/newsletter/test` | Admin | Haftalık bülten önizlemesi · yalnızca admin'e test gönderimi |
 
 Ayrıca `/api/billing/*` (LemonSqueezy checkout/portal/webhook), `/api/newsletter`, `/api/newsletter/count`, `/api/support/chat`, `/api/feedback` blueprint'leri ve `/blog/`, `/faq`, `/legal/<slug>`, `/rehber`, `/about` statik sayfaları mevcuttur.
 

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Tüm Hisseler: BIST ve ABD Teknik Analiz Puanları | Nebula Scanner</title>
+<meta name="description" content="Nebula Scanner'ın taradığı {{ total }} BIST ve ABD hissesinin sektörlere göre listesi. Her hisse için 0-10 teknik analiz puanı ve gösterge özeti." />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Tüm Hisseler: BIST ve ABD Teknik Analiz Puanları" />
+<meta property="og:description" content="{{ total }} hissenin sektörlere göre listesi ve teknik analiz puanları." />
+<meta property="og:url" content="{{ canonical }}" />
+<meta name="twitter:card" content="summary" />
+<link rel="canonical" href="{{ canonical }}" />
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/legal/legal.css" />
+<style>
+  .breadcrumb{font-size:13px;color:#8b949e;margin-bottom:24px}
+  .breadcrumb a{color:#8b949e;text-decoration:none}
+  .stocks{display:flex;flex-wrap:wrap;gap:8px;padding:0;margin:8px 0 20px;list-style:none}
+  .stocks a{display:inline-block;border:1px solid #30363d;border-radius:8px;padding:5px 11px;text-decoration:none;font-size:13px}
+  .stocks a:hover{border-color:#5b8def}
+  .market-title{margin-top:44px;padding-top:20px;border-top:1px solid #21262d}
+</style>
+</head>
+<body>
+<div class="page">
+  <nav class="breadcrumb" aria-label="Sayfa yolu"><a href="/">Nebula Scanner</a> › Hisseler</nav>
+  <h1>Tüm Hisseler</h1>
+  <div class="meta">{{ total }} hisse &bull; her biri için 0-10 teknik analiz puanı</div>
+
+  <p>
+    Nebula Scanner, aşağıdaki hisseleri trend, momentum, Bollinger, ADX ve hacim göstergeleriyle tarayıp
+    0-10 arasında puanlar. Bir hissenin güncel puanını ve gösterge özetini görmek için adına tıklayın;
+    tüm hisseleri puana göre sıralı görmek için <a href="/">tarama ekranını</a> kullanın.
+  </p>
+
+  {% for group in groups %}
+  <h2 class="market-title">{{ group.label }} — {{ group.count }} hisse</h2>
+  {% for sector in group.sectors %}
+  <h3>{{ sector.label }}</h3>
+  <ul class="stocks">
+    {% for s in sector.stocks %}<li><a href="/hisse/{{ s.slug }}">{{ s.name }}</a></li>{% endfor %}
+  </ul>
+  {% endfor %}
+  {% endfor %}
+
+  <div class="warning-box">
+    ⚠ Bu sayfadaki bilgiler yatırım tavsiyesi değildir; eğitim ve bilgilendirme amaçlıdır.
+    Ayrıntılar için <a href="/legal/risk">Risk Uyarısı</a>.
+  </div>
+
+  <footer class="legal-footer">
+    &copy; {{ year }} Nebula Scanner &bull; <a href="/">Ana Sayfa</a> &bull; <a href="/rehber">Rehber</a> &bull; <a href="/blog/">Blog</a>
+  </footer>
+</div>
+</body>
+</html>

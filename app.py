@@ -32,6 +32,7 @@ from backend.alerts import (
 from backend.auth import admin_required, auth_bp, email_verified_required
 from backend.billing import billing_bp
 from backend.newsletter import newsletter_bp
+from backend.seo import seo_bp
 from backend.support import support_bp
 from backend.cache import (
     analysis_cache, exchange_cache, fundamentals_cache, scan_cache, stock_cache,
@@ -51,6 +52,7 @@ from backend.fundamentals import GROQ_API_KEY, analyze_fundamentals
 from backend.backtest import run_backtest, run_signal_study
 from backend.scanner import build_index_summary, get_index_df, scan_market, scan_market_chunk
 from backend.scoring import compute_regime_ok, score_symbol_detailed
+from backend.sectors import SECTOR_LABELS
 from backend.security import limiter, session_fingerprint
 from backend.tickers import MARKETS, market_of_symbol, resolve_symbol
 
@@ -310,6 +312,7 @@ def create_app() -> Flask:
     flask_app.register_blueprint(billing_bp)
     flask_app.register_blueprint(newsletter_bp)
     flask_app.register_blueprint(support_bp)
+    flask_app.register_blueprint(seo_bp)  # /hisse/<sembol>, /hisseler, /sitemap.xml
 
     @flask_app.errorhandler(Exception)
     def handle_exception(e):
@@ -332,10 +335,8 @@ def create_app() -> Flask:
         return _serve_html(FRONTEND_DIR, "index.html")
 
     @flask_app.route("/robots.txt")
-    @flask_app.route("/sitemap.xml")
-    def seo_files():
-        fname = request.path.lstrip("/")
-        return send_from_directory(FRONTEND_DIR, fname)
+    def robots_txt():
+        return send_from_directory(FRONTEND_DIR, "robots.txt")
 
     @flask_app.route("/rehber")
     def rehber_page():
@@ -398,6 +399,35 @@ def create_app() -> Flask:
             "feedback_count": db.session.query(Feedback).count(),
         })
 
+    @flask_app.route("/api/admin/newsletter/preview")
+    @admin_required
+    def api_admin_newsletter_preview():
+        """Bu haftaki bültenin HTML önizlemesi (kimseye gönderilmez)."""
+        from backend import newsletter
+        digest = newsletter.build_weekly_digest()
+        if digest is None:
+            return jsonify({"error": "no_data", "message": "Bülten için veri alınamadı."}), 503
+        html, _text = newsletter.render_digest(digest, newsletter.unsubscribe_url_for("ornek-anahtar"))
+        return Response(html, mimetype="text/html")
+
+    @flask_app.route("/api/admin/newsletter/test", methods=["POST"])
+    @admin_required
+    @limiter.limit("6 per hour")
+    def api_admin_newsletter_test():
+        """Bültenin bir kopyasını YALNIZCA bu admin'in e-postasına gönderir."""
+        from backend import newsletter
+        from backend.email import _send
+        digest = newsletter.build_weekly_digest()
+        if digest is None:
+            return jsonify({"error": "no_data", "message": "Bülten için veri alınamadı."}), 503
+        html, text = newsletter.render_digest(digest, newsletter.unsubscribe_url_for("ornek-anahtar"))
+        ok = _send(current_user.email, "[TEST] " + digest["subject"], html, text)
+        return jsonify({
+            "ok": bool(ok), "sent_to": current_user.email,
+            "enabled": newsletter.newsletter_enabled(),
+            "active_subscribers": newsletter.active_count(),
+        })
+
     @flask_app.route("/api/admin/feedback")
     @admin_required
     def api_admin_feedback():
@@ -452,6 +482,7 @@ def create_app() -> Flask:
             "support_email": SUPPORT_EMAIL,
             "plans": PLANS,
             "ga_measurement_id": GA_MEASUREMENT_ID,
+            "sector_labels": SECTOR_LABELS,
         })
 
     @flask_app.route("/api/markets")
