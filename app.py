@@ -714,24 +714,6 @@ def create_app() -> Flask:
         exchange_cache.set(cache_key, payload)
         return jsonify(payload)
 
-    # GEÇİCİ tanı ucu: Railway/Cloudflare'in gerçekte hangi IP başlıklarını
-    # ilettiğini doğrulamak için. İsteyene yalnızca KENDİ isteğinin başlıklarını
-    # gösterir. Doğrulamadan sonra kaldırılacak.
-    @flask_app.route("/api/debug/client-ip")
-    @limiter.limit("20 per hour")
-    def api_debug_client_ip():
-        from backend.security import client_ip, is_cloudflare_ip, peer_ip
-        peer = peer_ip()
-        return jsonify({
-            "x_real_ip": request.headers.get("X-Real-IP"),
-            "x_forwarded_for": request.headers.get("X-Forwarded-For"),
-            "cf_connecting_ip": request.headers.get("CF-Connecting-IP"),
-            "remote_addr": request.remote_addr,
-            "peer": peer,
-            "peer_is_cloudflare": is_cloudflare_ip(peer),
-            "resolved_client_ip": client_ip(),
-        })
-
     @flask_app.route("/api/health")
     @limiter.exempt
     def health():

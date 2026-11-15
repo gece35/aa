@@ -46,10 +46,13 @@ def is_cloudflare_ip(ip: str) -> bool:
 
 
 def peer_ip() -> str:
-    """Railway kenar sunucusuna bağlanan tarafın IP'si.
+    """Railway kenar sunucusunun bildirdiği istemci IP'si.
 
-    Railway edge `X-Real-IP` başlığını her istekte kendisi yazar (istemcinin
-    gönderdiği değeri ezer); bu yüzden güvenilirdir. Başlık yoksa (lokal
+    Railway edge `X-Real-IP` başlığını her istekte kendisi yazar ve istemcinin
+    gönderdiği değeri ezer. Canlıda doğrulandı (2026-11-15): Cloudflare üzerinden
+    gelen istekte değer zaten gerçek ziyaretçi IP'sidir; Railway alan adına
+    doğrudan gelen istekte uydurulmuş X-Real-IP / X-Forwarded-For /
+    CF-Connecting-IP değerleri bu sonucu değiştirmez. Başlık yoksa (lokal
     geliştirme, testler) doğrudan bağlantının adresi kullanılır.
     """
     return (_valid_ip(request.headers.get("X-Real-IP", ""))
@@ -69,6 +72,8 @@ def client_ip() -> str:
     istemci tarafından uydurulabildiği için kullanılmaz.
     """
     peer = peer_ip()
+    # Railway şu an Cloudflare trafiğinde de gerçek ziyaretçiyi bildiriyor; bu dal,
+    # bir gün X-Real-IP olarak Cloudflare sunucusu gelirse diye bir yedektir.
     if is_cloudflare_ip(peer):
         cf = _valid_ip(request.headers.get("CF-Connecting-IP", ""))
         if cf:
