@@ -24,7 +24,7 @@ from flask_cors import CORS
 from flask_login import LoginManager, current_user, login_required
 from sqlalchemy import text
 
-from backend import migrate_boot, scheduler
+from backend import migrate_boot, procinfo, scheduler
 from backend.alerts import (
     CONDITION_LABELS, count_active_alerts, create_alert,
     delete_alert, dismiss_alert, get_triggered, list_alerts,
@@ -726,6 +726,7 @@ def create_app() -> Flask:
             "schema_ok": None,
             "migration": migrate_boot.state(),
             "scheduler": scheduler.status(),
+            "memory_mb": procinfo.memory_mb(),
         }
         try:
             db.session.execute(text("SELECT 1"))

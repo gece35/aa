@@ -186,3 +186,27 @@ def test_health_reports_db_schema_and_scheduler(client):
     assert body["schema_ok"] is True
     assert body["scheduler"]["running"] is False       # testte zamanlayıcı kapalı
     assert body["migration"]["error"] is None
+    mem = body["memory_mb"]
+    assert set(mem) == {"rss", "peak", "container"}
+    # Linux'ta sayı, diğer sistemlerde None — ama asla hata değil
+    assert all(v is None or v > 0 for v in mem.values())
+
+
+def test_procinfo_parses_proc_and_cgroup(monkeypatch, tmp_path):
+    from backend import procinfo
+
+    status = tmp_path / "status"
+    status.write_text("Name:\tpython\nVmHWM:\t  262144 kB\nVmRSS:\t  204800 kB\n", encoding="ascii")
+    cgroup = tmp_path / "memory.current"
+    cgroup.write_text("314572800\n", encoding="ascii")
+
+    real_open = open
+
+    def fake_open(path, *a, **kw):
+        if path == "/proc/self/status":
+            return real_open(status, *a, **kw)
+        return real_open(path, *a, **kw)
+
+    monkeypatch.setattr("builtins.open", fake_open)
+    monkeypatch.setattr(procinfo, "_CGROUP_FILES", (str(tmp_path / "yok"), str(cgroup)))
+    assert procinfo.memory_mb() == {"rss": 200.0, "peak": 256.0, "container": 300.0}
